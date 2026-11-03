@@ -26,7 +26,7 @@ function coalesceGlyphs(glyphs){
    row={...g,lastX:g.x,lastSize:g.size,lastText:g.text};
    continue;
   }
-  const addSpace=dx>Math.max(row.lastSize,g.size)*1.12 && !/\\s$/.test(row.text) && !/^\\s/.test(g.text);
+  const addSpace=dx>Math.max(row.lastSize,g.size)*1.12 && !row.text.endsWith(' ') && !g.text.startsWith(' ');
   row.text+=(addSpace?' ':'')+g.text;
   row.lastX=g.x;
   row.lastSize=g.size;
