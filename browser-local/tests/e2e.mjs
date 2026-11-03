@@ -41,6 +41,13 @@ try{
   await page.waitForFunction(()=>document.querySelector('#download').hidden===false || document.querySelector('#status').textContent.includes('변환 실패'),null,{timeout:120000});
   const message=await page.locator('#status').innerText();
   if(!message.includes('실제 PDF 생성 완료'))throw new Error(ext+' conversion status: '+message);
+  const raster=await page.locator('#preview img').evaluate(async img=>{
+   await img.decode();
+   return {width:img.naturalWidth,height:img.naturalHeight};
+  });
+  if(Math.min(raster.width,raster.height)<2300 || Math.max(raster.width,raster.height)<3000)
+   throw new Error('R31 high-quality raster under target: '+JSON.stringify({ext,...raster}));
+  console.log('R31 300dpi-first-page resolution:',ext,raster);
   const dlPromise=page.waitForEvent('download',{timeout:20000});
   await page.locator('#download').click();
   const dl=await dlPromise;
