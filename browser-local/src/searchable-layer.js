@@ -75,7 +75,8 @@ export function writeSearchableText(pdfPage,pdfFont,textLayer){
     x:run.x,y:run.y,size:run.size,font:pdfFont,opacity:0
    });
    embedded+=[...run.text].length;
-  }catch{
+  }catch(err){
+   if(globalThis.__SUNRISE_CI_R32_DIAG__)console.warn('R32_LAYER_FONT_FAIL',run.text.length,err?.name,String(err?.message||err).slice(0,180));
    // Fall back to exact per-glyph coordinates if a grouped text run cannot encode.
    for(const glyph of run.glyphs){
     try{
