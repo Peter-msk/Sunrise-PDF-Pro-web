@@ -122,7 +122,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,quality='standa
   const pdf=await PDFDocument.create();let preview=null,searchFont=null;
   const textSummary={total:0,embedded:0,skipped:0};
   if(needText){
-   const response=await fetch(searchableFontURL,{credentials:'same-origin'});
+   const response=await fetch(searchableFontURL,{credentials:'same-origin',signal});
    if(!response.ok)throw Error('검색용 한글 폰트 정적 자산을 가져오지 못했습니다.');
    throwIfCancelled(signal);
    pdf.registerFontkit(fontkit);
