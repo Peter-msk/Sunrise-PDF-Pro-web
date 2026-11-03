@@ -2,6 +2,9 @@ import init, { HwpDocument } from '@rhwp/core';
 import { PDFDocument } from 'pdf-lib';
 const MAX_FILE=20*1024*1024,MAX_PAGES=120,MAX_PIXELS=9_000_000;
 const OLE=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1];
+function throwIfCancelled(signal){
+ if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
+}
 let wasmPromise=null;
 export function verifyFile(file,buf){
  if(!file||file.size<8||file.size>MAX_FILE)throw Error('파일 크기는 8바이트 이상, 20MiB 이하여야 합니다.');
@@ -53,28 +56,50 @@ export function checkedSvg(svg){
  if(width<1||height<1||width>20000||height>20000)throw Error('비정상적인 페이지 크기');
  return {svg:new XMLSerializer().serializeToString(root),width,height};
 }
-export async function rasterPage(svg){
+export async function rasterPage(svg,signal){
+ throwIfCancelled(signal);
  const checked=checkedSvg(svg);
  const scale=Math.min(2,Math.sqrt(MAX_PIXELS/(checked.width*checked.height)));
  const w=Math.max(1,Math.round(checked.width*scale));
  const h=Math.max(1,Math.round(checked.height*scale));
  if(w*h>MAX_PIXELS+10000)throw Error('페이지 이미지 크기 제한 초과');
  const svgUrl=URL.createObjectURL(new Blob([checked.svg],{type:'image/svg+xml;charset=utf-8'}));
+ let cvs=null;
  try{
   const img=new Image();
-  await new Promise((ok,bad)=>{img.onload=ok;img.onerror=()=>bad(Error('SVG 이미지를 렌더링할 수 없습니다.'));img.src=svgUrl;});
-  const cvs=document.createElement('canvas');cvs.width=w;cvs.height=h;
+  await new Promise((ok,bad)=>{
+   const done=(error)=>{
+    img.onload=null;img.onerror=null;
+    signal?.removeEventListener('abort',onAbort);
+    if(error)bad(error);else ok();
+   };
+   const onAbort=()=>{
+    img.removeAttribute('src');
+    done(new DOMException('PDF 변환이 취소되었습니다.','AbortError'));
+   };
+   img.onload=()=>done();
+   img.onerror=()=>done(Error('SVG 이미지를 렌더링할 수 없습니다.'));
+   signal?.addEventListener('abort',onAbort,{once:true});
+   if(signal?.aborted){onAbort();return;}
+   img.src=svgUrl;
+  });
+  throwIfCancelled(signal);
+  cvs=document.createElement('canvas');cvs.width=w;cvs.height=h;
   const ctx=cvs.getContext('2d',{alpha:false});
   if(!ctx)throw Error('Canvas 2D를 사용할 수 없습니다.');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
   const blob=await new Promise((ok,bad)=>cvs.toBlob(x=>x?ok(x):bad(Error('PNG 생성 실패')),'image/png'));
-  cvs.width=1;cvs.height=1;
+  throwIfCancelled(signal);
   return {blob,widthPt:Math.max(1,checked.width*72/96),heightPt:Math.max(1,checked.height*72/96)};
- } finally{URL.revokeObjectURL(svgUrl);}
+ } finally{
+  if(cvs){cvs.width=1;cvs.height=1;}
+  URL.revokeObjectURL(svgUrl);
+ }
 }
-export async function convertToPdf(file,onProgress=()=>{}){
- const buf=await file.arrayBuffer();verifyFile(file,buf);
- await prepareWasm();
+export async function convertToPdf(file,onProgress=()=>{},signal){
+ throwIfCancelled(signal);
+ const buf=await file.arrayBuffer();throwIfCancelled(signal);verifyFile(file,buf);
+ await prepareWasm();throwIfCancelled(signal);
  let doc=null;
  try{
   doc=new HwpDocument(new Uint8Array(buf));
@@ -82,8 +107,10 @@ export async function convertToPdf(file,onProgress=()=>{}){
   if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
   const pdf=await PDFDocument.create();let preview=null;
   for(let i=0;i<count;i++){
+   throwIfCancelled(signal);
    onProgress({stage:'render',page:i+1,total:count});
-   const page=await rasterPage(doc.renderPageSvg(i));
+   const page=await rasterPage(doc.renderPageSvg(i),signal);
+   throwIfCancelled(signal);
    if(i===0)preview=page.blob;
    const png=await pdf.embedPng(await page.blob.arrayBuffer());
    const out=pdf.addPage([page.widthPt,page.heightPt]);
@@ -91,7 +118,9 @@ export async function convertToPdf(file,onProgress=()=>{}){
    onProgress({stage:'pdf',page:i+1,total:count});
    await new Promise(resolve=>setTimeout(resolve,0));
   }
+  throwIfCancelled(signal);
   const bytes=await pdf.save({useObjectStreams:true});
+  throwIfCancelled(signal);
   if(bytes[0]!==37||bytes[1]!==80||bytes[2]!==68||bytes[3]!==70)throw Error('PDF 헤더 확인 실패');
   return {pdf:new Blob([bytes],{type:'application/pdf'}),preview,pages:count,bytes:bytes.byteLength,renderMode:'raster'};
  }finally{if(doc)doc.free();}
