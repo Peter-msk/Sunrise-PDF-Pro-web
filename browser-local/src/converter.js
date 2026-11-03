@@ -1,7 +1,7 @@
 import init, { HwpDocument } from '@rhwp/core';
 import { PDFDocument } from 'pdf-lib';
-const MAX_FILE=20*1024*1024,MAX_PAGES=120,MAX_PIXELS=9_000_000;
-const TARGET_DPI=300; // 96 CSS pixels per inch; A4 fits under the 9 MP per-page guard
+const MAX_FILE=20*1024*1024,MAX_PAGES=120,MAX_PIXELS=9_000_000,DETAIL_MAX_PIXELS=12_000_000;
+const TARGET_DPI=300,DETAIL_DPI=360; // 96 CSS pixels per inch; A4 fits under the 9 MP per-page guard
 const OLE=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1];
 function throwIfCancelled(signal){
  if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
@@ -57,13 +57,27 @@ export function checkedSvg(svg){
  if(width<1||height<1||width>20000||height>20000)throw Error('비정상적인 페이지 크기');
  return {svg:new XMLSerializer().serializeToString(root),width,height};
 }
+// A conservative complexity heuristic: dense vector drawings benefit from more pixels.
+// Never trust document-supplied dimensions or SVG attributes as an allocation hint.
+export function pageRenderProfile(checked){
+ const parser=new DOMParser();
+ const root=parser.parseFromString(checked.svg,'image/svg+xml').documentElement;
+ const shapes=root.querySelectorAll('path,line,polyline,polygon,rect,circle,ellipse').length;
+ const text=root.querySelectorAll('text,tspan').length;
+ const denseDrawing=shapes>=180 && shapes>=text*2;
+ const pixelLimit=denseDrawing?DETAIL_MAX_PIXELS:MAX_PIXELS;
+ const targetDpi=denseDrawing?DETAIL_DPI:TARGET_DPI;
+ const scale=Math.min(targetDpi/96,Math.sqrt(pixelLimit/(checked.width*checked.height)));
+ return {shapes,text,denseDrawing,pixelLimit,targetDpi,scale};
+}
 export async function rasterPage(svg,signal){
  throwIfCancelled(signal);
  const checked=checkedSvg(svg);
- const scale=Math.min(TARGET_DPI/96,Math.sqrt(MAX_PIXELS/(checked.width*checked.height)));
+ const profile=pageRenderProfile(checked);
+ const {scale,pixelLimit}=profile;
  const w=Math.max(1,Math.round(checked.width*scale));
  const h=Math.max(1,Math.round(checked.height*scale));
- if(w*h>MAX_PIXELS+10000)throw Error('페이지 이미지 크기 제한 초과');
+ if(w*h>pixelLimit+10000)throw Error('페이지 이미지 크기 제한 초과');
  const svgUrl=URL.createObjectURL(new Blob([checked.svg],{type:'image/svg+xml;charset=utf-8'}));
  let cvs=null;
  try{
