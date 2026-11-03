@@ -1,8 +1,8 @@
 import { prepareWasm, convertToPdf } from './converter.js';
 const $=id=>document.getElementById(id);
-let selected=null,pdfUrl=null,imgUrl=null,busy=false,ready=false;
+let selected=null,pdfUrl=null,imgUrl=null,busy=false,ready=false,controller=null;
 const status=(s)=>{$('status').textContent=s};
-const sync=()=>{$('convert').disabled=!ready||!selected||busy;$('reset').disabled=!selected||busy;};
+const sync=()=>{$('convert').disabled=!ready||!selected||busy;$('reset').disabled=!selected||busy;$('cancel').disabled=!busy;$('source').disabled=busy;};
 function clearOutput(){
  if(pdfUrl){URL.revokeObjectURL(pdfUrl);pdfUrl=null;}
  if(imgUrl){URL.revokeObjectURL(imgUrl);imgUrl=null;}
@@ -20,23 +20,32 @@ $('source').addEventListener('change',async e=>{
 });
 $('convert').addEventListener('click',async()=>{
  if(!selected||!ready||busy)return;
+ const file=selected;
+ controller=new AbortController();
  busy=true;clearOutput();sync();
  try{
-  const result=await convertToPdf(selected,info=>{
+  const result=await convertToPdf(file,info=>{
    $('progress').value=Math.min(99,Math.round(info.page/info.total*100));
    status('브라우저 내부 PDF 생성 중 · '+info.page+'/'+info.total+'쪽');
-  });
+  },controller.signal);
   pdfUrl=URL.createObjectURL(result.pdf);imgUrl=URL.createObjectURL(result.preview);
   const img=new Image();img.src=imgUrl;img.alt='변환된 PDF 첫 페이지 렌더링';
   $('preview').replaceChildren(img);
   $('download').href=pdfUrl;
-  $('download').download=selected.name.replace(/\.hwpx?$/i,'')+'.pdf';
+  $('download').download=file.name.replace(/\.hwpx?$/i,'')+'.pdf';
   $('download').hidden=false;$('progress').value=100;
   $('pages').textContent=result.pages+'쪽 · '+(result.bytes/1024).toFixed(1)+' KiB · 이미지 PDF';
   status('실제 PDF 생성 완료. 위 버튼을 누르면 컴퓨터로 다운로드합니다.');
- }catch(err){status('변환 실패: '+String(err?.message||err));$('progress').value=0;}
- finally{busy=false;sync();}
+ }catch(err){
+  if(err?.name==='AbortError'){
+   clearOutput();status('PDF 변환이 취소되었습니다. 파일을 다시 선택하거나 재시도할 수 있습니다.');
+  }else{
+   clearOutput();status('변환 실패: '+String(err?.message||err));
+  }
+ }
+ finally{controller=null;busy=false;sync();}
 });
+$('cancel').addEventListener('click',()=>controller?.abort());
 $('reset').addEventListener('click',()=>{selected=null;$('source').value='';clearOutput();$('filename').textContent='선택된 파일이 없습니다.';status('새 문서를 선택해 주세요.');sync();});
 prepareWasm().then(()=>{ready=true;status('공식 rhwp WASM 초기화 완료. HWP/HWPX 문서를 선택하세요.');sync();})
  .catch(e=>{ready=false;status('rhwp WASM 초기화 실패: '+String(e?.message||e));sync();});

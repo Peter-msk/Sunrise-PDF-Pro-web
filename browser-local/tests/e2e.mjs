@@ -21,6 +21,22 @@ try{
   console.log('WASM BOOT:',boot,'CONSOLE_ERRORS:',consoleErrors,'REQUEST_FAILURES:',requestFailures);
   if(!boot.includes('초기화 완료'))throw Error(ext+' WASM initialization failed: '+boot+' '+consoleErrors.join('|'));
   await page.locator('#source').setInputFiles(resolve(root,'r29-browser-fixtures/genuine.'+ext));
+  if(ext==='hwp'){
+   const controls=await page.evaluate(()=>{
+    document.querySelector('#convert').click();
+    const state={
+     cancelEnabled:!document.querySelector('#cancel').disabled,
+     fileSelectionLocked:document.querySelector('#source').disabled,
+     secondConversionLocked:document.querySelector('#convert').disabled
+    };
+    document.querySelector('#cancel').click();
+    return state;
+   });
+   if(!Object.values(controls).every(Boolean))throw Error('Cancellation control contract: '+JSON.stringify(controls));
+   await page.waitForFunction(()=>document.querySelector('#status')?.textContent.includes('취소되었습니다'),null,{timeout:20000});
+   if(!(await page.locator('#download').isHidden()))throw Error('Cancelled job exposed a PDF download');
+   if(await page.locator('#source').isDisabled())throw Error('Cancelled job did not unlock file selection');
+  }
   await page.locator('#convert').click();
   await page.waitForFunction(()=>document.querySelector('#download').hidden===false || document.querySelector('#status').textContent.includes('변환 실패'),null,{timeout:120000});
   const message=await page.locator('#status').innerText();
