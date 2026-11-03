@@ -1,6 +1,7 @@
 import init, { HwpDocument } from '@rhwp/core';
 import { PDFDocument } from 'pdf-lib';
 const MAX_FILE=20*1024*1024,MAX_PAGES=120,MAX_PIXELS=9_000_000;
+const TARGET_DPI=300; // 96 CSS pixels per inch; A4 fits under the 9 MP per-page guard
 const OLE=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1];
 function throwIfCancelled(signal){
  if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
@@ -59,7 +60,7 @@ export function checkedSvg(svg){
 export async function rasterPage(svg,signal){
  throwIfCancelled(signal);
  const checked=checkedSvg(svg);
- const scale=Math.min(2,Math.sqrt(MAX_PIXELS/(checked.width*checked.height)));
+ const scale=Math.min(TARGET_DPI/96,Math.sqrt(MAX_PIXELS/(checked.width*checked.height)));
  const w=Math.max(1,Math.round(checked.width*scale));
  const h=Math.max(1,Math.round(checked.height*scale));
  if(w*h>MAX_PIXELS+10000)throw Error('페이지 이미지 크기 제한 초과');
