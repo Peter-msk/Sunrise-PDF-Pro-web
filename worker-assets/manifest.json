@@ -3,8 +3,8 @@
   "rhwp_version": "0.8.7",
   "files": {
     "local-bundle.js": {
-      "bytes": 538303,
-      "sha256": "e2218191ab03b412b6855d64771a2738bb88ef63ec426f1ed799eacb85a0d68b"
+      "bytes": 539028,
+      "sha256": "7b7c1bb94f857308bb3def662ac8faabb6d3ebe3ad0969e9fdfabeb92fe69684"
     },
     "rhwp_bg.wasm": {
       "bytes": 11821756,
