@@ -13,6 +13,9 @@ on:
       - 'scripts/verify-browser-build.mjs'
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   browser-only-hwp-hwpx:
     runs-on: ubuntu-24.04
@@ -93,7 +96,11 @@ jobs:
               assert f.is_file() and f.stat().st_size>500 and f.read_bytes()[:5]==b'%PDF-',ext
               d=PdfReader(str(f),strict=True)
               assert len(d.pages)>0 and not d.is_encrypted,ext
-              out[ext]={'pages':len(d.pages),'bytes':f.stat().st_size,'sha256':hashlib.sha256(f.read_bytes()).hexdigest(),'status':'PASS'}
+              text=''.join(page.extract_text() or '' for page in d.pages)
+              assert len(text.strip())>=2, f'{ext}: R32 searchable PDF text extraction missing'
+              if ext=='hwp': assert '가나다라마' in text, f'HWP: Korean word search substring missing: {repr(text[:160])}'
+              if ext=='hwpx': assert 'CELLNEXTPARAGRAPH' in ''.join(text.split()), f'HWPX: word sequence missing: {repr(text[:160])}'
+              out[ext]={'pages':len(d.pages),'bytes':f.stat().st_size,'sha256':hashlib.sha256(f.read_bytes()).hexdigest(),'searchable_chars':len(text),'text_preview':text[:120],'status':'PASS'}
           Path('r29-browser-real-evidence/R29_BROWSER_PDF_CHECK.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))
           print(json.dumps(out,indent=2))
           PY

@@ -15,7 +15,7 @@ h2{font-size:18px;margin:5px 0 18px}.eyebrow{font-size:11px;letter-spacing:.12em
 .upload:hover{background:#edf6ff}.upload input{position:absolute;opacity:0;width:1px;height:1px}.upload b{color:#245b90}.upload small,.muted{color:#8b9fb3;font-size:12px}
 .upload .symbol{font-size:32px;background:#deeeff;padding:9px 21px;border-radius:12px;color:#2377e6}
 .info{min-height:30px;font-size:12px;color:#53708c;overflow-wrap:anywhere}button,.save{border:1px solid #2778e5;border-radius:8px;padding:11px 15px;background:#2778e5;color:#fff;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
-button:disabled{opacity:.4;cursor:not-allowed}#download[hidden]{display:none}.secondary{background:white;color:#2e6faf;border-color:#a9c7e7}.buttons{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button:disabled{opacity:.4;cursor:not-allowed}#download[hidden]{display:none}.settings{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:12px 0 16px;font-size:12px;color:#376081}.settings select{margin-left:6px;border:1px solid #b4cee5;border-radius:6px;padding:8px;background:#fff;color:#163250}.settings input{accent-color:#2778e5}.secondary{background:white;color:#2e6faf;border-color:#a9c7e7}.buttons{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 #preview{background:#f8fbff;min-height:330px;border:1px solid #e4edf5;border-radius:9px;display:flex;justify-content:center;align-items:center;overflow:auto;padding:14px}
 #preview img{display:block;max-width:100%;max-height:370px;border:1px solid #e0e0e0;box-shadow:0 3px 10px #0002;background:white}
 progress{display:block;width:100%;height:9px;margin:16px 0 10px;accent-color:#2778e5}
@@ -28,11 +28,13 @@ footer{font-size:11px;color:#8a9fb5;padding:27px 0}
 <div class="notice">이 화면은 외부 유료 변환 API를 사용하지 않습니다. 공식 <b>rhwp v0.8.7 WASM</b>으로 문서를 브라우저에서 열고 PDF 파일을 브라우저 메모리에서 생성합니다. 원본 문서는 서버로 업로드하지 않습니다.</div>
 <div class="panels"><section class="panel"><div class="eyebrow">01 / ORIGINAL</div><h2>HWP/HWPX 문서 선택</h2>
 <label class="upload"><span class="symbol">↑</span><b>문서를 선택하세요</b><small>HWP/HWPX · 최대 20MiB · 파일은 내 브라우저에만 보관</small><input id="source" type="file" accept=".hwp,.hwpx" /></label>
-<p class="info" id="filename">선택된 파일이 없습니다.</p><div class="buttons"><button id="convert" disabled>PDF 파일 생성</button><button class="secondary" id="cancel" disabled>변환 취소</button><button class="secondary" id="reset" disabled>초기화</button></div>
-<div class="warning">현재 PDF는 SVG를 브라우저에서 이미지화하여 저장합니다. <b>한글 글자는 PDF에서 선택·검색이 되지 않으며</b>, 원본 서식·글꼴·특수 객체의 표시 차이가 있을 수 있습니다.</div>
+<p class="info" id="filename">선택된 파일이 없습니다.</p>
+<div class="settings"><label>PDF 화질 <select id="quality" aria-label="PDF 화질"><option value="standard">기본 · 300dpi (최대 120쪽)</option><option value="detail">도면·표 정밀 · 360dpi (최대 30쪽)</option></select></label>
+<label><input id="searchable" type="checkbox" checked> 한글 검색·복사 계층 추가(실험)</label></div><div class="buttons"><button id="convert" disabled>PDF 파일 생성</button><button class="secondary" id="cancel" disabled>변환 취소</button><button class="secondary" id="reset" disabled>초기화</button></div>
+<div class="warning">페이지 배경은 고해상도 이미지로 출력됩니다. 검색·복사는 <b>투명한 한글 텍스트 계층</b>을 추가한 경우에만 지원되며, 일부 기호·복잡한 변형 텍스트는 누락될 수 있습니다. 이 출력은 <b>완전한 벡터 PDF나 한컴 원본 조판과 동등한 PDF가 아닙니다.</b> 정밀 모드는 메모리를 많이 사용합니다.</div>
 </section><section class="panel"><div class="eyebrow">02 / OUTPUT</div><h2>PDF 및 첫 페이지 미리보기</h2>
 <div id="preview"><span class="muted">파일을 선택하고 PDF 변환을 실행하면 첫 페이지가 표시됩니다.</span></div>
 <progress id="progress" max="100" value="0"></progress><p id="status" role="status" aria-live="polite">공식 WASM 로딩 준비 중</p>
 <div class="buttons"><a id="download" class="save" download hidden>생성한 PDF 다운로드</a><span id="pages" class="muted"></span></div>
-</section></div><footer>Sunrise PDF PRO · 브라우저 로컬 변환 실험 버전 · upstream edwardkim/rhwp MIT License</footer>
+</section></div><footer>Sunrise PDF PRO · 브라우저 로컬 변환 · rhwp MIT · 검색 계층: Nanum Gothic (NHN/Sandoll, OFL-1.1)</footer>
 </div><script type="module" src="./src/main.js"></script></body></html>

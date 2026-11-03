@@ -21,13 +21,17 @@ try{
   console.log('WASM BOOT:',boot,'CONSOLE_ERRORS:',consoleErrors,'REQUEST_FAILURES:',requestFailures);
   if(!boot.includes('초기화 완료'))throw Error(ext+' WASM initialization failed: '+boot+' '+consoleErrors.join('|'));
   await page.locator('#source').setInputFiles(resolve(root,'r29-browser-fixtures/genuine.'+ext));
+  if(ext==='hwp')await page.locator('#quality').selectOption('detail');
+  if(!(await page.locator('#searchable').isChecked()))throw Error('Searchable Unicode layer should be enabled by default');
   if(ext==='hwp'){
    const controls=await page.evaluate(()=>{
     document.querySelector('#convert').click();
     const state={
      cancelEnabled:!document.querySelector('#cancel').disabled,
      fileSelectionLocked:document.querySelector('#source').disabled,
-     secondConversionLocked:document.querySelector('#convert').disabled
+     secondConversionLocked:document.querySelector('#convert').disabled,
+     qualityLocked:document.querySelector('#quality').disabled,
+     searchableOptionLocked:document.querySelector('#searchable').disabled
     };
     document.querySelector('#cancel').click();
     return state;
@@ -40,14 +44,18 @@ try{
   await page.locator('#convert').click();
   await page.waitForFunction(()=>document.querySelector('#download').hidden===false || document.querySelector('#status').textContent.includes('변환 실패'),null,{timeout:120000});
   const message=await page.locator('#status').innerText();
-  if(!message.includes('실제 PDF 생성 완료'))throw new Error(ext+' conversion status: '+message);
+  if(!message.includes('PDF 생성 완료'))throw new Error(ext+' conversion status: '+message);
+  const pagesLabel=await page.locator('#pages').innerText();
+  if(!pagesLabel.includes('검색 계층'))throw new Error('Searchable PDF layer absent: '+pagesLabel);
+  console.log('R32 PDF TEXT STATS:',ext,pagesLabel);
   const raster=await page.locator('#preview img').evaluate(async img=>{
    await img.decode();
    return {width:img.naturalWidth,height:img.naturalHeight};
   });
-  if(Math.min(raster.width,raster.height)<2300 || Math.max(raster.width,raster.height)<3000)
-   throw new Error('R31 high-quality raster under target: '+JSON.stringify({ext,...raster}));
-  console.log('R31 300dpi-first-page resolution:',ext,raster);
+  const expectedWidth=ext==='hwp'?2800:2300;
+  if(Math.min(raster.width,raster.height)<expectedWidth || Math.max(raster.width,raster.height)<3000)
+   throw new Error('R32 quality profile raster under target: '+JSON.stringify({ext,...raster}));
+  console.log('R32 quality profile output dimensions:',ext,raster);
   const dlPromise=page.waitForEvent('download',{timeout:20000});
   await page.locator('#download').click();
   const dl=await dlPromise;
