@@ -100,7 +100,8 @@ export default {
       return localAsset(request,env,'/rhwp_bg.wasm',method,'application/wasm');
     }
     // Vite-pinned, self-hosted open-licensed Korean font, never a user document.
-    if(/^\\/local\\/assets\\/[a-zA-Z0-9_-]{1,96}\\.woff2?$/.test(path)){
+    const fontAssetName=path.startsWith('/local/assets/')?path.slice('/local/assets/'.length):'';
+    if(/^[A-Za-z0-9_-]{1,96}[.]woff2?$/.test(fontAssetName)){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       return localAsset(request,env,path.replace('/local/','/'),method,path.endsWith('.woff2')?'font/woff2':'font/woff');
     }
