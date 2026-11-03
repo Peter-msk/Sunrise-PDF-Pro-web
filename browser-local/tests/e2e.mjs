@@ -14,12 +14,14 @@ try{
   await page.addInitScript(() => {
    const parse=DOMParser.prototype.parseFromString;
    DOMParser.prototype.parseFromString=function(source,type){
+    const parsed=parse.call(this,source,type);
     if(type==='image/svg+xml' && !window.__r32SampleLogged){
       window.__r32SampleLogged=true;
-      const text=[...source.matchAll(/<text\\b[^>]*>[\\s\\S]*?<\\/text>/g)].slice(0,6).map(x=>x[0].slice(0,320));
-      console.log('R32_SVG_SAMPLE',JSON.stringify({svgLength:source.length,textElements:(source.match(/<text\\b/g)||[]).length,text}));
+      const nodes=[...parsed.querySelectorAll('text')];
+      const text=nodes.slice(0,8).map(n=>({outer:n.outerHTML.slice(0,350),x:n.getAttribute('x'),y:n.getAttribute('y'),transform:n.getAttribute('transform'),parent:n.parentElement?.getAttribute('transform')}));
+      console.log('R32_SVG_SAMPLE',JSON.stringify({svgLength:source.length,textElements:nodes.length,text}));
     }
-    return parse.call(this,source,type);
+    return parsed;
    };
   });
   const errors=[],external=[],consoleErrors=[],requestFailures=[];
