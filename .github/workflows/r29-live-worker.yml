@@ -1,0 +1,82 @@
+name: R29 LIVE Cloudflare Worker Browser-Local PDF Acceptance
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/r29-live-worker.yml'
+      - 'src/worker.js'
+permissions:
+  contents: read
+jobs:
+  live-worker-browser-conversion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SUNRISE_TEST_URL: https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser PDF acceptance test dependencies
+        working-directory: browser-local
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: Install real Chromium
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Download public genuine HWP and HWPX test inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fsSL --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fsSL --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Confirm PUBLIC Worker health and real verified WASM bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 'https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/health' | tee /tmp/worker-health.json
+          python - <<'PY'
+          import json
+          j=json.load(open('/tmp/worker-health.json'))
+          assert j.get('document_upload') is False
+          assert j.get('external_conversion_api') is False
+          assert j.get('wasm_sha256')=='54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989'
+          PY
+          curl -fsSL --retry 2 --max-time 120 \
+             'https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/rhwp_bg.wasm' \
+             -o /tmp/live-rhwp_bg.wasm
+          echo '54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989  /tmp/live-rhwp_bg.wasm' | sha256sum -c -
+          curl -fsSI 'https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/assets/local-bundle.js' | grep -i 'HTTP/'
+      - name: Real Chromium HWP/HWPX to PDF ON PUBLIC CLOUDFLARE WORKER
+        shell: bash
+        run: node browser-local/tests/e2e.mjs
+      - name: Validate actual downloaded PDFs
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check 'pypdf==5.9.0'
+          python - <<'PY'
+          from pathlib import Path
+          import json,hashlib
+          from pypdf import PdfReader
+          evidence=Path('r29-browser-real-evidence')
+          record={'site':'https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/','cases':{}}
+          for ext in ('hwp','hwpx'):
+              p=evidence/f'browser-genuine-{ext}.pdf'
+              assert p.exists() and p.stat().st_size>500 and p.read_bytes()[:5]==b'%PDF-',ext
+              doc=PdfReader(str(p),strict=True)
+              assert not doc.is_encrypted and len(doc.pages)>0
+              record['cases'][ext]={'pages':len(doc.pages),'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'result':'PASS'}
+          (evidence/'R29_LIVE_WORKER_PDF_ACCEPTANCE.json').write_text(json.dumps(record,indent=2)+'\n')
+          print(json.dumps(record,indent=2))
+          PY
+      - name: Upload evidence (public upstream sample PDFs only)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r29-live-worker-browser-pdf-evidence
+          path: r29-browser-real-evidence/
+          if-no-files-found: warn
+          retention-days: 7
