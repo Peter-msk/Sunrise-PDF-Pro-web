@@ -1,0 +1,1 @@
+export async function onRequest(){return Response.json({detail:'BACKEND_NOT_CONNECTED',error:'R27 FastAPI/rhwp conversion worker is not deployed on this Pages site'},{status:503,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}

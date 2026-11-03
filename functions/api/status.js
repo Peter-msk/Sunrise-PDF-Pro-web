@@ -1,0 +1,1 @@
+export async function onRequestGet(){return Response.json({service:'sunrise-pdf-pro-web',release:'R27-pages-ui',rhwp_cli_available:false,wasm_assets_verified:false,process_limits:{ready:false,mode:'pages-static'},detail:'BACKEND_NOT_CONNECTED'},{headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
