@@ -1,7 +1,14 @@
 import init, { HwpDocument } from '@rhwp/core';
 import { PDFDocument } from 'pdf-lib';
-const MAX_FILE=20*1024*1024,MAX_PAGES=120,MAX_PIXELS=9_000_000;
-const TARGET_DPI=300; // 96 CSS pixels per inch; A4 fits under the 9 MP per-page guard
+const MAX_FILE=20*1024*1024,MAX_PAGES=120;
+const QUALITY_PROFILES=Object.freeze({
+ standard:{dpi:300,maxPixels:9_000_000,maxPages:120},
+ detail:{dpi:360,maxPixels:16_000_000,maxPages:30}
+});
+export function qualityProfile(name='standard'){
+ if(!(name in QUALITY_PROFILES))throw Error('지원하지 않는 PDF 품질 설정입니다.');
+ return QUALITY_PROFILES[name];
+}
 const OLE=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1];
 function throwIfCancelled(signal){
  if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
@@ -57,13 +64,13 @@ export function checkedSvg(svg){
  if(width<1||height<1||width>20000||height>20000)throw Error('비정상적인 페이지 크기');
  return {svg:new XMLSerializer().serializeToString(root),width,height};
 }
-export async function rasterPage(svg,signal){
+export async function rasterPage(svg,signal,quality='standard'){
  throwIfCancelled(signal);
- const checked=checkedSvg(svg);
- const scale=Math.min(TARGET_DPI/96,Math.sqrt(MAX_PIXELS/(checked.width*checked.height)));
+ const checked=checkedSvg(svg), profile=qualityProfile(quality);
+ const scale=Math.min(profile.dpi/96,Math.sqrt(profile.maxPixels/(checked.width*checked.height)));
  const w=Math.max(1,Math.round(checked.width*scale));
  const h=Math.max(1,Math.round(checked.height*scale));
- if(w*h>MAX_PIXELS+10000)throw Error('페이지 이미지 크기 제한 초과');
+ if(w*h>profile.maxPixels+10000)throw Error('페이지 이미지 크기 제한 초과');
  const svgUrl=URL.createObjectURL(new Blob([checked.svg],{type:'image/svg+xml;charset=utf-8'}));
  let cvs=null;
  try{
@@ -97,20 +104,21 @@ export async function rasterPage(svg,signal){
   URL.revokeObjectURL(svgUrl);
  }
 }
-export async function convertToPdf(file,onProgress=()=>{},signal){
+export async function convertToPdf(file,onProgress=()=>{},signal,quality='standard'){
  throwIfCancelled(signal);
+ const profile=qualityProfile(quality);
  const buf=await file.arrayBuffer();throwIfCancelled(signal);verifyFile(file,buf);
  await prepareWasm();throwIfCancelled(signal);
  let doc=null;
  try{
   doc=new HwpDocument(new Uint8Array(buf));
   const count=doc.pageCount();
-  if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
+  if(!Number.isInteger(count)||count<1||count>Math.min(MAX_PAGES,profile.maxPages))throw Error(`해당 품질 모드의 페이지 수 제한: 1~${profile.maxPages}쪽`);
   const pdf=await PDFDocument.create();let preview=null;
   for(let i=0;i<count;i++){
    throwIfCancelled(signal);
    onProgress({stage:'render',page:i+1,total:count});
-   const page=await rasterPage(doc.renderPageSvg(i),signal);
+   const page=await rasterPage(doc.renderPageSvg(i),signal,quality);
    throwIfCancelled(signal);
    if(i===0)preview=page.blob;
    const png=await pdf.embedPng(await page.blob.arrayBuffer());
