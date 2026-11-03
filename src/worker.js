@@ -99,6 +99,11 @@ export default {
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       return localAsset(request,env,'/rhwp_bg.wasm',method,'application/wasm');
     }
+    // Vite-pinned, self-hosted open-licensed Korean font, never a user document.
+    if(/^\\/local\\/assets\\/[a-zA-Z0-9_-]{1,96}\\.woff2?$/.test(path)){
+      if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
+      return localAsset(request,env,path.replace('/local/','/'),method,path.endsWith('.woff2')?'font/woff2':'font/woff');
+    }
     if(path==='/local/health'&&['GET','HEAD'].includes(method))return new Response(method==='HEAD'?null:JSON.stringify({rhwp_version:'0.8.7',wasm_sha256:LOCAL_RHWP_WASM_SHA256,wasm_bytes:LOCAL_RHWP_WASM_BYTES,converter:'browser-local-raster-pdf',quality_target_dpi:300,wasm_delivery:'cloudflare-static-assets',external_conversion_api:false,document_upload:false}),{headers:{...LOCAL_POLICY,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
     if(path==='/api/edge-health'&&['GET','HEAD'].includes(method))
       return json({service:'sunrise-pdf-pro-web',edge:'cloudflare-worker',backend_configured:Boolean(target),real_conversion_verified:false},200,method);
