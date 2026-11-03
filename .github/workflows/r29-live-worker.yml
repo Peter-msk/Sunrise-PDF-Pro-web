@@ -2,6 +2,7 @@ name: R29 LIVE Cloudflare Worker Browser-Local PDF Acceptance
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - '.github/workflows/r29-live-worker.yml'
       - 'src/worker.js'
