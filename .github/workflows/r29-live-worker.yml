@@ -1,11 +1,7 @@
 name: R29 LIVE Cloudflare Worker Browser-Local PDF Acceptance
+# Explicit production acceptance only after Cloudflare GitHub authorization and deployment.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/r29-live-worker.yml'
-      - 'src/worker.js'
 permissions:
   contents: read
 jobs:
