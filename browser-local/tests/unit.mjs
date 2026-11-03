@@ -21,6 +21,6 @@ test('Korean text overlay has explicit positioning and transparency',()=>{
  assert(textLayer.includes('new DOMParser()'));
  assert(textLayer.includes('MAX_TEXT_NODES=25000'));
  assert(textLayer.includes('opacity:0'));
- assert(textLayer.includes('font:pdfFont'));
+ assert(textLayer.includes('font:ascii?latinFont:pdfFont')&&textLayer.includes('font:asciiGlyph?latinFont:pdfFont'));
  assert(converter.includes("renderMode:needText&&textSummary.embedded>0?'hybrid-searchable':'raster'"));
 });
