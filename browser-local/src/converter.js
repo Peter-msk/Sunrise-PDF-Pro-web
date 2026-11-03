@@ -1,5 +1,5 @@
 import init, { HwpDocument } from '@rhwp/core';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import searchableFontURL from '@fontsource/nanum-gothic/files/nanum-gothic-korean-400-normal.woff?url';
 import {extractSvgTextRuns,writeSearchableText} from './searchable-layer.js';
@@ -119,7 +119,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,quality='standa
   doc=new HwpDocument(new Uint8Array(buf));
   const count=doc.pageCount();
   if(!Number.isInteger(count)||count<1||count>Math.min(MAX_PAGES,profile.maxPages))throw Error(`해당 품질 모드의 페이지 수 제한: 1~${profile.maxPages}쪽`);
-  const pdf=await PDFDocument.create();let preview=null,searchFont=null;
+  const pdf=await PDFDocument.create();let preview=null,searchFont=null,latinFont=null;
   const textSummary={total:0,embedded:0,skipped:0};
   if(needText){
    const response=await fetch(searchableFontURL,{credentials:'same-origin',signal});
@@ -127,6 +127,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,quality='standa
    throwIfCancelled(signal);
    pdf.registerFontkit(fontkit);
    searchFont=await pdf.embedFont(await response.arrayBuffer(),{subset:true});
+   latinFont=await pdf.embedFont(StandardFonts.Helvetica);
   }
   for(let i=0;i<count;i++){
    throwIfCancelled(signal);
@@ -139,7 +140,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,quality='standa
    out.drawImage(png,{x:0,y:0,width:page.widthPt,height:page.heightPt});
    if(searchFont){
     const layer=extractSvgTextRuns(page.textSvg,page.svgWidth,page.svgHeight);
-    const stats=writeSearchableText(out,searchFont,layer);
+    const stats=writeSearchableText(out,searchFont,layer,latinFont);
     for(const name of ['total','embedded','skipped'])textSummary[name]+=stats[name];
    }
    onProgress({stage:'pdf',page:i+1,total:count});
