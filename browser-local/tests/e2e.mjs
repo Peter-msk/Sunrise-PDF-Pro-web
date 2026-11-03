@@ -10,9 +10,21 @@ const results=[];
 try{
  for(const ext of ['hwp','hwpx']){
   const page=await browser.newPage({acceptDownloads:true});
+  // Official public upstream fixture only: inspect SVG text syntax for R32 selectable layer.
+  await page.addInitScript(() => {
+   const parse=DOMParser.prototype.parseFromString;
+   DOMParser.prototype.parseFromString=function(source,type){
+    if(type==='image/svg+xml' && !window.__r32SampleLogged){
+      window.__r32SampleLogged=true;
+      const text=[...source.matchAll(/<text\\b[^>]*>[\\s\\S]*?<\\/text>/g)].slice(0,6).map(x=>x[0].slice(0,320));
+      console.log('R32_SVG_SAMPLE',JSON.stringify({svgLength:source.length,textElements:(source.match(/<text\\b/g)||[]).length,text}));
+    }
+    return parse.call(this,source,type);
+   };
+  });
   const errors=[],external=[],consoleErrors=[],requestFailures=[];
   page.on('pageerror',e=>errors.push(e.message));
-  page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
+  page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());if(m.text().startsWith('R32_SVG_SAMPLE'))console.log(m.text());});
   page.on('requestfailed',req=>requestFailures.push(req.url()+': '+req.failure()?.errorText));
   page.on('request',r=>{if(!r.url().startsWith(origin+'/')&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))external.push(r.url());});
   await page.goto(site,{waitUntil:'networkidle',timeout:30000});
