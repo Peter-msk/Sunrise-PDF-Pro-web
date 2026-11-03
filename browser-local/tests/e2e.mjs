@@ -10,23 +10,9 @@ const results=[];
 try{
  for(const ext of ['hwp','hwpx']){
   const page=await browser.newPage({acceptDownloads:true});
-  // Official public upstream fixture only: inspect SVG text syntax for R32 selectable layer.
-  await page.addInitScript(() => {
-   const parse=DOMParser.prototype.parseFromString;
-   DOMParser.prototype.parseFromString=function(source,type){
-    const parsed=parse.call(this,source,type);
-    if(type==='image/svg+xml' && !window.__r32SampleLogged){
-      window.__r32SampleLogged=true;
-      const nodes=[...parsed.querySelectorAll('text')];
-      const text=nodes.slice(0,8).map(n=>({outer:n.outerHTML.slice(0,350),x:n.getAttribute('x'),y:n.getAttribute('y'),transform:n.getAttribute('transform'),parent:n.parentElement?.getAttribute('transform')}));
-      console.log('R32_SVG_SAMPLE',JSON.stringify({svgLength:source.length,textElements:nodes.length,text}));
-    }
-    return parsed;
-   };
-  });
   const errors=[],external=[],consoleErrors=[],requestFailures=[];
   page.on('pageerror',e=>errors.push(e.message));
-  page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());if(m.text().startsWith('R32_SVG_SAMPLE'))console.log(m.text());});
+  page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
   page.on('requestfailed',req=>requestFailures.push(req.url()+': '+req.failure()?.errorText));
   page.on('request',r=>{if(!r.url().startsWith(origin+'/')&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))external.push(r.url());});
   await page.goto(site,{waitUntil:'networkidle',timeout:30000});
@@ -43,7 +29,9 @@ try{
     const state={
      cancelEnabled:!document.querySelector('#cancel').disabled,
      fileSelectionLocked:document.querySelector('#source').disabled,
-     secondConversionLocked:document.querySelector('#convert').disabled
+     secondConversionLocked:document.querySelector('#convert').disabled,
+     qualityLocked:document.querySelector('#quality').disabled,
+     searchableOptionLocked:document.querySelector('#searchable').disabled
     };
     document.querySelector('#cancel').click();
     return state;
@@ -66,7 +54,7 @@ try{
   const expectedWidth=ext==='hwp'?2800:2300;
   if(Math.min(raster.width,raster.height)<expectedWidth || Math.max(raster.width,raster.height)<3000)
    throw new Error('R32 quality profile raster under target: '+JSON.stringify({ext,...raster}));
-  console.log('R31 300dpi-first-page resolution:',ext,raster);
+  console.log('R32 quality profile output dimensions:',ext,raster);
   const dlPromise=page.waitForEvent('download',{timeout:20000});
   await page.locator('#download').click();
   const dl=await dlPromise;
