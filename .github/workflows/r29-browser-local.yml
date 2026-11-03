@@ -1,4 +1,4 @@
-name: R29 Official rhwp Browser-Local PDF E2E
+name: R31 Worker Static Assets Real Browser PDF E2E
 on:
   workflow_dispatch:
   push:
@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          persist-credentials: true
+          persist-credentials: false
           submodules: false
       - uses: actions/setup-node@v4
         with:
@@ -53,19 +53,31 @@ jobs:
           curl --fail --location --retry 3 \
             'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' \
             -o r29-browser-fixtures/genuine.hwpx
-      - name: Launch local-only static preview server
+      - name: Launch real local Cloudflare Worker and verify self-hosted WASM
         shell: bash
         run: |
-          npm --prefix browser-local run preview > /tmp/sunrise-r29-vite.log 2>&1 &
-          echo $! > /tmp/sunrise-r29-vite.pid
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then exit 0; fi
+          set -euo pipefail
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 > /tmp/sunrise-r31-worker.log 2>&1 &
+          echo $! > /tmp/sunrise-r31-worker.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8787/local/health > /tmp/sunrise-r31-health.json; then break; fi
             sleep 1
           done
-          cat /tmp/sunrise-r29-vite.log
-          exit 1
-      - name: REAL Chromium HWP/HWPX WASM to downloadable PDF
+          python - <<'PY'
+          import json
+          j=json.load(open('/tmp/sunrise-r31-health.json'))
+          assert j['wasm_delivery']=='cloudflare-static-assets'
+          assert j['quality_target_dpi']==300
+          assert not j['document_upload']
+          PY
+          curl -fsSL --max-time 90 http://127.0.0.1:8787/local/rhwp_bg.wasm -o /tmp/sunrise-r31-rhwp_bg.wasm
+          echo '54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989  /tmp/sunrise-r31-rhwp_bg.wasm' | sha256sum -c -
+          curl -fsS http://127.0.0.1:8787/local/ -o /tmp/sunrise-r31-page.html
+          grep -q 'HWP/HWPX' /tmp/sunrise-r31-page.html
+      - name: REAL Chromium HWP/HWPX → 300dpi PDF through Cloudflare Worker
         shell: bash
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
         run: node browser-local/tests/e2e.mjs
       - name: Check downloaded PDFs with pypdf
         shell: bash
@@ -85,10 +97,6 @@ jobs:
           Path('r29-browser-real-evidence/R29_BROWSER_PDF_CHECK.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))
           print(json.dumps(out,indent=2))
           PY
-      - name: Check public pinned npm WASM static distribution
-        shell: bash
-        run: |
-          curl -fsSI -L --max-time 30 'https://cdn.jsdelivr.net/npm/@rhwp/core@0.8.7/rhwp_bg.wasm' | head -20
       - name: Attach browser-generated PDFs and evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
