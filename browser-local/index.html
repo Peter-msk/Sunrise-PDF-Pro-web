@@ -28,7 +28,7 @@ footer{font-size:11px;color:#8a9fb5;padding:27px 0}
 <div class="notice">이 화면은 외부 유료 변환 API를 사용하지 않습니다. 공식 <b>rhwp v0.8.7 WASM</b>으로 문서를 브라우저에서 열고 PDF 파일을 브라우저 메모리에서 생성합니다. 원본 문서는 서버로 업로드하지 않습니다.</div>
 <div class="panels"><section class="panel"><div class="eyebrow">01 / ORIGINAL</div><h2>HWP/HWPX 문서 선택</h2>
 <label class="upload"><span class="symbol">↑</span><b>문서를 선택하세요</b><small>HWP/HWPX · 최대 20MiB · 파일은 내 브라우저에만 보관</small><input id="source" type="file" accept=".hwp,.hwpx" /></label>
-<p class="info" id="filename">선택된 파일이 없습니다.</p><div class="buttons"><button id="convert" disabled>PDF 파일 생성</button><button class="secondary" id="reset" disabled>초기화</button></div>
+<p class="info" id="filename">선택된 파일이 없습니다.</p><div class="buttons"><button id="convert" disabled>PDF 파일 생성</button><button class="secondary" id="cancel" disabled>변환 취소</button><button class="secondary" id="reset" disabled>초기화</button></div>
 <div class="warning">현재 PDF는 SVG를 브라우저에서 이미지화하여 저장합니다. <b>한글 글자는 PDF에서 선택·검색이 되지 않으며</b>, 원본 서식·글꼴·특수 객체의 표시 차이가 있을 수 있습니다.</div>
 </section><section class="panel"><div class="eyebrow">02 / OUTPUT</div><h2>PDF 및 첫 페이지 미리보기</h2>
 <div id="preview"><span class="muted">파일을 선택하고 PDF 변환을 실행하면 첫 페이지가 표시됩니다.</span></div>
