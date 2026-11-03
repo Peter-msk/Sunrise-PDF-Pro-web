@@ -11,6 +11,7 @@
 | 공식 rhwp v0.8.7 **실제 HWP → PDF** | [GitHub Actions PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41636542190) |
 | 공식 rhwp v0.8.7 **실제 HWPX → PDF** | [동일 실행 PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41636542190) |
 | 공식 Linux rhwp 포함 백엔드 Docker 빌드 | [GitHub Actions PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41637866326) |
+| **Docker 이미지 내부 실제 HWP/HWPX→PDF** | [GitHub Actions PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41638389696) |
 | FastAPI 보안/기존 기능 회귀시험 | 312 PASS / 1 SKIP |
 | 로컬 실제 HTTP Edge 인증검증 | 9/9 PASS |
 | Cloudflare Worker → 상시 Linux 원본 서버 → PDF 다운로드 | **미완료** |

@@ -15,3 +15,9 @@
 - Robust PDF visual fidelity comparison across tables, figures, fonts, multi-page documents and actual user documents.
 
 **Release gating remains blocked.** Actual sample conversion PASS does not equal hosted service PASS. Do not configure public Worker backend bindings until the origin host, trusted TLS, HMAC secrets, user accounts, sandbox/namespace/egress safety and storage policies are verified.
+
+## Final additional validation — real conversion inside the Docker image
+
+[GitHub Actions run 41638389696](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41638389696): **SUCCESS**. Built the pinned official rhwp v0.8.7 Linux Docker image (Debian 13), executed the CLI as the image's non-root user, and converted genuine upstream HWP and HWPX samples **inside that container**. Both generated PDFs passed the strict page/structure validator. HWP: 1 page, 6890 bytes. HWPX: 1 page, 5233 bytes. PDF files and JSON evidence stored as Actions artifact `r28-linux-backend-build-evidence`.
+
+The same documents produced different output sizes in a bare Ubuntu runner vs container. Font/runtime rendering differences are possible and require visual comparison. This does **not** establish a persistent production origin or Cloudflare browser E2E.
