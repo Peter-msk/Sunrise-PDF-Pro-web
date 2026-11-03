@@ -1,0 +1,55 @@
+name: R28 Linux Backend Docker Build and Import
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/r28-backend-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backend-container-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4 pinned
+        with:
+          persist-credentials: false
+      - name: Validate backend source archive sha256
+        shell: bash
+        run: |
+          echo 'c7b430c663f41491922855704df065f81eebfd9fb3e732de404356d113c1f9c4  backend/r28_backend_runtime.tar.gz' | sha256sum -c -
+          tar -tzf backend/r28_backend_runtime.tar.gz | grep -Fx 'cloud/edge_auth.py'
+          tar -tzf backend/r28_backend_runtime.tar.gz | grep -Fx 'cloud/app.py'
+      - name: Build immutable official rhwp Linux conversion origin
+        shell: bash
+        run: |
+          docker build --progress=plain --pull -f backend/Dockerfile -t sunrise-pdf-pro-origin:r28 .
+      - name: Check real packaged rhwp version
+        shell: bash
+        run: |
+          docker run --rm --entrypoint /usr/local/bin/rhwp sunrise-pdf-pro-origin:r28 --version | tee version.txt
+          grep -Fx 'rhwp v0.8.7' version.txt
+      - name: Check Python app import and HMAC gate module
+        shell: bash
+        run: |
+          docker run --rm --entrypoint python sunrise-pdf-pro-origin:r28 -c \
+            'from cloud.app import app; from cloud.edge_auth import EdgeAuthenticator; assert app is not None; print("PYTHON_RUNTIME_IMPORT_PASS")'
+      - name: Record package evidence
+        shell: bash
+        run: |
+          docker image inspect sunrise-pdf-pro-origin:r28 --format '{{.Id}}' | tee backend-image-id.txt
+          sha256sum backend/r28_backend_runtime.tar.gz >> backend-image-id.txt
+      - name: Upload non-secret build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 pinned
+        with:
+          name: r28-linux-backend-build-evidence
+          path: |
+            backend-image-id.txt
+            version.txt
+          if-no-files-found: warn
+          retention-days: 7
