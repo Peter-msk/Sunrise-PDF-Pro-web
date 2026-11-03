@@ -38,6 +38,26 @@ jobs:
         run: |
           docker run --rm --entrypoint python sunrise-pdf-pro-origin:r28 -c \
             'from cloud.app import app; from cloud.edge_auth import EdgeAuthenticator; assert app is not None; print("PYTHON_RUNTIME_IMPORT_PASS")'
+      - name: Genuine HWP and HWPX conversions INSIDE packaged Linux Docker image
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r28-docker-real
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 60 \
+            'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' \
+            -o r28-docker-real/genuine.hwp
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 60 \
+            'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' \
+            -o r28-docker-real/genuine.hwpx
+          chmod 777 r28-docker-real
+          docker run --rm -v "$PWD/r28-docker-real:/data" \
+            --entrypoint /usr/local/bin/rhwp sunrise-pdf-pro-origin:r28 \
+            export-pdf /data/genuine.hwp -o /data/genuine-hwp.pdf
+          docker run --rm -v "$PWD/r28-docker-real:/data" \
+            --entrypoint /usr/local/bin/rhwp sunrise-pdf-pro-origin:r28 \
+            export-pdf /data/genuine.hwpx -o /data/genuine-hwpx.pdf
+          python -m pip install --disable-pip-version-check 'pypdf==5.9.0'
+          python scripts/r28_real_rhwp_acceptance.py r28-docker-real
       - name: Record package evidence
         shell: bash
         run: |
@@ -51,5 +71,8 @@ jobs:
           path: |
             backend-image-id.txt
             version.txt
+            r28-docker-real/genuine-hwp.pdf
+            r28-docker-real/genuine-hwpx.pdf
+            r28-docker-real/R28_RHWP_REAL_ACCEPTANCE.json
           if-no-files-found: warn
           retention-days: 7
