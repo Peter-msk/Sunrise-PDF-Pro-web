@@ -1,0 +1,21 @@
+{
+  "name": "sunrise-pdf-pro-browser-local",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero-API HWP/HWPX->PDF browser-local converter using official rhwp WASM",
+  "scripts": {
+    "build": "node scripts/copy-wasm.mjs && vite build",
+    "dev": "node scripts/copy-wasm.mjs && vite --host 127.0.0.1",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test": "node --test tests/unit.mjs"
+  },
+  "dependencies": {
+    "@rhwp/core": "0.8.7",
+    "pdf-lib": "1.17.1"
+  },
+  "devDependencies": {
+    "vite": "8.3.2",
+    "playwright": "1.56.1"
+  }
+}

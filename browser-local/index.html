@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'">
+<title>Sunrise PDF PRO | 브라우저 로컬 변환</title><meta name="description" content="무료 API 없는 HWP/HWPX to PDF WebAssembly 브라우저 변환">
+<style>
+:root{font-family:system-ui,'Noto Sans KR','Malgun Gothic',sans-serif;color:#163250;background:#f3f7fc}
+*{box-sizing:border-box}body{margin:0}.shell{max-width:1160px;margin:auto;padding:30px 20px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:24px;border-bottom:1px solid #dce7f4}
+h1{margin:4px 0;font-size:27px;letter-spacing:-.045em}h1 strong{color:#2c7de4}.sub{color:#7790aa;font-size:13px}.mark{background:#1d73d8;color:white;font-weight:850;padding:12px 14px;border-radius:12px}
+.flag{background:#e4f3eb;color:#137147;border:1px solid #c5e4d2;border-radius:50px;padding:8px 11px;font-weight:750;font-size:12px}
+.notice{background:#e9f2ff;border:1px solid #c7def7;border-radius:9px;padding:13px 17px;margin:22px 0;color:#285a92;line-height:1.65;font-size:13px}
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:18px}.panel{background:white;border:1px solid #e0e8f1;border-radius:12px;padding:23px;min-width:0;box-shadow:0 4px 14px #1b48700a}
+h2{font-size:18px;margin:5px 0 18px}.eyebrow{font-size:11px;letter-spacing:.12em;font-weight:800;color:#347acd}
+.upload{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:245px;border:1.5px dashed #a9c6e9;background:#f6faff;border-radius:9px;text-align:center;gap:12px;padding:17px;cursor:pointer}
+.upload:hover{background:#edf6ff}.upload input{position:absolute;opacity:0;width:1px;height:1px}.upload b{color:#245b90}.upload small,.muted{color:#8b9fb3;font-size:12px}
+.upload .symbol{font-size:32px;background:#deeeff;padding:9px 21px;border-radius:12px;color:#2377e6}
+.info{min-height:30px;font-size:12px;color:#53708c;overflow-wrap:anywhere}button,.save{border:1px solid #2778e5;border-radius:8px;padding:11px 15px;background:#2778e5;color:#fff;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
+button:disabled{opacity:.4;cursor:not-allowed}.secondary{background:white;color:#2e6faf;border-color:#a9c7e7}.buttons{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#preview{background:#f8fbff;min-height:330px;border:1px solid #e4edf5;border-radius:9px;display:flex;justify-content:center;align-items:center;overflow:auto;padding:14px}
+#preview img{display:block;max-width:100%;max-height:370px;border:1px solid #e0e0e0;box-shadow:0 3px 10px #0002;background:white}
+progress{display:block;width:100%;height:9px;margin:16px 0 10px;accent-color:#2778e5}
+#status{font-size:12px;color:#537392;min-height:22px;line-height:1.5}.warning{color:#95510b;background:#fff3dc;border:1px solid #f3dfae;padding:13px 16px;border-radius:9px;font-size:12px;line-height:1.6;margin-top:18px}
+footer{font-size:11px;color:#8a9fb5;padding:27px 0}
+@media(max-width:730px){header{align-items:flex-start;flex-wrap:wrap}.panels{grid-template-columns:1fr}.shell{padding:20px 11px}h1{font-size:23px}.panel{padding:17px}}
+</style>
+</head><body><div class="shell">
+<header><div style="display:flex;align-items:center;gap:13px"><div class="mark">S</div><div><div class="eyebrow">SUNRISE PDF PRO · WEBASSEMBLY</div><h1>HWP/HWPX <strong>→ PDF</strong></h1><div class="sub">공식 rhwp 엔진 기반 · 브라우저 내 로컬 변환</div></div></div><span class="flag">서버 업로드 없음</span></header>
+<div class="notice">이 화면은 외부 유료 변환 API를 사용하지 않습니다. 공식 <b>rhwp v0.8.7 WASM</b>으로 문서를 브라우저에서 열고 PDF 파일을 브라우저 메모리에서 생성합니다. 원본 문서는 서버로 업로드하지 않습니다.</div>
+<div class="panels"><section class="panel"><div class="eyebrow">01 / ORIGINAL</div><h2>HWP/HWPX 문서 선택</h2>
+<label class="upload"><span class="symbol">↑</span><b>문서를 선택하세요</b><small>HWP/HWPX · 최대 20MiB · 파일은 내 브라우저에만 보관</small><input id="source" type="file" accept=".hwp,.hwpx" /></label>
+<p class="info" id="filename">선택된 파일이 없습니다.</p><div class="buttons"><button id="convert" disabled>PDF 파일 생성</button><button class="secondary" id="reset" disabled>초기화</button></div>
+<div class="warning">현재 PDF는 SVG를 브라우저에서 이미지화하여 저장합니다. <b>한글 글자는 PDF에서 선택·검색이 되지 않으며</b>, 원본 서식·글꼴·특수 객체의 표시 차이가 있을 수 있습니다.</div>
+</section><section class="panel"><div class="eyebrow">02 / OUTPUT</div><h2>PDF 및 첫 페이지 미리보기</h2>
+<div id="preview"><span class="muted">파일을 선택하고 PDF 변환을 실행하면 첫 페이지가 표시됩니다.</span></div>
+<progress id="progress" max="100" value="0"></progress><p id="status" role="status" aria-live="polite">공식 WASM 로딩 준비 중</p>
+<div class="buttons"><a id="download" class="save" download hidden>생성한 PDF 다운로드</a><span id="pages" class="muted"></span></div>
+</section></div><footer>Sunrise PDF PRO · 브라우저 로컬 변환 실험 버전 · upstream edwardkim/rhwp MIT License</footer>
+</div><script type="module" src="./src/main.js"></script></body></html>
