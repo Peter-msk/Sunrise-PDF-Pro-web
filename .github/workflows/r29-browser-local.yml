@@ -12,7 +12,7 @@ on:
       - 'scripts/test-worker-assets.mjs'
       - 'scripts/verify-browser-build.mjs'
 permissions:
-  contents: write
+  contents: read
 jobs:
   browser-only-hwp-hwpx:
     runs-on: ubuntu-24.04
