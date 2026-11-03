@@ -1,0 +1,89 @@
+name: R28 Official rhwp HWP-HWPX PDF Acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/r28-real-rhwp.yml'
+      - 'scripts/r28_real_rhwp_acceptance.py'
+
+permissions:
+  contents: read
+
+jobs:
+  official-rhwp-real-conversion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Sunrise test code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4 pinned
+        with:
+          persist-credentials: false
+      - name: Download and SHA-256 verify official rhwp Linux release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r28-evidence engine
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 180 \
+            https://github.com/edwardkim/rhwp/releases/download/v0.8.7/rhwp-v0.8.7-linux-x86_64.tar.gz \
+            -o /tmp/rhwp-official.tar.gz
+          echo 'f1e541a25cfe76b6bc1daf18bf9c1f9a5ac5e03e2c01b188daaf54107214f631  /tmp/rhwp-official.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/rhwp-official.tar.gz -C engine
+          RHWP="$(find engine -type f -name rhwp -print -quit)"
+          test -n "$RHWP"
+          chmod u+x "$RHWP"
+          echo "RHWP=$GITHUB_WORKSPACE/$RHWP" >> "$GITHUB_ENV"
+      - name: Verify native binary and CLI command contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RHWP" --version | tee r28-evidence/cli-version.txt
+          grep -F 'rhwp v0.8.7' r28-evidence/cli-version.txt
+          "$RHWP" capabilities --search export-pdf --json > r28-evidence/capabilities.json
+          python - <<'PY'
+          import json
+          data=json.load(open('r28-evidence/capabilities.json'))
+          assert data.get('tool')=='rhwp'
+          assert any(x.get('name')=='export-pdf' for x in data.get('commands',[]))
+          print('REAL CLI PDF COMMAND PRESENT')
+          PY
+      - name: Obtain real upstream HWP and HWPX sample documents
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p real-fixtures
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 60 \
+            'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' \
+            -o real-fixtures/genuine.hwp
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 60 \
+            'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' \
+            -o real-fixtures/genuine.hwpx
+          python - <<'PY'
+          from pathlib import Path
+          assert Path('real-fixtures/genuine.hwp').read_bytes()[:8]==bytes.fromhex('D0CF11E0A1B11AE1')
+          assert Path('real-fixtures/genuine.hwpx').read_bytes()[:4]==b'PK\x03\x04'
+          print('REAL HWP AND HWPX INPUT HEADERS VERIFIED')
+          PY
+          sha256sum real-fixtures/genuine.hwp real-fixtures/genuine.hwpx > r28-evidence/source-sha256.txt
+      - name: Real native HWP and HWPX to PDF conversions
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM 90 "$RHWP" export-pdf real-fixtures/genuine.hwp -o r28-evidence/genuine-hwp.pdf
+          timeout --signal=TERM 90 "$RHWP" export-pdf real-fixtures/genuine.hwpx -o r28-evidence/genuine-hwpx.pdf
+          test -s r28-evidence/genuine-hwp.pdf
+          test -s r28-evidence/genuine-hwpx.pdf
+      - name: Validate real PDF structure, pages and sha256
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'pypdf==5.9.0'
+          python scripts/r28_real_rhwp_acceptance.py r28-evidence
+      - name: Upload evidence including genuine PDFs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 pinned
+        with:
+          name: r28-official-rhwp-real-pdf-evidence
+          path: r28-evidence/
+          if-no-files-found: warn
+          retention-days: 7
