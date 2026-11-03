@@ -25,7 +25,10 @@
 - HWPX PDF 1쪽: `pypdf` 추출 34자(주로 영문), 다운로드 PDF 크기 37,181B.
 - 정밀 HWP 샘플 A4: 2,976 x 4,209 px. 일반 HWPX 샘플 A4: 2,480 x 3,508 px.
 - 검색 결과는 각 glyph의 배치에 의존하며, 실제 사용자 PC PDF처럼 완전한 문단 단위 검색/복사를 보장하는 것은 아님.
-- 최종 최신 SHA의 CI PASS는 별도 확인하고 PR 리뷰/병합 후 추가 기록 필요.
+- **최종 R32 단어 검색·복사 자동화 검증 PASS:** https://github.com/Peter-msk/Sunrise-PDF-Pro-web/actions/runs/41670136784 (SHA `93772eb4cc3023a95193ea30dc59546006813c75`).
+- HWP PDF 1쪽, 실 `pypdf` 추출 103자, `가나다라마` 연속 문자열 검증 PASS, 실 다운로드 69,416B.
+- HWPX PDF 1쪽, 실 `pypdf` 추출 20자, `CELL`과 `NEXT PARAGRAPH` 실제 공백·줄바꿈을 보존하며 `CELLNEXTPARAGRAPH` 공백 정규화 검색 PASS, 실 다운로드 34,938B.
+- 구형 테스트는 글자마다 줄바꿈되어 단어 검색이 불가능했음. R32에서 같은 줄의 인접 glyph 합치기 및 ASCII 구간 전용 Helvetica 폰트 사용으로 해결. **모든 실무문서 문장 검색·정확한 띄어쓰기 검증은 별도 필요.**
 
 ## 4. 남은 과제
 - R33: rhwp SVG native PDF vector rendering (paths/lines/images with fallback) 및 정량 시각회귀. PDF 레이어 출력 우선순위와 한글 폰트 메트릭 정합 별도.
