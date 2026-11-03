@@ -10,9 +10,10 @@ const results=[];
 try{
  for(const ext of ['hwp','hwpx']){
   const page=await browser.newPage({acceptDownloads:true});
+  await page.addInitScript(()=>{window.__SUNRISE_CI_R32_DIAG__=true;});
   const errors=[],external=[],consoleErrors=[],requestFailures=[];
   page.on('pageerror',e=>errors.push(e.message));
-  page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
+  page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());if(m.text().startsWith('R32_LAYER_FONT_FAIL'))console.log(m.text());});
   page.on('requestfailed',req=>requestFailures.push(req.url()+': '+req.failure()?.errorText));
   page.on('request',r=>{if(!r.url().startsWith(origin+'/')&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))external.push(r.url());});
   await page.goto(site,{waitUntil:'networkidle',timeout:30000});
