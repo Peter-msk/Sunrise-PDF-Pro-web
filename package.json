@@ -1,0 +1,11 @@
+{
+  "name": "sunrise-pdf-pro-web",
+  "private": true,
+  "version": "0.31.0",
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix browser-local install --no-audit --no-fund --ignore-scripts && npm --prefix browser-local test && npm --prefix browser-local run build && node scripts/verify-browser-build.mjs && node scripts/test-worker-assets.mjs",
+    "test": "npm --prefix browser-local test && node scripts/test-worker-assets.mjs"
+  },
+  "devDependencies": {}
+}
