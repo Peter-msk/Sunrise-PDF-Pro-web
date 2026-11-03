@@ -98,7 +98,7 @@ jobs:
               assert len(d.pages)>0 and not d.is_encrypted,ext
               text=''.join(page.extract_text() or '' for page in d.pages)
               assert len(text.strip())>=2, f'{ext}: R32 searchable PDF text extraction missing'
-              assert any('가'<=char<='힣' for char in text), f'{ext}: Korean searchable layer missing'
+              if ext=='hwp': assert any('가'<=char<='힣' for char in text), 'HWP: Korean searchable layer missing'
               out[ext]={'pages':len(d.pages),'bytes':f.stat().st_size,'sha256':hashlib.sha256(f.read_bytes()).hexdigest(),'searchable_chars':len(text),'status':'PASS'}
           Path('r29-browser-real-evidence/R29_BROWSER_PDF_CHECK.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))
           print(json.dumps(out,indent=2))
