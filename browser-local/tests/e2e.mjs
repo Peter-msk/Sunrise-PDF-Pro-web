@@ -47,6 +47,7 @@ try{
   if(!message.includes('PDF 생성 완료'))throw new Error(ext+' conversion status: '+message);
   const pagesLabel=await page.locator('#pages').innerText();
   if(!pagesLabel.includes('검색 계층'))throw new Error('Searchable PDF layer absent: '+pagesLabel);
+  console.log('R32 PDF TEXT STATS:',ext,pagesLabel);
   const raster=await page.locator('#preview img').evaluate(async img=>{
    await img.decode();
    return {width:img.naturalWidth,height:img.naturalHeight};
