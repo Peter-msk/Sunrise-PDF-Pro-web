@@ -10,11 +10,11 @@ function coalesceGlyphs(glyphs){
  const result=[];
  let row=null;
  const flush=()=>{
-  if(row){result.push({text:row.text,x:row.x,y:row.y,size:row.size});row=null;}
+  if(row){result.push({text:row.text,x:row.x,y:row.y,size:row.size,glyphs:row.glyphs});row=null;}
  };
  for(const g of glyphs){
   if(!row){
-   row={...g,lastX:g.x,lastSize:g.size,lastText:g.text};
+   row={...g,lastX:g.x,lastSize:g.size,lastText:g.text,glyphs:[g]};
    continue;
   }
   const dx=g.x-row.lastX;
@@ -23,11 +23,12 @@ function coalesceGlyphs(glyphs){
   // Do not merge independent table columns or separate graphic labels.
   if(!sameRow||!adjacent||row.text.length>=240||row.lastText.length!==1||g.text.length!==1){
    flush();
-   row={...g,lastX:g.x,lastSize:g.size,lastText:g.text};
+   row={...g,lastX:g.x,lastSize:g.size,lastText:g.text,glyphs:[g]};
    continue;
   }
   const addSpace=dx>Math.max(row.lastSize,g.size)*1.12 && !row.text.endsWith(' ') && !g.text.startsWith(' ');
   row.text+=(addSpace?' ':'')+g.text;
+  row.glyphs.push(g);
   row.lastX=g.x;
   row.lastSize=g.size;
   row.lastText=g.text;
@@ -61,7 +62,8 @@ export function extractSvgTextRuns(svg,width,height){
  }
  const runs=coalesceGlyphs(glyphs).map(row=>({
   text:row.text,x:row.x*PT_PER_PX,
-  y:(height-row.y)*PT_PER_PX,size:row.size*PT_PER_PX
+  y:(height-row.y)*PT_PER_PX,size:row.size*PT_PER_PX,
+  glyphs:row.glyphs.map(g=>({text:g.text,x:g.x*PT_PER_PX,y:(height-g.y)*PT_PER_PX,size:g.size*PT_PER_PX}))
  }));
  return {runs,total:nodes.length,skipped};
 }
@@ -74,8 +76,15 @@ export function writeSearchableText(pdfPage,pdfFont,textLayer){
    });
    embedded+=[...run.text].length;
   }catch{
-   // No replacement symbols; one unsupported character must not corrupt visible PDF.
-   unsupported+=[...run.text].length;
+   // Fall back to exact per-glyph coordinates if a grouped text run cannot encode.
+   for(const glyph of run.glyphs){
+    try{
+     pdfPage.drawText(glyph.text,{x:glyph.x,y:glyph.y,size:glyph.size,font:pdfFont,opacity:0});
+     embedded+=[...glyph.text].length;
+    }catch{
+     unsupported+=[...glyph.text].length;
+    }
+   }
   }
  }
  return {total:textLayer.total,embedded,skipped:textLayer.skipped+unsupported};
