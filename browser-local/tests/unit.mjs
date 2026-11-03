@@ -7,7 +7,7 @@ const textLayer=readFileSync(new URL('../src/searchable-layer.js',import.meta.ur
 test('client document parser and PDF renderer never send the HWP buffer to network',()=>{
  assert(converter.includes('new HwpDocument(new Uint8Array(buf))'));
  assert(converter.includes('PDFDocument.create()'));
- assert(converter.includes('fetch(searchableFontURL,{credentials:\'same-origin\'})'));
+ assert(converter.includes('fetch(searchableFontURL,')&&converter.includes('credentials:\'same-origin\',signal'));
  assert(!converter.includes('fetch(file')&&!converter.includes('fetch(buf')&&!converter.includes('fetch(selected'));
  assert(!/FormData|XMLHttpRequest|navigator[.]sendBeacon/.test(converter));
 });
