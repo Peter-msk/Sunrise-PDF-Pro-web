@@ -1,32 +1,35 @@
 # Sunrise PDF PRO Web
 
-## 웹 검증 사이트
+## Cloudflare Workers — 실제 테스트 주소
 
-- **Cloudflare Pages:** https://sunrise-pdf-pro-web.pages.dev
-- **GitHub 저장소:** https://github.com/Peter-msk/Sunrise-PDF-Pro-web-
-- **Pages 배포 방식:** Cloudflare API를 통한 직접 배포 (GitHub 자동연동 권한 설정 대기)
-- **배포 소스:** `public/` 및 `functions/api/` (R27 기반 브라우저 UI 스테이징)
+**https://sunrise-pdf-pro-web.ko-pg.workers.dev**
 
-이 사이트는 **웹 화면 검증 단계**입니다. HWP/HWPX 파일 선택과 기본 서명 검사는 브라우저에서 수행하지만, 변환 백엔드가 준비되지 않아 PDF 생성은 비활성화됩니다. API는 엔진이 없는 상태를 알리고 변환 요청을 HTTP 503으로 거부합니다. 가짜 결과나 사용자 문서 업로드를 생성하지 않습니다.
+- 실행 유형: **Cloudflare Workers** (별도 Worker, Pages 아님)
+- Worker 이름: `sunrise-pdf-pro-web`
+- 보호 대상 기존 PDF Editor: `sunrise-pdf-editor` (코드·배포 유지)
+- GitHub: `Peter-msk/Sunrise-PDF-Pro-web-`
+- Worker 코드: `src/worker.js`
+- Wrangler 설정: `wrangler.jsonc`
+- 과거 동일 이름의 Pages 프로젝트: Worker 전환 후 삭제 완료
 
-### 핵심 제품 아키텍처
+## 현재 검증 범위
 
-- **웹 화면:** Cloudflare Pages — PC/모바일 브라우저
-- **PDF 변환:** 기존 R27 Python FastAPI + 공식 `rhwp` CLI (별도 안전한 Linux 변환 워커 필요)
-- **원본 보기:** 공식 `@rhwp/core` WASM 정적 자산의 검증 후 탑재 예정
-- **사용자 PC:** 한컴·Python·Node·Java·rhwp 설치 불필요
+Cloudflare Workers에서 PC/모바일 웹 UI를 제공합니다. HWP/HWPX 파일 선택, 확장자·기본 헤더 검사는 클라이언트에서 가능하나, **실제 HWP/HWPX→PDF 변환 엔진은 아직 연결되지 않았습니다.**
 
-### Cloudflare Pages 정적 사이트 배포
+- `GET /api/status`: 엔진 미연결임을 표시합니다.
+- 다른 `/api/*`: HTTP 503 `BACKEND_NOT_CONNECTED`를 반환합니다.
+- 사용자 문서를 변환 서버로 전송하지 않고, 가짜 PDF 결과를 만들지 않습니다.
+- 최종 사용자는 한컴/Python/Java/rhwp 설치가 필요하지 않습니다.
 
-- 배포 브랜치: `main`
-- 빌드 명령: 없음
-- 출력 디렉터리: `public`
-- Pages Functions: `functions/api/`
+## 관리 및 배포
 
-Cloudflare의 비공개 GitHub 저장소 접근 권한이 연결되면 Git 기반 자동배포로 전환할 수 있습니다. 지금은 Pages 프로젝트 자체는 직접 배포되어 있습니다.
+1. Cloudflare **Workers & Pages**에서 `sunrise-pdf-pro-web` **Worker**를 선택합니다. `sunrise-pdf-editor`를 변경하지 마세요.
+2. Worker 소스는 `src/worker.js`에 있습니다. HTML·CSS·JS는 해당 Worker 코드에 포함된 스냅샷입니다. 참고용 원본은 `public/`이며, **`public/`만 수정해도 Worker가 자동 갱신되지 않습니다.**
+3. Wrangler CLI를 사용하는 경우 저장소 루트에서 `npx wrangler deploy`를 실행합니다. Cloudflare 연결/인증은 개발자에게만 필요합니다.
+4. 현재 GitHub push와 Cloudflare Workers 간 자동배포는 아직 연결하지 않았습니다. 수동/연결된 CI에서 배포할 수 있습니다.
 
-자세한 내용은 [DEPLOYMENT.md](DEPLOYMENT.md)를 참고하세요.
+자세한 안내는 [WORKERS_DEPLOYMENT.md](WORKERS_DEPLOYMENT.md)를 참고하세요.
 
-### 현재 제한 및 보안
+## 다음 단계
 
-R27 FastAPI 원본 전체는 아직 이 저장소에 업로드되지 않았습니다. Cloudflare Pages가 Python·native rhwp CLI를 직접 실행한다고 간주해서는 안 됩니다. 백엔드 인증, 작업 격리, 실제 HWP/HWPX→PDF 변환과 품질검증 완료 전에는 변환 서비스를 공개하지 않습니다. 비밀번호·토큰·사용자 문서는 저장소에 올리지 않습니다.
+별도의 안전한 Linux 변환 서버(FastAPI + 공식 rhwp CLI)를 연결하고, PDF 출력 품질 및 실제 브라우저 E2E 시험을 완료해야 합니다. Cloudflare Workers에 Linux 실행파일을 직접 설치하는 방식은 사용하지 않습니다.
