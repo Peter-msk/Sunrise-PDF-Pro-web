@@ -2,7 +2,7 @@ import { prepareWasm, convertToPdf } from './converter.js';
 const $=id=>document.getElementById(id);
 let selected=null,pdfUrl=null,imgUrl=null,busy=false,ready=false,controller=null;
 const status=(s)=>{$('status').textContent=s};
-const sync=()=>{$('convert').disabled=!ready||!selected||busy;$('reset').disabled=!selected||busy;$('cancel').disabled=!busy;$('source').disabled=busy;};
+const sync=()=>{$('convert').disabled=!ready||!selected||busy;$('reset').disabled=!selected||busy;$('cancel').disabled=!busy;$('source').disabled=busy;$('quality').disabled=busy;$('searchable').disabled=busy;};
 function clearOutput(){
  if(pdfUrl){URL.revokeObjectURL(pdfUrl);pdfUrl=null;}
  if(imgUrl){URL.revokeObjectURL(imgUrl);imgUrl=null;}
@@ -27,15 +27,21 @@ $('convert').addEventListener('click',async()=>{
   const result=await convertToPdf(file,info=>{
    $('progress').value=Math.min(99,Math.round(info.page/info.total*100));
    status('브라우저 내부 PDF 생성 중 · '+info.page+'/'+info.total+'쪽');
-  },controller.signal);
+  },controller.signal,$('quality').value,$('searchable').checked?'searchable':'image');
   pdfUrl=URL.createObjectURL(result.pdf);imgUrl=URL.createObjectURL(result.preview);
   const img=new Image();img.src=imgUrl;img.alt='변환된 PDF 첫 페이지 렌더링';
   $('preview').replaceChildren(img);
   $('download').href=pdfUrl;
   $('download').download=file.name.replace(/\.hwpx?$/i,'')+'.pdf';
   $('download').hidden=false;$('progress').value=100;
-  $('pages').textContent=result.pages+'쪽 · '+(result.bytes/1024).toFixed(1)+' KiB · 이미지 PDF';
-  status('실제 PDF 생성 완료. 위 버튼을 누르면 컴퓨터로 다운로드합니다.');
+  const coverage=result.textSummary;
+  const coverageText=result.renderMode==='hybrid-searchable'?
+   ' · 검색 계층 '+coverage.embedded+'개 (누락 '+coverage.skipped+'개)':
+   ' · 이미지 PDF (검색 계층 없음)';
+  $('pages').textContent=result.pages+'쪽 · '+(result.bytes/1024).toFixed(1)+' KiB'+coverageText;
+  status(result.renderMode==='hybrid-searchable'?
+   'PDF 생성 완료: 한글 검색·복사 계층이 포함됐습니다. 복잡한 글꼴·도면 조판은 원본과 비교하세요.':
+   'PDF 생성 완료: 이미지 PDF입니다. 다운로드할 수 있습니다.');
  }catch(err){
   if(err?.name==='AbortError'){
    clearOutput();status('PDF 변환이 취소되었습니다. 파일을 다시 선택하거나 재시도할 수 있습니다.');
