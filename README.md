@@ -1,40 +1,42 @@
-# Sunrise PDF PRO Web — Cloudflare Workers
+# Sunrise PDF PRO Web
 
-**[웹 테스트 사이트](https://sunrise-pdf-pro-web.ko-pg.workers.dev)** · Cloudflare Worker `sunrise-pdf-pro-web` (기존 `sunrise-pdf-editor`와 완전 별개)
+**공식 rhwp 오픈소스 기반 · 별도 유료 변환 API 불필요**
 
-## R28 구현·실검증 상태
+## 현재 공개 변환 사이트
 
-| 검증 단계 | 결과 |
-|---|---|
-| Cloudflare Worker 웹 UI 배포 | 완료 |
-| Worker ↔ Linux FastAPI HMAC 프록시 코드 | 배포 및 로컬 검증 완료 |
-| 공식 rhwp v0.8.7 **실제 HWP → PDF** | [GitHub Actions PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41636542190) |
-| 공식 rhwp v0.8.7 **실제 HWPX → PDF** | [동일 실행 PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41636542190) |
-| 공식 Linux rhwp 포함 백엔드 Docker 빌드 | [GitHub Actions PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41637866326) |
-| **Docker 이미지 내부 실제 HWP/HWPX→PDF** | [GitHub Actions PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41638389696) |
-| FastAPI 보안/기존 기능 회귀시험 | 312 PASS / 1 SKIP |
-| 로컬 실제 HTTP Edge 인증검증 | 9/9 PASS |
-| Cloudflare Worker → 상시 Linux 원본 서버 → PDF 다운로드 | **미완료** |
+- **[브라우저 로컬 HWP/HWPX → PDF 변환기](https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/)**
+- [기존 메인 화면](https://sunrise-pdf-pro-web.ko-pg.workers.dev/) — 무료 로컬 변환기로 연결되는 안내 링크 포함
+- Cloudflare Worker `sunrise-pdf-pro-web` (기존 PDF Editor `sunrise-pdf-editor`와 별도)
+- 실제 공개 사이트 Chromium 실변환 검증: [GitHub Actions 41643648944 — PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41643648944)
 
-공식 rhwp 변환 시험은 upstream의 HWP와 HWPX 원본을 PDF로 직접 변환했습니다. 각 1쪽이며 PDF 구조·SHA-256 검증이 통과했습니다. **사용자 웹사이트에서의 변환 성공을 의미하지는 않습니다.**
+## 소스 직접 통합
 
-## 배포 소스
+- 오픈소스: `edwardkim/rhwp` **MIT**, 태그 `v0.8.7`
+- 원본 Rust 소스 고정 참조: Git 서브모듈 `vendor/rhwp-upstream/` (커밋 `1a76570e833917d15817415a53c09ad61ab3203f`)
+- 브라우저 WASM: `@rhwp/core@0.8.7`, 의존성 직접 패키징: `browser-local/`
+- 브라우저 PDF 생성: `pdf-lib@1.17.1`
+- 컴파일된 자체 JS: `worker-assets/local-bundle.js`
+- 배포 Worker: `src/worker.js`
+- MIT 저작권: `THIRD_PARTY_RHWP_LICENSE.txt`
 
-- `src/worker.js` — 브라우저 UI 및 보안 프록시
-- `public/` — 웹 UI 소스
-- `backend/r28_backend_runtime.tar.gz` — 실제 R27 FastAPI 업무 로직 + R28 HMAC 보안 게이트, 무결성 고정
-- `backend/Dockerfile` — 공식 rhwp Linux x86_64 실행파일 SHA-256 검증, Debian 13 기반
-- `backend/docker-entrypoint.sh` — 원본 서버 비밀값 확인 및 FastAPI 실행
-- `.github/workflows/r28-real-rhwp.yml` — 실제 CLI HWP/HWPX→PDF 검증
-- `.github/workflows/r28-backend-build.yml` — 실제 Docker 빌드 검증
-- [R28 상세 개발 현황](R28_RELEASE_STATUS.md)
+## 데이터 처리 방식
 
-## 웹사이트 PDF 변환 기능이 아직 비활성화된 이유
+원본 HWP/HWPX 파일은 **사용자 브라우저 안에서만 처리**합니다. 변환 서버에 업로드하거나 유료 변환 API로 보내지 않습니다. Worker는 초기화에 필요한 공개 `rhwp_bg.wasm` 정적 실행 바이너리만, **고정 버전 npm CDN에서 SHA-256 검증 후** 전달합니다. 정적 바이너리를 받는 작업과 사용자 원본 문서를 업로드하는 작업은 다릅니다.
 
-현재 Cloudflare 계정의 **Containers API가 Workers Paid 플랜 필요 오류로 거부**됩니다. Workers V8 자체에서는 Linux 네이티브 rhwp CLI를 직접 실행할 수 없습니다. 따라서 Linux 컨테이너를 가동할 별도 호스트가 현재 없습니다.
+### 반드시 알아야 할 PDF 품질 제한
 
-Worker는 `SUNRISE_BACKEND_ORIGIN`(HTTPS 주소)와 `SUNRISE_EDGE_HMAC_SECRET`(Cloudflare secret) 모두 없으면 문서 업로드를 차단하고 HTTP 503 `BACKEND_NOT_CONNECTED`로 응답합니다. 사용자 문서를 가짜 PDF로 처리하지 않습니다.
+현재 PDF는 렌더링된 SVG 페이지를 이미지화하여 조립한 **이미지 기반 PDF**입니다. 따라서 PDF 텍스트 선택·검색이 되지 않습니다. 문서 글꼴, 서식, 이미지, 특수 개체에 따라 출력 품질 차이가 생길 수 있습니다. 복잡한 실무문서의 조판·페이지 나눔 품질평가는 별도 단계입니다.
 
-상시 Linux 서버가 확보되면 [백엔드 배포 안내](backend/README.md)에 따라 원본을 실행하고, Cloudflare Worker에 두 비밀값을 입력한 후 브라우저 E2E 검증을 수행합니다.
+## 검증 상태
 
-**기존 PDF Editor Worker `sunrise-pdf-editor`를 변경하지 않습니다.**
+- 기존 공식 Linux rhwp CLI 실변환 (HWP/HWPX): PASS
+- 브라우저 로컬 WASM HWP/HWPX 실변환: [PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41641674622)
+- **실제 Cloudflare 공개 사이트에서 Chromium PDF 다운로드 및 구조검사: [PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web-/actions/runs/41643648944)**
+- 동일한 브라우저 접속 경로에서 문서 원본의 외부 업로드 요청: 없음
+- 기존 PDF Editor Worker: 수정하지 않음
+
+## 배포 구조
+
+`src/worker.js`는 기존 API 사용 가능성을 보존하면서 `/local/`에 별도 브라우저 변환기를 추가합니다. `/local/rhwp_bg.wasm`은 공식 WASM 정적 자산의 SHA-256 확인 후 서빙하며, 변환 API 및 상시 Linux 서버 구독은 필요하지 않습니다. 서버 백엔드 관련 `backend/` 코드는 연구·선택적 고품질 변환 확장용으로 유지합니다.
+
+개발용 안내는 `browser-local/README.md` 및 `R29_CLOUDFLARE_BROWSER_ROUTE.md`를 참고하세요.
