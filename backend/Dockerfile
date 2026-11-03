@@ -1,5 +1,5 @@
 # R28 official rhwp Linux runtime — dedicated origin, not a Cloudflare Worker.
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-trixie
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 RUN apt-get update && apt-get install --no-install-recommends -y \
     ca-certificates curl tar bubblewrap util-linux fontconfig fonts-noto-cjk \
