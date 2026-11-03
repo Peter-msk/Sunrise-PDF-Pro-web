@@ -67,12 +67,13 @@ export function extractSvgTextRuns(svg,width,height){
  }));
  return {runs,total:nodes.length,skipped};
 }
-export function writeSearchableText(pdfPage,pdfFont,textLayer){
+export function writeSearchableText(pdfPage,pdfFont,textLayer,latinFont){
  let embedded=0,unsupported=0;
  for(const run of textLayer.runs){
   try{
+   const ascii=latinFont&&[...run.text].every(c=>c.codePointAt(0)>=32&&c.codePointAt(0)<=126);
    pdfPage.drawText(run.text,{
-    x:run.x,y:run.y,size:run.size,font:pdfFont,opacity:0
+    x:run.x,y:run.y,size:run.size,font:ascii?latinFont:pdfFont,opacity:0
    });
    embedded+=[...run.text].length;
   }catch(err){
@@ -80,7 +81,8 @@ export function writeSearchableText(pdfPage,pdfFont,textLayer){
    // Fall back to exact per-glyph coordinates if a grouped text run cannot encode.
    for(const glyph of run.glyphs){
     try{
-     pdfPage.drawText(glyph.text,{x:glyph.x,y:glyph.y,size:glyph.size,font:pdfFont,opacity:0});
+     const asciiGlyph=latinFont&&[...glyph.text].every(c=>c.codePointAt(0)>=32&&c.codePointAt(0)<=126);
+     pdfPage.drawText(glyph.text,{x:glyph.x,y:glyph.y,size:glyph.size,font:asciiGlyph?latinFont:pdfFont,opacity:0});
      embedded+=[...glyph.text].length;
     }catch{
      unsupported+=[...glyph.text].length;
