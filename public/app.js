@@ -40,17 +40,34 @@
   }
   async function checkServer(){
     try{
+      const edge=await api('/api/edge-health');
+      if (!edge.backend_configured){offline();return;}
+      set('serviceTitle','변환 서버 연결 구성됨');
+      set('serviceDetail','서버 계정으로 로그인한 다음 엔진 준비상태를 확인합니다.');
+      set('serviceMode','백엔드 연결 구성');set('badge','로그인 필요');$('badge').classList.add('warn');
+      const session=await api('/api/session').catch(()=>null);
+      if(session&&session.csrf)await authenticated(session);
+      else {$('loginLayer').hidden=false;set('userLabel','로그인 필요');reply('서버 계정으로 로그인해 주세요.');}
+    }catch(e){offline();}
+  }
+  async function authenticated(s){
+    csrf=s.csrf;username=s.user||'';set('userLabel',username);
+    $('loginLayer').hidden=true;$('logout').hidden=false;
+    try{
       const r=await api('/api/status');
       engine=Boolean(r.rhwp_cli_available&&r.process_limits&&r.process_limits.ready);
       wasm=Boolean(r.wasm_assets_verified);
-      if(!engine){offline();return;}
-      set('serviceTitle','변환 API 사용 가능');set('serviceDetail','서버 연결을 확인했습니다. 계정 로그인 후 변환을 시험하세요.');
-      set('serviceMode','실서비스');set('badge','서버 연결됨');$('badge').classList.remove('warn');
-      const session=await api('/api/session').catch(()=>null);
-      if(session&&session.csrf){await authenticated(session);}else{$('loginLayer').hidden=false;set('userLabel','로그인 필요');}
-    }catch(e){offline();}
+      const ready=engine?'rhwp 변환 엔진 준비됨':'변환 엔진 미준비';
+      const cause=r.rhwp_cli_contract_reason||r.process_limits?.reason||'RHWP_BACKEND_NOT_READY';
+      set('serviceTitle',ready);
+      set('serviceDetail',engine?'서버 변환 엔진을 확인했습니다. 실제 문서 변환을 시험할 수 있습니다.':'엔진 상태: '+cause);
+      set('serviceMode',engine?'실서비스 연결':'실서비스 점검');
+      set('badge',engine?'변환 가능':'서버 검증 대기');
+      $('badge').classList.toggle('warn',!engine);
+      reply(engine?'문서를 선택해 변환하세요.':'서버 로그인은 완료됐지만 실제 rhwp 변환은 준비되지 않았습니다.');
+    }catch(e){engine=false;wasm=false;set('badge','엔진 확인 실패');reply('엔진 상태 확인 실패: '+e.message);}
+    sync();await jobs();
   }
-  async function authenticated(s){csrf=s.csrf;username=s.user||'';set('userLabel',username);$('loginLayer').hidden=true;$('logout').hidden=false;sync();await jobs();}
   async function jobs(){
     if(!csrf)return;
     try{const data=await api('/api/jobs');$('jobs').replaceChildren();
