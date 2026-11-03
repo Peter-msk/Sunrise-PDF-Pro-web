@@ -1,0 +1,96 @@
+name: R29 Official rhwp Browser-Local PDF E2E
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'browser-local/**'
+      - '.github/workflows/r29-browser-local.yml'
+      - '.gitmodules'
+permissions:
+  contents: read
+jobs:
+  browser-only-hwp-hwpx:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned official rhwp WASM and PDF library
+        working-directory: browser-local
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: Static browser-only contract tests
+        working-directory: browser-local
+        run: npm test
+      - name: Build browser-local HTML JS and official WASM assets
+        working-directory: browser-local
+        run: npm run build
+      - name: Inspect self-hosted WASM assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s browser-local/dist/rhwp_bg.wasm
+          test -f browser-local/dist/index.html
+          find browser-local/dist -maxdepth 3 -type f -printf '%p %s bytes\n'
+          mkdir -p r29-browser-real-evidence
+          sha256sum browser-local/dist/rhwp_bg.wasm > r29-browser-real-evidence/official-wasm-sha256.txt
+      - name: Install Chromium for browser conversion test
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Fetch genuine upstream HWP/HWPX fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl --fail --location --retry 3 \
+            'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' \
+            -o r29-browser-fixtures/genuine.hwp
+          curl --fail --location --retry 3 \
+            'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' \
+            -o r29-browser-fixtures/genuine.hwpx
+      - name: Launch local-only static preview server
+        shell: bash
+        run: |
+          npm --prefix browser-local run preview > /tmp/sunrise-r29-vite.log 2>&1 &
+          echo $! > /tmp/sunrise-r29-vite.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/sunrise-r29-vite.log
+          exit 1
+      - name: REAL Chromium HWP/HWPX WASM to downloadable PDF
+        shell: bash
+        run: node browser-local/tests/e2e.mjs
+      - name: Check downloaded PDFs with pypdf
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check 'pypdf==5.9.0'
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          from pypdf import PdfReader
+          out={}
+          for ext in ('hwp','hwpx'):
+              f=Path('r29-browser-real-evidence')/f'browser-genuine-{ext}.pdf'
+              assert f.is_file() and f.stat().st_size>500 and f.read_bytes()[:5]==b'%PDF-',ext
+              d=PdfReader(str(f),strict=True)
+              assert len(d.pages)>0 and not d.is_encrypted,ext
+              out[ext]={'pages':len(d.pages),'bytes':f.stat().st_size,'sha256':hashlib.sha256(f.read_bytes()).hexdigest(),'status':'PASS'}
+          Path('r29-browser-real-evidence/R29_BROWSER_PDF_CHECK.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))
+          print(json.dumps(out,indent=2))
+          PY
+      - name: Attach browser-generated PDFs and evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r29-browser-local-rhwp-pdf-evidence
+          path: |
+            r29-browser-real-evidence/
+            browser-local/package-lock.json
+          if-no-files-found: warn
+          retention-days: 7
