@@ -7,7 +7,7 @@ on:
       - '.github/workflows/r29-browser-local.yml'
       - '.gitmodules'
 permissions:
-  contents: read
+  contents: write
 jobs:
   browser-only-hwp-hwpx:
     runs-on: ubuntu-24.04
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          persist-credentials: false
+          persist-credentials: true
           submodules: false
       - uses: actions/setup-node@v4
         with:
@@ -84,6 +84,31 @@ jobs:
           Path('r29-browser-real-evidence/R29_BROWSER_PDF_CHECK.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))
           print(json.dumps(out,indent=2))
           PY
+      - name: Check public pinned npm WASM static distribution
+        shell: bash
+        run: |
+          curl -fsSI -L --max-time 30 'https://cdn.jsdelivr.net/npm/@rhwp/core@0.8.7/rhwp_bg.wasm' | head -20
+      - name: Publish static JS bundle and pinned WASM digest into own GitHub repository
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p worker-assets
+          cp browser-local/dist/assets/local-bundle.js worker-assets/local-bundle.js
+          node - <<'JS'
+          const fs=require('fs'),crypto=require('crypto');
+          const files={'local-bundle.js':'worker-assets/local-bundle.js','rhwp_bg.wasm':'browser-local/dist/rhwp_bg.wasm'};
+          const record={rhwp_upstream:'edwardkim/rhwp',rhwp_version:'0.8.7',files:{}};
+          for(const [name,path] of Object.entries(files)){
+            const bytes=fs.readFileSync(path);
+            record.files[name]={bytes:bytes.length,sha256:crypto.createHash('sha256').update(bytes).digest('hex')};
+          }
+          fs.writeFileSync('worker-assets/manifest.json',JSON.stringify(record,null,2)+'\n');
+          JS
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add worker-assets/local-bundle.js worker-assets/manifest.json
+          git diff --cached --quiet || { git commit -m 'build: publish verified browser-only rhwp JS assets [skip ci]'; git push origin HEAD:main; }
       - name: Attach browser-generated PDFs and evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
