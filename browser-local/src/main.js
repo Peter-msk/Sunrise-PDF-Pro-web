@@ -12,8 +12,8 @@ function clearOutput(){
 $('source').addEventListener('change',async e=>{
  const file=e.target.files?.[0];selected=null;clearOutput();
  if(!file){$('filename').textContent='선택된 파일이 없습니다.';sync();return;}
- if(!/\.(hwp|hwpx)$/i.test(file.name)||file.size>20*1024*1024||file.size<8){
-   $('filename').textContent='HWP/HWPX 20MiB 이하만 지원합니다.';sync();return;
+ if(!/\.(hwp|hwpx)$/i.test(file.name)||file.size<8){
+   $('filename').textContent='HWP/HWPX 형식이며 최소 8바이트인 파일만 지원합니다.';sync();return;
  }
  selected=file;$('filename').textContent=file.name+' · '+(file.size/1048576).toFixed(2)+' MiB';
  status('파일을 선택했습니다. 서버로 전송하지 않습니다.');sync();
