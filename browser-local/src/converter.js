@@ -1,6 +1,6 @@
 import init, { HwpDocument } from '@rhwp/core';
 import { PDFDocument } from 'pdf-lib';
-const MAX_FILE=20*1024*1024,MAX_PAGES=120,MAX_PIXELS=9_000_000,DETAIL_MAX_PIXELS=12_000_000;
+const MAX_PAGES=120,MAX_PIXELS=9_000_000,DETAIL_MAX_PIXELS=12_000_000;
 const TARGET_DPI=300,DETAIL_DPI=360; // 96 CSS pixels per inch; A4 fits under the 9 MP per-page guard
 const OLE=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1];
 function throwIfCancelled(signal){
@@ -8,7 +8,7 @@ function throwIfCancelled(signal){
 }
 let wasmPromise=null;
 export function verifyFile(file,buf){
- if(!file||file.size<8||file.size>MAX_FILE)throw Error('파일 크기는 8바이트 이상, 20MiB 이하여야 합니다.');
+ if(!file||file.size<8)throw Error('HWP/HWPX 파일은 최소 8바이트여야 합니다.');
  const b=new Uint8Array(buf,0,8);
  if(/\.hwp$/i.test(file.name)){if(!OLE.every((n,i)=>b[i]===n))throw Error('HWP OLE 파일 서명이 일치하지 않습니다.');}
  else if(/\.hwpx$/i.test(file.name)){if(!(b[0]===80&&b[1]===75&&b[2]===3&&b[3]===4))throw Error('HWPX ZIP 파일 서명이 일치하지 않습니다.');}
