@@ -13,3 +13,10 @@ test('drawing enhancement is bounded and does not claim vector PDF output',()=>{
 });
 
 test('HWP selection and conversion do not reject files over 20MiB',()=>{const ui=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');assert(!ui.includes('file.size>20*1024*1024'));assert(!html.includes('20MiB'));assert(!code.includes('file.size>MAX_FILE'));});
+
+test('homepage shows functional guide without legacy staging or API marketing copy',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ for(const label of ['PDF 변환 사용 방법','문서 선택','PDF 변환','미리보기·다운로드','지원 기능','출력 안내'])assert(html.includes(label),label);
+ for(const stale of ['무료 API 없는','WEBASSEMBLY','실험 버전','유료 변환 API'])assert(!html.includes(stale),stale);
+ for(const id of ['source','convert','cancel','reset','download','preview','progress','status','pages'])assert(html.includes('id="'+id+'"'),id);
+});
