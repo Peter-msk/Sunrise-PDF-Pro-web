@@ -23,6 +23,11 @@ for(const [route,assetPath,contentType] of [
   assert.equal(requested.at(-1),assetPath);
  }
 }
+for(const route of ['/','/index.html']){
+ const resp=await worker.fetch(new Request('https://sunrise.example'+route),env);
+ assert.equal(resp.status,302,'Legacy home must redirect to converter');
+ assert.equal(resp.headers.get('Location'),'https://sunrise.example/local/');
+}
 const health=await (await worker.fetch(new Request('https://sunrise.example/local/health'),env)).json();
 assert.equal(health.document_upload,false);
 assert.equal(health.external_conversion_api,false);
