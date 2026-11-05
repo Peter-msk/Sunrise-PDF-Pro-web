@@ -1,0 +1,105 @@
+name: Production Sunrise PDF PRO example conversion
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'browser-local/**'
+      - 'src/worker.js'
+      - 'scripts/**'
+      - '.github/workflows/production-pdf-example.yml'
+permissions:
+  contents: read
+jobs:
+  production-hwp-hwpx-pdf:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SUNRISE_TEST_URL: https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build pinned browser converter and install Playwright test dependency
+        run: npm run build
+      - name: Install headless Chromium
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Wait for production to show the updated three-step guide
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 90); do
+            if curl --fail --silent --show-error --max-time 15 "${SUNRISE_TEST_URL}" | grep -q 'PDF 변환 사용 방법'; then
+              echo "Production three-step guide is live"
+              exit 0
+            fi
+            echo "Waiting for Cloudflare production release, check $i/90"
+            sleep 10
+          done
+          echo "Production release did not become visible" >&2
+          exit 1
+      - name: Verify live site UI and capture screenshot
+        shell: bash
+        working-directory: browser-local
+        run: |
+          set -euo pipefail
+          mkdir -p ../r29-browser-real-evidence
+          node --input-type=module <<'JS'
+          import {chromium} from 'playwright';
+          const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+          try{
+            const page=await browser.newPage({viewport:{width:1280,height:900}});
+            const base=process.env.SUNRISE_TEST_URL;
+            await page.goto(new URL('/',base).href,{waitUntil:'networkidle',timeout:60000});
+            if(!page.url().endsWith('/local/'))throw Error('Root URL does not open the converter: '+page.url());
+            const t=await page.locator('body').innerText();
+            for(const label of ['문서 선택','PDF 변환','미리보기·다운로드','지원 기능','출력 안내']){
+              if(!t.includes(label))throw Error('Missing guide or feature label: '+label);
+            }
+            for(const stale of ['WEB STAGING','유료 변환 API','실험 버전']){
+              if(t.includes(stale))throw Error('Legacy UI text visible: '+stale);
+            }
+            await page.screenshot({path:'../r29-browser-real-evidence/production-web-ui.png',fullPage:true});
+          }finally{await browser.close();}
+          JS
+      - name: Download genuine HWP and HWPX sample documents
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Real production HWP and HWPX to PDF via Chromium
+        run: node browser-local/tests/e2e.mjs
+      - name: Validate downloaded PDF structure, pages and hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'pypdf==5.9.0'
+          python - <<'PY'
+          from pathlib import Path
+          import json,hashlib
+          from pypdf import PdfReader
+          data={}
+          for ext in ('hwp','hwpx'):
+              file=Path('r29-browser-real-evidence')/f'browser-genuine-{ext}.pdf'
+              assert file.is_file() and file.stat().st_size>500 and file.read_bytes()[:5]==b'%PDF-',ext
+              pdf=PdfReader(str(file),strict=True)
+              assert len(pdf.pages)>0 and not pdf.is_encrypted,ext
+              data[ext]={'pages':len(pdf.pages),'bytes':file.stat().st_size,'sha256':hashlib.sha256(file.read_bytes()).hexdigest(),'status':'PASS'}
+          Path('r29-browser-real-evidence/PRODUCTION_EXAMPLE_PDF_REPORT.json').write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(data,ensure_ascii=False,indent=2))
+          PY
+      - name: Save production example PDFs, UI screenshot and report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sunrise-production-example-pdfs
+          path: r29-browser-real-evidence/
+          if-no-files-found: warn
+          retention-days: 14
