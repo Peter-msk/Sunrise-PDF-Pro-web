@@ -111,7 +111,7 @@ export default {
       return relay(request,env,target);
     }
     if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:POLICY});
-    if(path==='/'||path==='/index.html')return safe(HTML,200,method,'text/html; charset=utf-8');
+    if(path==='/'||path==='/index.html')return Response.redirect(new URL('/local/',request.url),302);
     if(path==='/style.css')return safe(CSS,200,method,'text/css; charset=utf-8');
     if(path==='/app.js')return safe(APP,200,method,'application/javascript; charset=utf-8');
     return new Response('Not Found',{status:404,headers:POLICY});
