@@ -2,7 +2,7 @@ name: R40 Professional Batch PDF Real Browser E2E
 on:
   workflow_dispatch:
   push:
-    branches: [main, release/r40-dev4-20261106]
+    branches: [main, release/r40-dev4-20261106, 'fix/**']
     paths:
       - 'browser-local/**'
       - '.github/workflows/r29-browser-local.yml'
