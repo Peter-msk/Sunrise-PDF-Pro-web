@@ -1,4 +1,44 @@
 /**
+ * R35 DEV3 - browser-local font selection for exact SVG family/style matching.
+ * Font bytes come only from user-selected files; no system-font enumeration,
+ * remote font URL, or CJK font redistribution is performed.
+ */
+const GLYPH_WHITESPACE=/\s/u;
+const GENERIC_FAMILIES=new Set(['sans-serif','serif','monospace','system-ui']);
+
+export function splitFontFamilies(value=''){
+  const names=[];let current='',quote=null;
+  for(const c of String(value)){
+    if(c==='"'||c==="'"){
+      if(!quote)quote=c;
+      else if(quote===c)quote=null;
+      current+=c;
+    }else if(c===','&&!quote){
+      if(current.trim())names.push(current.trim());
+      current='';
+    }else current+=c;
+  }
+  if(current.trim())names.push(current.trim());
+  return names;
+}
+
+export function familyKey(value){
+  return String(value||'').trim().replace(/^['"]|['"]$/g,'')
+    .normalize('NFKC').replace(/\s+/g,'').toLocaleLowerCase('en-US');
+}
+
+export function requestedStyle(weight='normal',style='normal'){
+  const w=String(weight||'normal').trim().toLowerCase();
+  const s=String(style||'normal').trim().toLowerCase();
+  // Relative or variable weights cannot reliably match one static font face.
+  if(w==='bolder'||w==='lighter')return null;
+  const numeric=/^[1-9]00$/.test(w)?Number(w):null;
+  if(w!=='normal'&&w!=='bold'&&numeric===null)return null;
+  if(!['normal','italic','oblique'].includes(s))return null;
+  return {bold:w==='bold'||(numeric!==null&&numeric>=600),italic:s!=='normal'};
+}
+
+/**
  * Resolve an embedded font. Exact user-provided family+style wins; an OFL
  * bundled face is a clearly reported substitute when the document names a
  * font not available in the browser. Never reach out to the OS or a CDN.
@@ -26,7 +66,7 @@ export function resolveFont(registry,family,weight='normal',style='normal',text=
   if(candidates.length){
     // A small number of bundled Hangul families supports many source font
     // names. Serif documents retain a serif face; the rest prefer sans.
-    const hint=declared.map(familyKey).join(' ');
+    const hint=familyKey(firstConcrete||declared[0]||'');
     const serif=/(명조|바탕|batang|myeongjo|myungjo|serif|times|명조체)/i.test(hint);
     const desired=serif?'serif':'sans';
     const category=candidates.filter(face=>face.genericFamily===desired);
