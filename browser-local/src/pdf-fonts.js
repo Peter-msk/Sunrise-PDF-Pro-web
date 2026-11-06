@@ -38,28 +38,47 @@ export function requestedStyle(weight='normal',style='normal'){
   return {bold:w==='bold'||(numeric!==null&&numeric>=600),italic:s!=='normal'};
 }
 
-export function resolveFont(registry,family,weight='normal',style='normal'){
+/**
+ * Resolve an embedded font. Exact user-provided family+style wins; an OFL
+ * bundled face is a clearly reported substitute when the document names a
+ * font not available in the browser. Never reach out to the OS or a CDN.
+ * The optional text is supplied during preflight to verify glyph coverage.
+ */
+export function resolveFont(registry,family,weight='normal',style='normal',text=''){
   const variant=requestedStyle(weight,style);
   if(!variant)return null;
   const faces=registry?.faces||[];
   const declared=splitFontFamilies(family);
-  // Never silently substitute the second family if an earlier concrete
-  // family was specified: it may be installed on the user's PC.
   const firstConcrete=declared.find(name=>!GENERIC_FAMILIES.has(familyKey(name)));
+  const covers=face=>!text||missingCodepoint(face,text)===null;
+  const exactStyle=face=>face.bold===variant.bold&&face.italic===variant.italic;
+  // Keep the first concrete document family authoritative; later CSS
+  // alternatives do not override a requested unavailable face silently.
   if(firstConcrete){
     const key=familyKey(firstConcrete);
-    const matched=faces.find(face=>face.aliases.includes(key)&&
-      face.bold===variant.bold&&face.italic===variant.italic);
-    if(matched)return matched;
-    if(key==='helvetica'&&!variant.bold&&!variant.italic)
+    const match=faces.find(face=>face.aliases.includes(key)&&exactStyle(face)&&covers(face));
+    if(match)return match;
+    if(key==='helvetica'&&!variant.bold&&!variant.italic&&
+      (!text||[...text].every(c=>c.codePointAt(0)<127)))
       return {name:'Helvetica',characterSet:null,standard:true};
-    return null;
   }
-  // An omitted/generic family only means the document does not specify a
-  // concrete face. User-selected fonts are explicit fallbacks in this case.
-  if(!declared.length || declared.every(name=>GENERIC_FAMILIES.has(familyKey(name)))){
+  const candidates=faces.filter(face=>face.isFallback&&covers(face));
+  if(candidates.length){
+    // A small number of bundled Hangul families supports many source font
+    // names. Serif documents retain a serif face; the rest prefer sans.
+    const hint=familyKey(firstConcrete||declared[0]||'');
+    const serif=/(명조|바탕|batang|myeongjo|myungjo|serif|times|명조체)/i.test(hint);
+    const desired=serif?'serif':'sans';
+    const category=candidates.filter(face=>face.genericFamily===desired);
+    const ranked=category.length?category:candidates;
+    return ranked.find(exactStyle)||ranked.find(face=>face.bold===variant.bold&&!face.italic)
+      ||ranked.find(face=>!face.bold&&!face.italic)||ranked[0];
+  }
+  // Without explicit bundled substitutes, preserve strict family matching.
+  if(!firstConcrete){
     const generic=declared.map(familyKey).find(n=>n==='serif'||n==='sans-serif');
-    const fallback=faces.find(face=>face.bold===variant.bold&&face.italic===variant.italic&&(!generic||!face.genericFamily||face.genericFamily===(generic==='serif'?'serif':'sans')));
+    const fallback=faces.find(face=>exactStyle(face)&&covers(face)&&
+      (!generic||!face.genericFamily||face.genericFamily===(generic==='serif'?'serif':'sans')));
     if(fallback)return fallback;
     if(!variant.bold&&!variant.italic)return {name:'Helvetica',characterSet:null,standard:true};
   }

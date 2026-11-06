@@ -3,7 +3,7 @@
  * SVG-to-PDFKit and PDFKit are MIT dependencies, loaded only when selected.
  * checkedSvg() must sanitize each page before invoking this module.
  */
-import {resolveFont,missingCodepoint} from './pdf-fonts.js';
+import {resolveFont,missingCodepoint,splitFontFamilies,familyKey} from './pdf-fonts.js';
 import {validateTextGeometry} from './svg-text-geometry.js';
 import {flattenLocalSvgStyles} from './svg-style.js';
 import {loadBrowserPdfBackend} from './pdfkit-backend.js';
@@ -120,19 +120,33 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
     const geometry=validateTextGeometry(el);
     if(!geometry.ok)return {ok:false,reason:geometry.reason};
     positionedRuns+=geometry.positionedRuns;
-    const currentFamily=el.getAttribute('font-family')??family;
-    const currentWeight=el.getAttribute('font-weight')??weight;
-    const currentStyle=el.getAttribute('font-style')??style;
+    let currentFamily=el.getAttribute('font-family')??family;
+    let currentWeight=el.getAttribute('font-weight')??weight;
+    let currentStyle=el.getAttribute('font-style')??style;
     if(el.localName==='text'||el.localName==='tspan'||el.localName==='textPath'){
       const value=textDirectlyIn(el);
       if(value.trim()){
         hasText=true;textPages++;
-        const face=resolveFont(fontRegistry,currentFamily,currentWeight,currentStyle);
+        const face=resolveFont(fontRegistry,currentFamily,currentWeight,currentStyle,value);
         if(!face)return {ok:false,reason:'FONT_FAMILY_OR_VARIANT_UNAVAILABLE',
           fontFamily:String(currentFamily||'기본 글꼴').slice(0,120),
           fontWeight:String(currentWeight||'normal').slice(0,24),
           fontStyle:String(currentStyle||'normal').slice(0,24)};
-        if(face.isFallback)substituteFamilies.add(face.family);
+        if(face.isFallback){
+          const original=splitFontFamilies(currentFamily)[0]||'기본 글꼴';
+          if(familyKey(original)!==familyKey(face.family)||
+             (currentWeight==='bold')!==face.bold||
+             (currentStyle!=='normal')!==face.italic){
+            substituteFamilies.add(original.slice(0,48)+' → '+face.family);
+          }
+          // Preflight and PDFKit must use the very same embedded font face.
+          // Replace unavailable italics/weights deterministically and report.
+          el.setAttribute('font-family',face.family);
+          el.setAttribute('font-weight',face.bold?'bold':'normal');
+          el.setAttribute('font-style',face.italic?'italic':'normal');
+          currentFamily=face.family;currentWeight=face.bold?'bold':'normal';
+          currentStyle=face.italic?'italic':'normal';changed=true;
+        }
         if(missingCodepoint(face,value)!==null)
           return {ok:false,reason:'FONT_GLYPH_MISSING',
             fontFamily:String(currentFamily||face.family||'기본 글꼴').slice(0,120)};
