@@ -1,0 +1,48 @@
+name: R40 Release Candidate Gate
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'browser-local/**'
+      - 'src/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'wrangler.jsonc'
+      - '.github/workflows/r40-release-gate.yml'
+permissions:
+  contents: read
+jobs:
+  r40-source-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Require R40 multi-file professional source
+        run: |
+          test -f browser-local/src/batch.js
+          test -f browser-local/src/svg-professional.js
+          test -f browser-local/src/pdfkit-backend.js
+          test -f browser-local/scripts/check-source.mjs
+          test -f browser-local/package-lock.json
+      - name: Install exact dependencies
+        run: npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund
+      - name: Source contract and unit regression
+        run: npm --prefix browser-local run test:local
+      - name: Production assets build and verification
+        run: |
+          npm run build
+          npm --prefix browser-local run verify:dist
+          npx --yes wrangler@4 deploy --dry-run --outdir /tmp/sunrise-r40-dryrun
+      - name: Browser smoke test
+        run: |
+          npm --prefix browser-local exec playwright install --with-deps chromium
+          npm --prefix browser-local run test:wasm
+      - name: R40 release note
+        if: always()
+        run: |
+          echo "This CI is only a technical gate; human-reviewed real HWP/HWPX PDF and batch ZIP acceptance is additionally required before production merge." >> "$GITHUB_STEP_SUMMARY"
