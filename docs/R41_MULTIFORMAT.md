@@ -1,0 +1,11 @@
+# R41 XLS/XLSX/JPG/PNG PDF support
+
+Supported inputs: HWP, HWPX, XLS (OLE/BIFF), XLSX (OOXML), JPG/JPEG, PNG. Files can be mixed in one sequential queue and downloaded separately or as ZIP. Each source file produces one PDF; multiple visible spreadsheet sheets are combined in that source's PDF.
+
+Excel: SheetJS CE 0.20.3 from its official release tarball, integrity pinned by package-lock. Values, formatted dates/numbers, cached formula results, column/row dimensions and merged cells are rendered as searchable PDF text with a basic grid. Blank and hidden sheets and hidden rows/columns are excluded. Original chart/image/style/print-area reproduction and formula recalculation are not supported and are disclosed in the UI. Missing formula cache, unsupported font glyphs, overly wide columns or tall merged regions fail explicitly. Limits: 200,000 used-range cells per sheet and 120 output pages. Nanum Gothic is embedded in full because subset embedding produced invisible composite glyphs despite extractable Unicode. An actual raster-glyph visibility regression check was added.
+
+Images: A4 portrait/landscape selection, proportional fit with margins, browser EXIF decoding, PNG transparency preservation, 80 million decoded pixel limit. JPEG pixels are normalized to PNG without an additional lossy encoding step for consistent orientation. No OCR is performed.
+
+HWP/HWPX: existing rhwp object-preserving conversion is retained from production commit 9100f491760c294d68ec7f91630e91c99753f7f1. Print helper and original font controls apply to HWP/HWPX only. Other formats do not depend on successful WASM initialization.
+
+Local verification: 71 tests passed; six mixed inputs reached successful conversion in development browser. The local-preview download tool timed out, so that UI observation alone is not a saved-PDF validation. Shared production PDF drawing functions were tested separately: XLS/XLSX 70-row two-visible-sheet fixtures each yielded 3 pages, extracted all expected text, no page images, visible glyph rendering; image PDF retained alpha soft mask. New remote browser workflow tests actual downloads, ZIP hashes, EXIF orientation and transparency. See the workflow result for final CI status.

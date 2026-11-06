@@ -3,7 +3,7 @@ import {Zip,ZipPassThrough} from 'fflate';
 export function uniquePdfNames(files){
  const used=new Set();
  return files.map((file,index)=>{
-  let base=String(file.name||'문서').replace(/\.hwpx?$/i,'')
+  let base=String(file.name||'문서').replace(/\.(?:hwp|hwpx|xls|xlsx|jpg|jpeg|png)$/i,'')
    .replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').replace(/^\.+|\.+$/g,'').trim().slice(0,150)||'문서';
   let name=base+'.pdf',n=2;
   while(used.has(name.toLocaleLowerCase('ko-KR')))name=base+' ('+(n++)+').pdf';
