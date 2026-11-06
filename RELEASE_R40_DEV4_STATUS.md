@@ -1,30 +1,32 @@
-# Sunrise PDF PRO Web — R40-DEV4 정식 배포 게이트 (2026-11-06)
+# Sunrise PDF PRO Web — R40-DEV4 배포 이력 및 수락 범위
 
-- 저장소: `Peter-msk/Sunrise-PDF-Pro-web`
-- 운영 브랜치: `main`; 기존 배포 커밋 `c26a64b5bff6ff465fbdfd148a78d13a89a2df67`
-- 최신 로컬 기준본: `Sunrise_PDF_PRO_Web_R40_DEV4_Source_Checkpoint.zip` (GitHub 미반영)
-- 이 브랜치는 **인수 및 배포 준비 브랜치이며, 최신 R40-DEV4의 실기 검증/배포를 완료했다는 뜻이 아님**.
+## 배포 대상
 
-## 필수 요구사항
+- GitHub: `Peter-msk/Sunrise-PDF-Pro-web`, release branch `release/r40-dev4-20261106`.
+- 대상 Cloudflare Worker: `sunrise-pdf-pro-web` — 다른 `sunrise-pdf-editor` Worker 변경 금지.
+- 대상 UI: `/local/`; 원본문서 브라우저 처리, 서버 업로드 없음.
+- 기본 PDF 방식: rhwp WASM `print` SVG → PDFKit 글자/도형 보존. 미지원 처리 시 이미지로 자동 대체하지 않고 오류·부분 PDF 폐기.
+- 다중 HWP/HWPX 선택, 개별 PDF 및 ZIP, 재시도/취소/임시 URL 정리.
 
-1. 입력 HWP/HWPX **다중 파일** 처리, 개별 PDF/ZIP, 진행/취소/실패/재시도 및 자원 정리.
-2. 기본 PDF는 rhwp 기반 글자/표/도형 보존 경로. 이미지 자동 대체 금지; 미지원 글꼴/SVG는 오류를 명시하고 작성 중인 PDF 폐기.
-3. 실제 생성 PDF를 재열어 페이지 수, 추출 텍스트, 이미지 XObject 여부, 표/도형 위치 확인.
-4. 한컴 COM PDF와 동일 문서 품질 대조. 미지원 문서의 성공률을 근거 없이 100%라고 표기하지 않음.
-5. 메인 UI/변환기 UX 통합, 300dpi/페이지 정확도/웹 브라우저 접근성.
-6. source 검사, lockfile 기반 빌드, 핵심 단위시험, 실제 Chromium PDF 다운로드/ZIP 다중파일 E2E.
-7. 기존 `sunrise-pdf-editor` Worker 변경 금지; `sunrise-pdf-pro-web`만 배포.
+## 검증 증거
 
-## 2026-11-06 확인 사실
+- Release code commit: `2cb9b68a82be044fc8ed3ac6a80855e3c1df3be6`.
+- GitHub Actions: <https://github.com/Peter-msk/Sunrise-PDF-Pro-web/actions/runs/42243867213>, 전체 성공.
+- `npm ci` / 단위시험 / Vite WASM 패키징 / Wrangler dry-run / Worker 경로 + CSP 검사: PASS.
+- 실제 Chromium에서 공식 HWP + HWPX 동시 선택 → 개별 PDF 2건 + ZIP 다운로드: PASS.
+- PDF 구조(pypdf strict), 글자 추출, 이미지 XObject 부재: PASS.
+  - HWP: PDF 1쪽, 8,383 bytes, 추출 문자 102자, 이미지 객체 0.
+  - HWPX: PDF 1쪽, 8,354 bytes, 추출 문자 19자, 이미지 객체 0.
+- ZIP: `genuine.pdf`, `genuine (2).pdf` 2개.
+- 브라우저 입력 원문의 외부 전송 관찰 없음(동일 출처 정적 자산만 요청).
 
-- Cloudflare Workers Builds의 GitHub 연결은 정상: 계정 내 `sunrise-pdf-pro-web`, main 자동 트리거.
-- 기존 main 자동빌드 `84f9f335-8475-4d00-8e5b-df43106420af`은 2026-11-05 success. 버전 `7a789576-aa0d-4601-ac26-47f1e69f1e16`이 100% 배포됨.
-- R40-DEV4 체크포인트 소스 단독 검사는 PASS. 현 컨테이너에 npm 의존성과 인터넷이 없어 전체 build/E2E는 이번 점검에서 수행하지 못함.
-- R40-DEV4 개발 인수기록상 실제 다운로드된 PDF/ZIP을 확보해 품질을 재검증하지 못했고, 한글/다중 글자 폭 조정·COM 대조는 미완료.
-- **운영 main에 R40-DEV4 머지는 금지**: 최신 소스 커밋, CI PASS 및 전문 PDF 실파일 검사 이후 승인.
+## 남은 품질 제한 — PASS로 주장하지 말 것
 
-## 배포 프로세스
+- 동일 원본에 대한 Windows 한컴 COM PDF와 다쪽 표/도면/글꼴/줄바꿈 시각·배치 대조: 미실시.
+- 드문 폰트 및 HWPX 다중 글자 `textLength` 처리: 제한적 지원/일부 실패 가능.
+- 공식 1쪽 샘플의 성공이 임의의 업무용 HWP/HWPX 전부의 품질을 보증하지 않음.
+- 운영 배포 후 실제 외부 URL 접속/업로드 없이 변환 시험, 요청 실패 감시, 롤백 준비 필요.
 
-최신 R40-DEV4 소스를 이 release 브랜치에 보존 → GitHub PR 및 CI 증거 첨부 → 실문서 PDF QA 확인 → main 병합 → Cloudflare Builds 자동 배포 → /local/health·WASM 해시·실문서 브라우저 PDF/ZIP·롤백 경로 확인.
+## 배포 결정
 
-이 문서는 배포 가능 여부의 사실 기록이며, 완료하지 못한 테스트를 PASS로 주장하지 않습니다.
+기능을 제한 없이 한컴 COM과 동일하다고 광고하지 않는다. 사용자 지시에 따른 R40 기능 공개는 **지원하지 않는 문서는 명시적으로 실패하고 자동 이미지 대체하지 않는다**는 계약을 전제로 진행한다. Cloudflare 빌드 결과 및 최신 Worker 버전 확인 후 운영 적용 여부를 최종 기록한다.
