@@ -5,14 +5,14 @@
  * No arbitrary input-file byte limit is imposed here.
  */
 /**
- * @param {Blob} file user-provided local HWP/HWPX
+ * @param {Blob} file user-provided local document or image
  * @param {AbortSignal} [signal] cancellation
  * @param {(progress:{loaded:number,total:number})=>void} [onProgress]
  */
 export function readDocumentBuffer(file, signal, onProgress=()=>{}) {
   if(signal?.aborted) return Promise.reject(new DOMException('PDF 변환이 취소되었습니다.','AbortError'));
   if(!file || typeof file.size!=='number' || file.size<8)
-    return Promise.reject(Error('HWP/HWPX 파일을 선택하세요.'));
+    return Promise.reject(Error('유효한 문서 또는 이미지 파일을 선택하세요.'));
   if(typeof FileReader!=='function')
     return Promise.reject(Error('브라우저에서 FileReader API를 사용할 수 없습니다.'));
   return new Promise((resolve,reject)=>{

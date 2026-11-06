@@ -1,0 +1,57 @@
+name: R41 Excel and image PDF acceptance
+on:
+  pull_request:
+    branches: [main]
+    paths: ['browser-local/**', '.github/workflows/r41-multiformat-qa.yml', 'scripts/verify-r41-pdfs.py']
+permissions:
+  contents: read
+jobs:
+  format-conversion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install PDF verification tools
+        run: |
+          if ! command -v pdftoppm || ! command -v pdftotext; then
+            sudo apt-get update && sudo apt-get install -y poppler-utils
+          fi
+      - name: Build and run regression tests
+        run: npm run build
+      - name: Select available Chrome or install Chromium
+        working-directory: browser-local
+        run: |
+          if command -v google-chrome; then
+            echo "CHROME_BIN=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            npx playwright install --with-deps chromium
+          fi
+      - name: Start Worker
+        run: |
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 > /tmp/r41-worker.log 2>&1 &
+          for i in $(seq 1 80); do
+            if curl -fsS http://127.0.0.1:8787/local/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/r41-worker.log
+          exit 1
+      - name: Download four converted PDFs and compare ZIP contents
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/multi-format-e2e.mjs
+      - name: Check text, pages, image orientation and transparency
+        run: |
+          python -m pip install 'pypdf==5.9.0'
+          python scripts/verify-r41-pdfs.py artifacts/r41-browser
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: r41-format-conversion-pdfs
+          path: artifacts/r41-browser/
+          retention-days: 7
