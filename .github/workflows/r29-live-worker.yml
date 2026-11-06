@@ -1,7 +1,11 @@
-name: R29 LIVE Cloudflare Worker Browser-Local PDF Acceptance
+name: R40 LIVE Cloudflare Professional PDF + ZIP Acceptance
 # Explicit production acceptance only after Cloudflare GitHub authorization and deployment.
 on:
   workflow_dispatch:
+  push:
+    branches: [release/r40-dev4-20261106]
+    paths:
+      - '.github/workflows/r29-live-worker.yml'
 permissions:
   contents: read
 jobs:
@@ -19,7 +23,7 @@ jobs:
           node-version: '22'
       - name: Install browser PDF acceptance test dependencies
         working-directory: browser-local
-        run: npm install --no-audit --no-fund --ignore-scripts
+        run: npm ci --no-audit --no-fund --ignore-scripts
       - name: Install real Chromium
         working-directory: browser-local
         run: npx playwright install --with-deps chromium
@@ -40,6 +44,8 @@ jobs:
           j=json.load(open('/tmp/worker-health.json'))
           assert j.get('document_upload') is False
           assert j.get('external_conversion_api') is False
+          assert j.get('default_output')=='professional'
+          assert j.get('wasm_delivery')=='cloudflare-static-assets'
           assert j.get('wasm_sha256')=='54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989'
           PY
           curl -fsSL --retry 2 --max-time 120 \
@@ -65,15 +71,25 @@ jobs:
               assert p.exists() and p.stat().st_size>500 and p.read_bytes()[:5]==b'%PDF-',ext
               doc=PdfReader(str(p),strict=True)
               assert not doc.is_encrypted and len(doc.pages)>0
-              record['cases'][ext]={'pages':len(doc.pages),'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'result':'PASS'}
-          (evidence/'R29_LIVE_WORKER_PDF_ACCEPTANCE.json').write_text(json.dumps(record,indent=2)+'\n')
+              extracted=''.join(page.extract_text() or '' for page in doc.pages).strip()
+              images=[]
+              for page in doc.pages:
+                  resource=page.get('/Resources')
+                  resource=resource.get_object() if resource else {}
+                  objects=resource.get('/XObject')
+                  for ref in (objects.get_object().values() if objects else []):
+                      if ref.get_object().get('/Subtype')=='/Image': images.append(ref)
+              assert extracted, f'{ext}: no extractable text'
+              assert not images, f'{ext}: rasterized PDF on default engine'
+              record['cases'][ext]={'pages':len(doc.pages),'bytes':p.stat().st_size,'text_length':len(extracted),'image_xobjects':len(images),'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'result':'PASS'}
+          (evidence/'R40_LIVE_WORKER_PDF_ACCEPTANCE.json').write_text(json.dumps(record,indent=2)+'\n')
           print(json.dumps(record,indent=2))
           PY
       - name: Upload evidence (public upstream sample PDFs only)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: r29-live-worker-browser-pdf-evidence
+          name: r40-live-worker-professional-pdf-evidence
           path: r29-browser-real-evidence/
           if-no-files-found: warn
           retention-days: 7
