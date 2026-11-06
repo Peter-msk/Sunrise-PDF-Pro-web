@@ -18,12 +18,20 @@ jobs:
         with:
           node-version: '22'
       - name: Install PDF verification tools
-        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+        run: |
+          if ! command -v pdftoppm || ! command -v pdftotext; then
+            sudo apt-get update && sudo apt-get install -y poppler-utils
+          fi
       - name: Build and run regression tests
         run: npm run build
-      - name: Install Chromium
+      - name: Select available Chrome or install Chromium
         working-directory: browser-local
-        run: npx playwright install --with-deps chromium
+        run: |
+          if command -v google-chrome; then
+            echo "CHROME_BIN=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            npx playwright install --with-deps chromium
+          fi
       - name: Start Worker
         run: |
           npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 > /tmp/r41-worker.log 2>&1 &

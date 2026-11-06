@@ -2,7 +2,7 @@ import {chromium} from 'playwright';import {readFileSync,writeFileSync,mkdirSync
 import '../scripts/create-format-fixtures.mjs';
 const root=resolve(import.meta.dirname,'../..'),out=resolve(root,'artifacts/r41-browser');mkdirSync(out,{recursive:true});
 const site=process.env.SUNRISE_TEST_URL||'http://127.0.0.1:8787/local/';
-const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+const browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.CHROME_BIN?{executablePath:process.env.CHROME_BIN}:{})});
 try{
  const page=await browser.newPage({acceptDownloads:true});const errors=[],uploads=[],external=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!['GET','HEAD'].includes(r.method()))uploads.push(r.url());if(!r.url().startsWith(new URL(site).origin+'/')&&!/^(blob:|data:)/.test(r.url()))external.push(r.url());});
