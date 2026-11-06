@@ -1,7 +1,8 @@
-name: R31 Worker Static Assets Real Browser PDF E2E
+name: R40 Professional Batch PDF Real Browser E2E
 on:
   workflow_dispatch:
   push:
+    branches: [main, release/r40-dev4-20261106]
     paths:
       - 'browser-local/**'
       - '.github/workflows/r29-browser-local.yml'
@@ -74,7 +75,7 @@ jobs:
           echo '54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989  /tmp/sunrise-r31-rhwp_bg.wasm' | sha256sum -c -
           curl -fsS http://127.0.0.1:8787/local/ -o /tmp/sunrise-r31-page.html
           grep -q 'HWP/HWPX' /tmp/sunrise-r31-page.html
-      - name: REAL Chromium HWP/HWPX → 300dpi PDF through Cloudflare Worker
+      - name: REAL Chromium Professional HWP/HWPX Batch PDF + ZIP through Cloudflare Worker
         shell: bash
         env:
           SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
@@ -93,8 +94,20 @@ jobs:
               assert f.is_file() and f.stat().st_size>500 and f.read_bytes()[:5]==b'%PDF-',ext
               d=PdfReader(str(f),strict=True)
               assert len(d.pages)>0 and not d.is_encrypted,ext
-              out[ext]={'pages':len(d.pages),'bytes':f.stat().st_size,'sha256':hashlib.sha256(f.read_bytes()).hexdigest(),'status':'PASS'}
-          Path('r29-browser-real-evidence/R29_BROWSER_PDF_CHECK.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))
+              
+              extracted=''.join(page.extract_text() or '' for page in d.pages).strip()
+              image_objects=[]
+              for page in d.pages:
+                  resources=page.get('/Resources')
+                  resources=resources.get_object() if resources else {}
+                  xobjects=resources.get('/XObject')
+                  for obj in (xobjects.get_object().values() if xobjects else []):
+                      target=obj.get_object()
+                      if target.get('/Subtype')=='/Image': image_objects.append(target)
+              assert extracted, f'{ext}: PDF text is not extractable'
+              assert not image_objects, f'{ext}: default output unexpectedly contains raster image objects'
+              out[ext]={'pages':len(d.pages),'bytes':f.stat().st_size,'text_length':len(extracted),'image_xobjects':0,'sha256':hashlib.sha256(f.read_bytes()).hexdigest(),'status':'PASS'}
+          Path('r29-browser-real-evidence/R40_BROWSER_PDF_CHECK.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))
           print(json.dumps(out,indent=2))
           PY
       - name: Attach browser-generated PDFs and evidence

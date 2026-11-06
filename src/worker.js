@@ -59,7 +59,7 @@ async function relay(request,env,target) {
 const LOCAL_RHWP_WASM_SHA256="54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989";
 const LOCAL_RHWP_WASM_BYTES=11821756;
 const LOCAL_POLICY={...POLICY,
- 'Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+ 'Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
 };
 async function localAsset(request, env, assetPath, method, contentType) {
   if (!env.ASSETS || typeof env.ASSETS.fetch !== 'function')
@@ -91,15 +91,20 @@ export default {
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       return localAsset(request,env,'/app.html',method,'text/html; charset=utf-8');
     }
-    if(path==='/local/assets/local-bundle.js'){
+    if(/^\/local\/assets\/(?:local-bundle\.js|local-chunk-[A-Za-z0-9_-]+\.js)$/.test(path)){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
-      return localAsset(request,env,'/assets/local-bundle.js',method,'application/javascript; charset=utf-8');
+      return localAsset(request,env,path.slice('/local'.length),method,'application/javascript; charset=utf-8');
+    }
+    const fontPath=/^\/local\/fonts\/(Nanum(?:Gothic|Myeongjo)-(?:Regular|Bold)\.ttf)$/.exec(path);
+    if(fontPath){
+      if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
+      return localAsset(request,env,'/fonts/'+fontPath[1],method,'font/ttf');
     }
     if(path==='/local/rhwp_bg.wasm'){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       return localAsset(request,env,'/rhwp_bg.wasm',method,'application/wasm');
     }
-    if(path==='/local/health'&&['GET','HEAD'].includes(method))return new Response(method==='HEAD'?null:JSON.stringify({rhwp_version:'0.8.7',wasm_sha256:LOCAL_RHWP_WASM_SHA256,wasm_bytes:LOCAL_RHWP_WASM_BYTES,converter:'browser-local-raster-pdf',quality_target_dpi:300,wasm_delivery:'cloudflare-static-assets',external_conversion_api:false,document_upload:false}),{headers:{...LOCAL_POLICY,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
+    if(path==='/local/health'&&['GET','HEAD'].includes(method))return new Response(method==='HEAD'?null:JSON.stringify({rhwp_version:'0.8.7',wasm_sha256:LOCAL_RHWP_WASM_SHA256,wasm_bytes:LOCAL_RHWP_WASM_BYTES,converter:'browser-local-pdf',default_output:'professional',optional_outputs:['explicit-raster','native-print'],quality_target_dpi:300,wasm_delivery:'cloudflare-static-assets',external_conversion_api:false,document_upload:false}),{headers:{...LOCAL_POLICY,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
     if(path==='/api/edge-health'&&['GET','HEAD'].includes(method))
       return json({service:'sunrise-pdf-pro-web',edge:'cloudflare-worker',backend_configured:Boolean(target),real_conversion_verified:false},200,method);
     if(path.startsWith('/api/')){
