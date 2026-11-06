@@ -77,6 +77,29 @@ test('matching Unicode font family and weight are selected exactly',()=>{
  assert.equal(missingCodepoint(f.faces[0],'漢字'),'漢'.codePointAt(0));
 });
 
+test('R40 font substitution handles enterprise HWP family lists without adding font files',async()=>{
+ const sans={...face('Nanum Gothic'),name:'BundledSans',isFallback:true,genericFamily:'sans'};
+ const serif={...face('Nanum Myeongjo'),name:'BundledSerif',isFallback:true,genericFamily:'serif'};
+ const registry={faces:[sans,serif]};
+ const screenshot="'굴림','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR ExtraLight'";
+ assert.equal(resolveFont(registry,screenshot,'normal','normal',korean).name,'BundledSans');
+ assert.equal(resolveFont(registry,"'굴림체','HY굴림체','GulimChe','D2Coding'",'normal','normal',korean).name,'BundledSans');
+ assert.equal(resolveFont(registry,'알 수 없는 업무용 글꼴','normal','normal',korean).name,'BundledSans');
+ assert.equal(resolveFont(registry,'HY명조','normal','normal',korean).name,'BundledSerif');
+ assert.equal(resolveFont(registry,'굴림','normal','italic',korean).name,'BundledSans');
+ const text=el('text',{'font-family':screenshot,'font-style':'italic'},[],korean);
+ const root=el('svg',{},[text]);
+ await withDOM(root,()=>{
+  const result=preflightProfessionalSvg(checked,{fontRegistry:registry});
+  assert.equal(result.ok,true);
+  assert.equal(text.getAttribute('font-family'),'Nanum Gothic');
+  assert.equal(text.getAttribute('font-style'),'normal');
+  assert.deepEqual(result.substituteFamilies,["'굴림' → Nanum Gothic"]);
+  assert.equal(result.svg,'normalized-svg-placeholder');
+ });
+ assert.equal(resolveFont(registry,screenshot,'normal','normal','漢'),null);
+});
+
 test('multiple local font files are parsed, variants tracked, never fetched',async()=>{
  const files=['Malgun-Regular.ttf','Malgun-Bold.otf'].map((name,i)=>({name,async arrayBuffer(){return new Uint8Array([i,1,2,3]).buffer;}}));
  const parser={create:bytes=>({familyName:'맑은 고딕',subfamilyName:bytes[0]?'Bold':'Regular',

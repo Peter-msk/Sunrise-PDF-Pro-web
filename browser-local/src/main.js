@@ -56,7 +56,7 @@ $('source').addEventListener('change',e=>{addFiles(Array.from(e.target.files||[]
 for(const event of ['dragenter','dragover'])$('drop').addEventListener(event,e=>{e.preventDefault();if(!busy)$('drop').classList.add('drag');});
 for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{e.preventDefault();$('drop').classList.remove('drag');});
 $('drop').addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer?.files||[])));
-$('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'기본 한글 글꼴이 자동으로 제공됩니다. 원본 글꼴을 선택하면 우선 사용합니다.';sync();});
+$('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'글꼴 파일을 추가할 필요는 없습니다. 미등록 글꼴은 기본 한글 글꼴로 자동 대체하며, 원본 서체가 꼭 필요한 경우에만 추가하세요.';sync();});
 $('pdf-engine').addEventListener('change',()=>{clearPrint();status('변경한 출력 방식은 다음 변환부터 적용됩니다.');sync();});
 $('convert').addEventListener('click',async()=>{
  if(busy||!ready)return;const pending=items.filter(i=>['ready','failed','cancelled'].includes(i.state));if(!pending.length)return;
