@@ -1,4 +1,4 @@
-import {copyFileSync, readFileSync, statSync} from 'node:fs';
+import {copyFileSync, readFileSync, statSync, readdirSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {resolve} from 'node:path';
 
@@ -11,9 +11,12 @@ const EXPECTED_SHA256='54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d02
 if(statSync(wasm).size!==EXPECTED_BYTES)throw Error('WASM size mismatch in packaged assets');
 const digest=createHash('sha256').update(readFileSync(wasm)).digest('hex');
 if(digest!==EXPECTED_SHA256)throw Error('WASM SHA256 mismatch in packaged assets');
+const chunks=readdirSync(resolve(dist,'assets')).filter(name=>/^local-chunk-[A-Za-z0-9_-]+\.js$/.test(name));
+if(chunks.length===0)throw Error('Professional engine chunks were not emitted');
+for(const name of chunks)if(statSync(resolve(dist,'assets',name)).size===0)throw Error('Empty engine chunk: '+name);
 if(statSync(bundle).size<10000)throw Error('Client JS bundle missing or too small');
 const content=readFileSync(html,'utf8');
 if(!content.includes('local-bundle.js'))throw Error('Client asset reference missing');
 if(!content.includes('id="cancel"'))throw Error('R30 cancellation UI missing');
 copyFileSync(html,resolve(dist,'app.html')); // Avoid /index.html canonical redirects in Cloudflare's HTML assets router.
-console.log(JSON.stringify({asset_delivery:'cloudflare-static-assets',wasm_bytes:EXPECTED_BYTES,wasm_sha256:digest,js_bytes:statSync(bundle).size}));
+console.log(JSON.stringify({asset_delivery:'cloudflare-static-assets',wasm_bytes:EXPECTED_BYTES,wasm_sha256:digest,js_bytes:statSync(bundle).size,engine_chunks:chunks.length}));

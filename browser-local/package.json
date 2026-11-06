@@ -1,21 +1,34 @@
 {
   "name": "sunrise-pdf-pro-browser-local",
-  "version": "0.1.0",
+  "version": "0.40.0-dev4",
   "private": true,
   "type": "module",
-  "description": "Zero-API HWP/HWPX->PDF browser-local converter using official rhwp WASM",
+  "description": "Browser-local HWP/HWPX batch PDF conversion with object-preserving default",
   "scripts": {
     "build": "node scripts/copy-wasm.mjs && vite build",
     "dev": "node scripts/copy-wasm.mjs && vite --host 127.0.0.1",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "test": "node --test tests/unit.mjs"
+    "test": "node --test tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs",
+    "check:source": "node scripts/check-source.mjs",
+    "test:local": "npm run check:source && npm test",
+    "diagnose": "node scripts/diagnose-local.mjs",
+    "verify:dist": "node scripts/verify-local-build.mjs",
+    "test:hwp": "node tests/real-hwp-local-e2e.mjs",
+    "test:wasm": "node tests/stage1-browser-boot.mjs",
+    "stage1:verify": "npm run build && npm run test:wasm && npm run diagnose",
+    "test:engine": "node --test tests/page-geometry.mjs tests/pdfkit-backend.mjs",
+    "test:pdfkit-real": "node --test tests/pdfkit-real-library.mjs"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "1.1.1",
     "@rhwp/core": "0.8.7",
-    "pdf-lib": "1.17.1"
+    "fflate": "0.8.3",
+    "pdf-lib": "1.17.1",
+    "pdfkit": "0.20.2",
+    "svg-to-pdfkit": "0.1.8"
   },
   "devDependencies": {
-    "vite": "8.3.2",
-    "playwright": "1.56.1"
+    "playwright": "1.56.1",
+    "vite": "8.3.2"
   }
 }

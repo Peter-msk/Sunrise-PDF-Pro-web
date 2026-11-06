@@ -1,3 +1,17 @@
+# R40-DEV2 로컬 개발본 — rhwp 글자·도형 보존 우선
+
+운영 main `c26a64b5bff6ff465fbdfd148a78d13a89a2df67`을 기준으로 R40-DEV1을 수정한 로컬 개발본이다. 운영 사이트에는 아직 반영되지 않았다.
+
+- 기본 출력은 rhwp 브라우저 WASM의 `print` 프로필 SVG를 PDFKit으로 변환하는 글자·도형 보존 경로다.
+- 글꼴 또는 SVG 기능이 지원되지 않으면 변환을 중단하고 원인을 표시한다. 전체 페이지를 이미지로 자동 대체하지 않는다.
+- 이미지 PDF는 사용자가 명시적으로 선택한 경우에만 동작한다. 미리보기 이미지는 PDF 본문의 이미지화와 구분한다.
+- `@rhwp/core@0.8.7` 브라우저 API에는 확인된 직접 PDF 내보내기 메서드가 없다. 이 개발본은 rhwp CLI의 `export-pdf`를 웹에 연결한 것이 아니다.
+- 한컴 COM과 동일 품질, 한글 자동 글꼴 공급, 다쪽 비교 및 실제 다운로드는 미완료다. 공식 HWP 예제는 필요한 글꼴 부재로 기본 변환을 중단했다.
+- 변경사항 및 검증 기록: `docs/R40_DEV2_OBJECT_PRESERVATION.md`. 기존 R40-DEV1 보고서는 당시 이력이다.
+- Node 22.12+ 또는 Node 24에서 `npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund`, `npm test`, `npm --prefix browser-local run build`, `node scripts/verify-browser-build.mjs` 순으로 확인할 수 있다.
+
+---
+
 # Sunrise PDF PRO Web
 
 **공식 rhwp 오픈소스 기반 · 별도 유료 변환 API 불필요**
