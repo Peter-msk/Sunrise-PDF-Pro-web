@@ -2,7 +2,7 @@ name: R41 Excel and image PDF acceptance
 on:
   pull_request:
     branches: [main]
-    paths: ['browser-local/**', '.github/workflows/r41-multiformat-qa.yml']
+    paths: ['browser-local/**', '.github/workflows/r41-multiformat-qa.yml', 'scripts/verify-r41-pdfs.py']
 permissions:
   contents: read
 jobs:

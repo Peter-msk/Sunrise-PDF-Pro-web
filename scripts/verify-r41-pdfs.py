@@ -14,7 +14,8 @@ for ext in ('xls','xlsx','jpg','png'):
         assert len(pdf.pages)==1 and len(pdf.pages[0].images)==1
         if ext=='jpg':
             assert pdf.pages[0].mediabox.height>pdf.pages[0].mediabox.width
-            assert pdf.pages[0].images[0].image.size==(200,400)
+            images=[ref.get_object() for ref in pdf.pages[0]['/Resources']['/XObject'].values() if ref.get_object().get('/Subtype')=='/Image']
+            assert len(images)==1 and (images[0]['/Width'],images[0]['/Height'])==(200,400)
         else:
             objects=pdf.pages[0]['/Resources']['/XObject'].values()
             assert any('/SMask' in ref.get_object() for ref in objects)
