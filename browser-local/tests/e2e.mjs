@@ -64,7 +64,7 @@ try{
  const zipPath=resolve(output,'browser-genuine-batch.zip');await zip.saveAs(zipPath);
  const unpacked=unzipSync(new Uint8Array(readFileSync(zipPath)));
  const names=Object.keys(unpacked).sort();
- if(names.length!==2||names.some(x=>!x.endsWith('.pdf')||unpacked[x].subarray(0,5).toString()!=='%PDF-'))
+ if(names.length!==2||names.some(x=>!x.endsWith('.pdf')||Buffer.from(unpacked[x].subarray(0,5)).toString('ascii')!=='%PDF-'))
   throw Error('ZIP does not contain exactly two valid PDF files: '+JSON.stringify(names));
  if(errors.length||external.length||failures.length)throw Error(JSON.stringify({errors,external,failures}));
  reports.push({archive:zipPath,contents:names,status:'PASS',engine:'professional',networkRequests:'same-origin only',boot});
