@@ -1,0 +1,48 @@
+name: R40 font fallback pre-release QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'browser-local/**'
+      - '.github/workflows/r40-font-fallback-qa.yml'
+permissions:
+  contents: read
+jobs:
+  font-fallback-build-and-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run R40 professional conversion tests and bundle
+        run: npm run build
+      - name: Install Chromium
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Fetch official rhwp HWP/HWPX test files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 3 https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 3 https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx -o r29-browser-fixtures/genuine.hwpx
+      - name: Start local Cloudflare Worker for real browser conversion
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 > /tmp/r40-font-fallback-worker.log 2>&1 &
+          for i in $(seq 1 80); do
+            if curl -fsS http://127.0.0.1:8787/local/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/r40-font-fallback-worker.log
+          exit 1
+      - name: Convert genuine HWP and HWPX to text-preserving PDFs and ZIP
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/e2e.mjs
