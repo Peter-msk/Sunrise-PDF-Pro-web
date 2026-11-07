@@ -26,7 +26,7 @@ def engine_for(path):
 def inspect_pdf(path):
     try:
         with fitz.open(path) as doc:
-            if doc.is_encrypted or doc.needs_pass or len(doc) < 1:
+            if not doc.is_pdf or doc.is_encrypted or doc.needs_pass or len(doc) < 1:
                 raise ValueError('PDF를 열거나 쪽수를 확인할 수 없습니다.')
             # Reading every page catches many structurally damaged results.
             for page in doc:
