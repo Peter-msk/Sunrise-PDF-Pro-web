@@ -36,7 +36,7 @@ jobs:
           done
           cat /tmp/r42-worker.log
           exit 1
-      - name: Export six rich documents and test desktop/mobile review
+      - name: Export seven rich documents and test desktop/mobile review
         run: node browser-local/tests/r42-rich-e2e.mjs
       - name: Inspect and render every exported PDF page
         run: python scripts/verify-r42-pdfs.py artifacts/r42-browser

@@ -22,7 +22,7 @@ try{
  await page.goto(site,{waitUntil:'networkidle',timeout:60000});
  await page.locator('#source').setInputFiles(fixtures.map(([name])=>resolve(input,name)));await page.locator('#convert').click();
  await page.waitForFunction(()=>!document.querySelector('#source').disabled,null,{timeout:180000});
- assert.equal(await page.locator('#done-count').textContent(),'6',await page.locator('#file-list').textContent());assert.equal(await page.locator('#failed-count').textContent(),'0');
+ assert.equal(await page.locator('#done-count').textContent(),String(fixtures.length),await page.locator('#file-list').textContent());assert.equal(await page.locator('#failed-count').textContent(),'0');
  for(let i=0;i<fixtures.length;i++){
   const row=page.locator('#file-list .file-row').nth(i),pending=page.waitForEvent('download');
   await row.getByRole('link',{name:'다운로드',exact:true}).click();await(await pending).saveAs(resolve(output,fixtures[i][0]+'.pdf'));
@@ -43,8 +43,8 @@ try{
  // Resize the same working batch, preserving results and downloads.
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true,'mobile page overflows horizontally');
- assert.equal(await page.locator('#done-count').textContent(),'6');
+ assert.equal(await page.locator('#done-count').textContent(),String(fixtures.length));
  await page.screenshot({path:resolve(output,'mobile.png'),fullPage:true});
  assert.deepEqual(errors,[]);assert.deepEqual(uploads,[]);assert.deepEqual(external,[]);
- writeFileSync(resolve(output,'BROWSER_RESULT.json'),JSON.stringify({status:'PASS',successfulExports:6,fixtures:fixtures.map(([name,,sha256])=>({name,sha256})),actualPdfNavigation:true,rapidPaintRace:true,mobileWidth:390,documentUpload:false,hancomReferenceEquivalence:'NOT_VERIFIED'},null,2));
+ writeFileSync(resolve(output,'BROWSER_RESULT.json'),JSON.stringify({status:'PASS',successfulExports:fixtures.length,fixtures:fixtures.map(([name,,sha256])=>({name,sha256})),actualPdfNavigation:true,rapidPaintRace:true,mobileWidth:390,documentUpload:false,hancomReferenceEquivalence:'NOT_VERIFIED'},null,2));
 }finally{await browser.close();}

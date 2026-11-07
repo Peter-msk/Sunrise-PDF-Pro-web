@@ -61,6 +61,13 @@ test('local CSS is flattened before picture ID scoping, including marker referen
  assert.match(root.querySelector('rect').getAttribute('fill'),/^url\(#sunrise-picture-\d+\)$/);
 });
 
+test('outer selectors do not cross picture boundaries and hidden pictures are never exposed',()=>{
+ const root=parseDocumentSvg(wrap('<style>rect{fill:blue}</style>'+image(picture('#ff0000'))));
+ assert.match(root.querySelector('rect').getAttribute('fill'),/^url\(/);
+ for(const attr of ['visibility="hidden"','style="visibility:hidden"'])
+  assert.throws(()=>parseDocumentSvg(wrap('<g '+attr+'>'+image(picture('red'))+'</g>')),/숨김/);
+});
+
 test('real PDF keeps two differently colored embedded SVG pictures as vectors with correct fit geometry',async t=>{
  if(spawnSync('pdftoppm',['-v']).error){t.skip('pdftoppm unavailable');return;}
  const root=parseDocumentSvg(wrap(image(picture('#ff0000'))+image(picture('#0000ff'),'x="130" y="20" width="80" height="60"')));

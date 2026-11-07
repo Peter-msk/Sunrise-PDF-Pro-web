@@ -9,7 +9,10 @@ const POSITION=/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?(?:px)?$/i;
 const DEFAULTS={fill:'#000',stroke:'none',color:'#000','fill-opacity':'1',
  'stroke-opacity':'1','stroke-width':'1','font-family':'serif','font-size':'16',
  'font-weight':'normal','font-style':'normal','text-anchor':'start',
- 'letter-spacing':'normal','word-spacing':'normal',visibility:'visible'};
+ 'letter-spacing':'normal','word-spacing':'normal','fill-rule':'nonzero',
+ 'stroke-dasharray':'none','stroke-dashoffset':'0','stroke-linecap':'butt',
+ 'stroke-linejoin':'miter','stroke-miterlimit':'4','marker-start':'none',
+ 'marker-mid':'none','marker-end':'none'};
 
 /** Inline only independently sanitized SVG pictures. Raster images stay images;
  * SVG pictures stay vector primitives. No decoded SVG is inserted into a live DOM.
@@ -51,10 +54,19 @@ export function parseDocumentSvg(source,parser=new DOMParser()){
   }
  }
  function expand(root,depth){
+  // Parent document selectors must never style the contents of a separate
+  // embedded image document after inlining. Resolve them before adding nodes.
+  const styles=flattenLocalSvgStyles(root);
+  if(!styles.ok)throw Error('SVG 그림 스타일을 보존할 수 없습니다 ('+styles.reason+').');
   for(const image of Array.from(root.querySelectorAll('image'))){
    const refs=Array.from(image.attributes).filter(a=>(a.localName||a.name.split(':').at(-1))==='href');
    const match=refs.length===1?DATA.exec(refs[0].value.trim()):null;
    if(!match)continue; // All other references go through the existing trust boundary.
+   for(let ancestor=image;ancestor;ancestor=ancestor.parentElement){
+    if(/^(hidden|collapse)$/.test(ancestor.getAttribute('visibility')||'')||
+       /(?:^|;)\s*visibility\s*:\s*(?:hidden|collapse)\s*(?:;|$)/i.test(ancestor.getAttribute('style')||''))
+     throw Error('숨김 SVG 그림의 표시 상태를 보존할 수 없습니다.');
+   }
    if(depth>=4||++pictures>128)throw Error('삽입 SVG 그림의 중첩 또는 개수 제한을 초과했습니다.');
    const encoded=match[1].replace(/\s+/g,'');
    if(encoded.length>5_600_000)throw Error('삽입 SVG 그림의 처리 크기를 초과했습니다.');
