@@ -21,6 +21,9 @@ try{
  const archive=unzipSync(new Uint8Array(readFileSync(resolve(out,'batch.zip'))));assert.equal(Object.keys(archive).length,4);
  const hashes=Object.values(archive).map(bytes=>createHash('sha256').update(bytes).digest('hex')).sort();assert.deepEqual(hashes,results.map(r=>r.hash).sort());
  assert.deepEqual(errors,[]);assert.deepEqual(uploads,[]);assert.deepEqual(external,[]);
- await page.locator('#file-list .file-row').nth(0).getByRole('button',{name:'미리보기',exact:true}).click();assert.match(await page.locator('#pages').textContent(),/3쪽/);
+ await page.locator('#file-list .file-row').nth(0).getByRole('button',{name:'PDF 검토',exact:true}).click();assert.match(await page.locator('#pages').textContent(),/3쪽/);
+ await page.locator('#pdf-canvas[aria-label="생성된 PDF 1 / 3쪽"]').waitFor({state:'visible'});
+ await page.locator('#page-next').click();await page.locator('#pdf-canvas[aria-label="생성된 PDF 2 / 3쪽"]').waitFor({state:'visible'});
+ await page.locator('#preview-zoom').selectOption('2');
  await page.screenshot({path:resolve(out,'result.png'),fullPage:true});writeFileSync(resolve(out,'BROWSER_RESULT.json'),JSON.stringify({status:'PASS',results,zipMatches:true,documentUpload:false},null,2));
 }finally{await browser.close();}

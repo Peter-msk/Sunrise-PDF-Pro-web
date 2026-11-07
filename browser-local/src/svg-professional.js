@@ -13,7 +13,7 @@ const SUPPORTED=new Set([
   'svg','g','title','desc','metadata','defs','symbol','use',
   'rect','line','polyline','polygon','path','circle','ellipse',
   'image','text','tspan','textPath','a','clipPath','mask',
-  'linearGradient','radialGradient','stop','pattern'
+  'linearGradient','radialGradient','stop','pattern','marker'
 ]);
 // Only SVG presentation properties known to be supported by the SVG renderer.
 // Unknown CSS rejects the default vector conversion before output is published.
@@ -22,7 +22,8 @@ const PRESENTATION=new Set([
   'stroke-linecap','stroke-linejoin','stroke-miterlimit','stroke-dasharray',
   'stroke-dashoffset','opacity','color','font-family','font-size',
   'font-style','font-weight','letter-spacing','word-spacing','text-anchor',
-  'clip-path','mask','stop-color','stop-opacity','display','visibility'
+  'clip-path','mask','stop-color','stop-opacity','display','visibility',
+  'marker','marker-start','marker-mid','marker-end'
 ]);
 const UNSUPPORTED_ATTRIBUTES=new Set([
   'filter','mix-blend-mode','isolation','paint-order',
@@ -114,7 +115,11 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
       if(/(?:href|src)$/i.test(name)&&value&&!value.startsWith('#')&&
         !/^data:image\/(?:png|jpeg);base64,[a-z0-9+/]+={0,2}$/i.test(value))
         return {ok:false,reason:'SVG_EXTERNAL_RESOURCE'};
-      if(/^on/i.test(name)||UNSUPPORTED_ATTRIBUTES.has(name)||unsafeReference(value))
+      // A valid embedded PNG/JPEG may contain // inside its base64 payload.
+      // That is binary data, not a protocol-relative network reference.
+      const embeddedImage=el.localName==='image'&&/(?:^|:)href$/.test(name)&&
+        /^data:image\/(?:png|jpeg);base64,[a-z0-9+/]+={0,2}$/i.test(value);
+      if(/^on/i.test(name)||UNSUPPORTED_ATTRIBUTES.has(name)||(!embeddedImage&&unsafeReference(value)))
         return {ok:false,reason:'SVG_UNSAFE_ATTRIBUTE'};
     }
     const geometry=validateTextGeometry(el);

@@ -24,6 +24,7 @@
     "@rhwp/core": "0.8.7",
     "fflate": "0.8.3",
     "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.5.438",
     "pdfkit": "0.20.2",
     "svg-to-pdfkit": "0.1.8",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"

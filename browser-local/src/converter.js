@@ -1,5 +1,4 @@
 import init, { HwpDocument } from '@rhwp/core';
-import { PDFDocument } from 'pdf-lib';
 import { tryProfessionalDocument } from './svg-professional.js';
 import { loadPdfFonts, installMeasureFonts } from './pdf-fonts.js';
 import { readDocumentBuffer } from './file-reader.js';
@@ -108,11 +107,11 @@ export async function rasterPage(svg,signal){
  * @param {File} file HWP/HWPX, no arbitrary size ceiling.
  * @param {(progress: {stage:string,page:number,total:number})=>void} onProgress
  * @param {AbortSignal} [signal]
- * @param {{fontFile?:File,fontFiles?:File[]|FileList,engine?:'stable'|'professional'}} [options]
+ * @param {{fontFile?:File,fontFiles?:File[]|FileList,engine?:'professional'}} [options]
  */
 export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
  options={engine:'professional',...options};
- if(!['professional','stable'].includes(options.engine))throw Error('지원하지 않는 PDF 출력 방식입니다.');
+ if(options.engine!=='professional')throw Error('HWP/HWPX는 글자·도형 보존 출력만 지원합니다. 이미지 PDF 변환은 허용하지 않습니다.');
  throwIfCancelled(signal);
  // Check the first bytes before allocating a whole large file in browser RAM.
  // This removes the former 20MiB rejection without eliminating magic checks.
@@ -152,29 +151,6 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     checkedSvg,rasterPage,signal,fontRegistry,onProgress,allowRasterFallback:false
    });
   }
-  // Full-page rasterization is only reachable through an explicit image-mode selection.
-  const pdf=await PDFDocument.create();
-  let preview=null;
-  for(let i=0;i<count;i++){
-   throwIfCancelled(signal);
-   onProgress({stage:'render',page:i+1,total:count});
-   const svg=doc.renderPageSvgWithProfile(i,'print');
-   const page=await rasterPage(svg,signal);
-   throwIfCancelled(signal);
-   if(i===0)preview=page.blob;
-   const png=await pdf.embedPng(await page.blob.arrayBuffer());
-   throwIfCancelled(signal);
-   const out=pdf.addPage([page.widthPt,page.heightPt]);
-   out.drawImage(png,{x:0,y:0,width:page.widthPt,height:page.heightPt});
-   onProgress({stage:'pdf',page:i+1,total:count});
-   await new Promise(resolve=>setTimeout(resolve,0));
-  }
-  throwIfCancelled(signal);
-  const bytes=await pdf.save({useObjectStreams:true});
-  throwIfCancelled(signal);
-  if(bytes[0]!==37||bytes[1]!==80||bytes[2]!==68||bytes[3]!==70)throw Error('PDF 헤더 확인 실패');
-  return {pdf:new Blob([bytes],{type:'application/pdf'}),preview,pages:count,
-    bytes:bytes.byteLength,renderMode:'raster',vectorPages:0,rasterPages:count};
  }catch(error){
   if(error instanceof RangeError || /out of memory|memory allocation|allocation failed/i.test(String(error?.message))){
    throw Error('브라우저 메모리 부족으로 변환하지 못했습니다. 파일 크기 제한은 없지만 기기 RAM 용량에 따라 변환이 어려울 수 있습니다.');

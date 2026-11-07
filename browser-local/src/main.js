@@ -1,9 +1,11 @@
+import {createPdfViewer} from './pdf-viewer.js';
 import {renderNativePrintPages} from './converter.js';
 import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
 const $=id=>document.getElementById(id);
+const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
 const status=value=>{$('status').textContent=value;};
 function clearPrint(){if(printJob){printJob.dispose();printJob=null;}}
@@ -11,10 +13,17 @@ function clearArchive(){if(archiveUrl)URL.revokeObjectURL(archiveUrl);archiveUrl
 function release(item){if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
 function show(item){
  active=item;clearPrint();
- if(!item?.result){$('preview').textContent='변환된 문서를 선택하면 첫 페이지를 볼 수 있습니다.';$('pages').textContent='';sync();return;}
- const img=new Image();img.src=item.imgUrl;img.alt=item.file.name+' 첫 페이지 미리보기';$('preview').replaceChildren(img);
- const r=item.result;const mode=r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='spreadsheet-text'?'셀·글자 보존':r.renderMode==='source-image'?'원본 이미지':r.renderMode==='raster'?'이미지':'PDF';
- $('pages').textContent=r.pages+'쪽 · '+mode;sync();
+ for(const row of $('file-list').children)row.classList.toggle('is-active',row.dataset.id===String(item?.id));
+ $('viewer-file').textContent=item?.file.name||'문서를 선택하세요';
+ const link=$('active-download');link.hidden=!item?.result;
+ if(!item?.result){link.removeAttribute('href');$('pages').textContent='';$('quality-detail').replaceChildren();viewer.open(null);sync();return;}
+ link.href=item.pdfUrl;link.download=uniquePdfNames(items.map(i=>i.file))[items.indexOf(item)];
+ const r=item.result;const mode=r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='spreadsheet-text'?'셀·글자 보존 · 원본 서식 제한':r.renderMode==='source-image'?'원본 이미지':'PDF';
+ $('pages').textContent=r.pages+'쪽 · '+mode;
+ const title=document.createElement('strong');title.textContent='출력 확인 · '+mode;
+ const detail=document.createElement('div');
+ detail.textContent=[...(r.substituteFamilies?.length?['대체 글꼴: '+r.substituteFamilies.join(', ')]:[]),...(r.warnings||[]),r.renderMode==='professional'?'HWP/HWPX 전체 페이지를 이미지로 바꾸지 않았습니다. 표·글상자·머리말·꼬리말은 페이지를 넘기며 확인하세요.':''].filter(Boolean).join(' ');
+ $('quality-detail').replaceChildren(title,detail);viewer.open(item.result.pdf);sync();
 }
 function sync(){
  const pending=items.some(i=>['ready','failed','cancelled'].includes(i.state));
@@ -30,18 +39,18 @@ function draw(){
  if(!items.length){const li=document.createElement('li');li.className='empty';li.textContent='선택한 문서가 여기에 표시됩니다.';list.append(li);}
  const names=uniquePdfNames(items.map(i=>i.file));
  items.forEach((item,index)=>{
-  const li=document.createElement('li');li.className='file-row';
+  const li=document.createElement('li');li.className='file-row';li.dataset.id=String(item.id);li.dataset.state=item.state;li.classList.toggle('is-active',active===item);
   const icon=document.createElement('span');icon.className='file-icon';icon.textContent=(inputKind(item.file)||'FILE').toUpperCase();
   const body=document.createElement('div'),name=document.createElement('div'),meta=document.createElement('div');name.className='file-name';name.textContent=item.file.name;meta.className='file-meta';
   const labels={ready:'변환 대기',working:'변환 중',done:'변환 완료',failed:'변환 실패',invalid:'지원하지 않는 파일',cancelled:'취소됨 · 다시 변환 가능'};
   let message=labels[item.state]||'';
   if(item.error){message+=' · '+item.error;meta.classList.add('error');}
-  if(item.result?.substituteFamilies?.length)message+=' · 대체 글꼴: '+item.result.substituteFamilies.join(', ');
-  if(item.result?.warnings?.length)message+=' · '+item.result.warnings.join(' ');
+  if(item.result?.substituteFamilies?.length)message+=' · 대체 글꼴 있음';
+  if(item.result?.warnings?.length)message+=' · 출력 안내 확인';
   meta.textContent=message;body.append(name,meta);
   const actions=document.createElement('div');actions.className='file-actions';
   if(item.state==='done'){
-   const preview=document.createElement('button');preview.className='secondary';preview.type='button';preview.textContent='미리보기';preview.disabled=busy;preview.addEventListener('click',()=>show(item));actions.append(preview);
+   const preview=document.createElement('button');preview.className='secondary';preview.type='button';preview.textContent='PDF 검토';preview.disabled=busy;preview.addEventListener('click',()=>show(item));actions.append(preview);
    const link=document.createElement('a');link.className='download';link.href=item.pdfUrl;link.download=names[index];link.textContent='다운로드';actions.append(link);
   }else if(item.state!=='invalid'){
    const select=document.createElement('button');select.className='secondary';select.type='button';select.textContent='선택';select.disabled=busy;select.addEventListener('click',()=>{show(item);status(item.file.name+' 문서를 선택했습니다.');});actions.append(select);
@@ -59,7 +68,7 @@ $('source').addEventListener('change',e=>{addFiles(Array.from(e.target.files||[]
 for(const event of ['dragenter','dragover'])$('drop').addEventListener(event,e=>{e.preventDefault();if(!busy)$('drop').classList.add('drag');});
 for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{e.preventDefault();$('drop').classList.remove('drag');});
 $('drop').addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer?.files||[])));
-$('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'글꼴 파일을 추가할 필요는 없습니다. 미등록 글꼴은 기본 한글 글꼴로 자동 대체하며, 원본 서체가 꼭 필요한 경우에만 추가하세요.';sync();});
+$('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.';sync();});
 $('pdf-engine').addEventListener('change',()=>{clearPrint();status('변경한 출력 방식은 다음 변환부터 적용됩니다.');sync();});
 $('convert').addEventListener('click',async()=>{
  if(busy||!ready)return;const pending=items.filter(i=>['ready','failed','cancelled'].includes(i.state));if(!pending.length)return;
@@ -94,5 +103,5 @@ $('print-prepare').addEventListener('click',async()=>{
 $('print-save').addEventListener('click',()=>{if(printJob&&!busy){try{printJob.print();status('인쇄 창에서 PDF로 저장을 선택하세요.');}catch(error){status('인쇄 실패: '+String(error?.message||error));}}});
 $('cancel').addEventListener('click',()=>controller?.abort());
 $('reset').addEventListener('click',()=>{for(const item of items)release(item);items=[];clearPrint();clearArchive();$('progress').value=0;show(null);draw();status('새 문서를 선택해 주세요.');});
-status('변환 준비 완료. 한글·엑셀·이미지를 여러 개 선택할 수 있습니다.');sync();
-window.addEventListener('pagehide',()=>{controller?.abort();clearPrint();clearArchive();for(const item of items)release(item);});
+viewer.open(null);status('변환 준비 완료. 한글·엑셀·이미지를 여러 개 선택할 수 있습니다.');sync();
+window.addEventListener('pagehide',()=>{controller?.abort();viewer.dispose();clearPrint();clearArchive();for(const item of items)release(item);});
