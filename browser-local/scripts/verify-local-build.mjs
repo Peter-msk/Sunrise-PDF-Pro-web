@@ -7,6 +7,7 @@ const asset=resolve(dist,'rhwp_bg.wasm');
 const htmlPath=resolve(dist,'index.html');
 const errors=[];
 if(!existsSync(htmlPath))errors.push('dist/index.html is missing');
+if(!existsSync(join(dist,'pdf-worker.mjs')))errors.push('self-hosted PDF preview worker is missing');
 if(!existsSync(asset))errors.push('dist/rhwp_bg.wasm is missing');
 else {
  const hash=createHash('sha256').update(readFileSync(asset)).digest('hex');
