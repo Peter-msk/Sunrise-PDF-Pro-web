@@ -1,42 +1,49 @@
-# R42 UI / conversion fidelity checkpoint — 2026-11-07 KST
+# R42 layout and object fidelity checkpoint — 2026-11-07 KST
 
-Status: IN DEVELOPMENT. Not a release gate pass. Production is still R41.
+Status: DEVELOPMENT CHECKPOINT. Production remains R41; full Hancom/Excel reference equivalence is NOT VERIFIED.
 
-## Implemented
+## Implemented and verified
 
-- Wider document queue/output workspace, larger text and touch targets, selected file outline, separate failure rows.
-- Self-hosted PDF.js 6.5.438 renders actual generated PDF bytes. Previous/next, page count, 100/150/200% preview, selected-result download. Canvas is screen-only; it does not generate HWP PDF pages.
-- HWP/HWPX conversion entry rejects every engine except professional. The former stable/full-page image PDF branch and user selector were removed. rhwp 0.8.7 WASM remains the parser/layout engine; print-profile SVG text/shapes are written with PDFKit. This is not a native Hancom COM engine and does not prove Hancom layout equivalence.
-- Valid embedded PNG/JPEG base64 containing // no longer triggers the external URL detector. Real protocol-relative URLs remain blocked.
-- Locally defined SVG arrow markers are now accepted by preflight; the pinned SVG-to-PDFKit renderer supports these objects. External marker references remain blocked.
-- Same-origin PDF worker route and CSP worker-src self, including GET/HEAD and POST rejection checks.
+- Larger queue/output review workspace, selected-file outline, failure states and readable controls.
+- Self-hosted PDF.js 6.5.438 renders the saved PDF bytes with page navigation, zoom and per-file save. Serialize paint cancellation so rapid page/zoom/file changes cannot reuse a busy canvas or replace a newer result with stale output. Preview canvas never generates HWP PDF pages.
+- HWP/HWPX entry accepts only object-preserving export. rhwp 0.8.7 WASM interprets the document; print-profile SVG text and primitives are written with PDFKit. The old full-page image export entry/selector is removed.
+- Embedded PNG/JPEG binary base64 containing // no longer triggers the external URL detector. Actual external URLs remain blocked.
+- Locally defined arrow markers are supported.
+- Embedded SVG images are decoded within bounded size/depth/count limits, independently sanitized, and inlined as vector primitives. Two viewports preserve intrinsic picture dimensions and internal viewBox mapping. Internal IDs/references are scoped; parent CSS selectors cannot cross image-document boundaries. Unverified hidden-image visibility is rejected. Scripts, external references, foreign executable content and malformed XML remain blocked.
+- Same-origin PDF worker route and CSP worker-src self; route method and asset-boundary tests pass.
 
-## Observed browser checks
+## Evidence
 
-Six synthetic upstream rhwp v0.8.7 corpus examples, manually selected through the actual application. Before: 3 done / 3 failed. After: 5 done / 1 failed.
+Implementation commit: eeb1f2662835c01064a38593f04f23e2ea4c1166.
 
-| Example | Before | After |
-| --- | --- | --- |
-| footnote-tbox-01.hwp | done | done |
-| group-drawing-02.hwp | unsupported marker | done |
-| hwpers_test4_complex_table.hwp | done | done |
-| centered_cell_nested_table.hwpx | done | done |
-| test-image.hwpx | image data incorrectly rejected | done, 5 pages |
-| svg_picture_repro.hwpx | embedded SVG reference blocked | still blocked |
+- 80 local regression tests passed, including real vector PDF pixel/color/position checks and no-raster-image assertions.
+- CI rich document run 42348624584: PASS — 7 actual application exports, 15 PDF pages, every page rendered/inspected; desktop, 390px mobile width, rapid navigation/zoom/file-switch checks; no document upload or external requests.
+- CI font regression 42348624619: PASS.
+- CI Excel/image regression 42348624576: PASS. The Excel path tested here is still the existing cell-reflow implementation, not a newly connected native engine.
+- Initial rich CI failed because its PDF inspector attempted Pillow-based image extraction without Pillow. The inspector now counts image-object metadata through PyMuPDF; conversion and visual assertions were retained. Final rich CI passes.
 
-The generated test-image PDF preview was navigated from page 1 to 5, including 150% zoom and fit mode. These checks establish export completion and viewer operation, not visual equivalence to Hancom output. Source samples came from edwardkim/rhwp v0.8.7 fuzz/corpus, extracted individually from an incomplete archive; no claim is made that the whole archive is valid.
+| Example | Pages | PDF image objects |
+| --- | ---: | --- |
+| footnote-tbox-01.hwp | 1 | 0 |
+| group-drawing-02.hwp | 1 | 0 |
+| hwpers_test4_complex_table.hwp | 1 | 0 |
+| centered_cell_nested_table.hwpx | 1 | 0 |
+| test-image.hwpx | 5 | 1 original picture per page |
+| svg_picture_repro.hwpx | 3 | 0, SVG pictures stay vector |
+| hwp_table_test_saved.hwp | 3 | 0, contains 10 parsed tables including merged cells |
 
-## Validation
+The name hwpers_test4_complex_table.hwp is not proof of table content: native rhwp explain reports zero tables. It is excluded as evidence of complex-table fidelity. The additional hwp_table_test_saved.hwp has ten tables with verified merged-cell structures. Sources are pinned by SHA-256 in browser-local/tests/r42-fixtures.mjs.
 
-- Browser-local automated suite: 73 tests passed.
-- Vite build: passed; bundle-size advisory remains.
-- Static asset/WASM/font/PDF-worker verification: passed.
-- Worker route/CSP/health checks: passed.
+## Office layout feasibility — local only
 
-## Outstanding — do not mark complete
+scripts/verify-office-layout.py creates synthetic XLSX and XLS test examples and exports them through a separate native LibreOffice path. This script is a QA probe, not an HTTP service or integrated browser converter. Dependencies: Python openpyxl, Pillow, PyMuPDF, a local soffice executable, and the bundled Nanum fonts. Run it in the supplied primary runtime with a new empty output folder.
 
-1. Safely preserve embedded SVG picture objects without permitting external resources or rasterizing HWP pages.
-2. Side-by-side source/reference PDF comparison for headers, footers, page backgrounds, notes/comments, fonts, textbox position, table boundaries, embedded images and page breaks. Current examples do not certify every object class. No genuine Hancom reference PDF corpus has been established for these examples.
-3. XLS/XLSX currently reflow cell data and do not preserve original styles, charts, drawings or print layout. A native spreadsheet layout/export path is required. No native Office runtime is deployed or connected to the browser.
-4. Mobile layout and full new-viewer E2E CI run, render cancellation/rapid page navigation regression, actual PDF file inspection and object-level comparison.
-5. Release only after the above quality gates are resolved. Do not replace the R41 production deployment with this checkpoint merely because unit tests pass.
+Both formats exported two pages, preserving table fills, chart vectors, an original image, headers/footers, print area, hidden-sheet exclusion, portrait/landscape pages and cell comments as PDF Text annotations. Explicit checks cover embedded Korean font presence, no ### numeric overflow, formula total 10,553,400, expected page orientation and visible objects. All four native candidate pages were visually reviewed. The XLS and XLSX candidates have small geometry differences; no pixel-equivalence claim is made.
+
+Runtime used: LibreOfficeDev 26.8.0.0.alpha0, build 2c87e51eeaa2b413ff4ae097b2705eea1995d8e5. This development runtime is not approved as a production engine. Native namespace isolation is unavailable on the local host. Only generated examples were processed; no user document upload endpoint was added.
+
+## Outstanding release requirements
+
+1. Hancom-produced reference PDFs for precise font/line/page/object geometry, background and annotation comparisons. Existing export/visible-object checks do not certify every source object or every document.
+2. Stable Office runtime version, actual host/container isolation, transport/data-handling decision and native engine connection. Current web XLS/XLSX still reflows cells and does not preserve charts/styles/print layout.
+3. Production deployment and live verification after those requirements are satisfied. Unit or CI success alone is not a release gate pass.
