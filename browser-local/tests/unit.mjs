@@ -103,7 +103,7 @@ test('R40 font substitution handles enterprise HWP family lists without adding f
 test('R43 mixed glyph coverage splits one text run without losing Unicode characters',()=>{
  const serif={...face('Nanum Myeongjo'),isFallback:true,genericFamily:'serif'};
  serif.characterSet=new Set(['한','글'].map(c=>c.codePointAt(0)));
- const symbol={...face('Symbols'),isFallback:true,genericFamily:'symbol'};
+ const symbol={...face('Symbols'),name:'FakeSymbols',isFallback:true,genericFamily:'symbol'};
  symbol.characterSet=new Set(['①'].map(c=>c.codePointAt(0)));
  const runs=resolveFontRuns({faces:[serif,symbol]},'HY신문명조','normal','normal','한①글');
  assert.deepEqual(runs?.map(r=>r.text),['한','①','글']);
