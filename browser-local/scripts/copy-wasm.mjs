@@ -14,3 +14,6 @@ if(sha!==EXPECTED_SHA256)throw Error('Pinned rhwp v0.8.7 WASM SHA-256 mismatch')
 mkdirSync(resolve(root,'public'),{recursive:true});
 copyFileSync(source,dest);
 console.log('Verified and bundled official rhwp WASM:',EXPECTED_BYTES,'bytes, SHA-256',sha);
+
+// Self-host PDF renderer: no document or font is sent to a third party.
+await import('node:fs/promises').then(fs=>fs.copyFile(new URL('../node_modules/pdfjs-dist/build/pdf.worker.mjs',import.meta.url),new URL('../public/pdf-worker.mjs',import.meta.url)));

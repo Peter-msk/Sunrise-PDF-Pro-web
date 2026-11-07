@@ -43,17 +43,18 @@ test('no hard size limit at file input or HWP decoder entry',()=>{
  assert.match(html,/<input id="pdf-font"[^>]*multiple/);
 });
 
-test('raster fallback keeps strict vector isolation and releases HWP instance',()=>{
+test('HWP conversion rejects image export and releases HWP instance',()=>{
  assert.match(source,/options\.engine==='professional'/);
  assert.match(source,/tryProfessionalDocument\(doc,count/);
  assert.match(source,/allowRasterFallback:false/);
  assert.doesNotMatch(source,/vectorFallbackReason=/);
  assert.match(source,/doc\.free\(\)/);
  assert.doesNotMatch(source,/legacy-vector'/);
- assert.match(source,/const page=await rasterPage\(svg,signal\)/);
+ assert.doesNotMatch(source,/pdf\.embedPng|renderMode:'raster'/);
+ assert.match(source,/options\.engine!=='professional'/);
 });
 
-test('stable mode does not load, embed, or parse selected fonts',()=>{
+test('only object-preserving HWP export loads local font registry',()=>{
  assert.match(source,/if\(options\.engine==='professional'\)/);
  assert.doesNotMatch(source,/pdf\.embedFont/);
  assert.doesNotMatch(source,/appendVectorPage/);
@@ -190,6 +191,25 @@ test('R43 neutral SVG presentation defaults are safe but filters and event handl
  const image=el('image',{href:'data:image/png;base64,AAAA//AA'});
  await withDOM(el('svg',{},[image]),()=>{
   assert.equal(preflightProfessionalSvg(checked).ok,true);
+ });
+});
+
+test('embedded image base64 containing double slash is data, while network links remain blocked',async()=>{
+ const img=el('image',{href:'data:image/png;base64,////AAAA'});
+ await withDOM(el('svg',{},[img]),()=>{
+  assert.equal(preflightProfessionalSvg(checked).ok,true);
+  img.setAttribute('href','//external.example/image.png');
+  assert.equal(preflightProfessionalSvg(checked).reason,'SVG_EXTERNAL_RESOURCE');
+ });
+});
+
+test('local arrow markers are preserved and external marker references are rejected',async()=>{
+ const path=el('path',{d:'M0 0L20 20','marker-end':'url(#arrow)'});
+ const marker=el('marker',{id:'arrow',markerWidth:'8',markerHeight:'8'},[el('path',{d:'M0 0L8 4L0 8Z'})]);
+ await withDOM(el('svg',{},[el('defs',{},[marker]),path]),()=>{
+  assert.equal(preflightProfessionalSvg(checked).ok,true);
+  path.setAttribute('marker-end','url(//external.example/arrow.svg)');
+  assert.equal(preflightProfessionalSvg(checked).reason,'SVG_UNSAFE_ATTRIBUTE');
  });
 });
 
