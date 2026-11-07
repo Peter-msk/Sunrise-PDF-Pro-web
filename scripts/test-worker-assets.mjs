@@ -5,13 +5,14 @@ const requested=[];
 const assets={fetch:async request=>{
  const path=new URL(request.url).pathname;
  requested.push(path);
- const types={'/app.html':'text/html','/assets/local-bundle.js':'application/javascript','/assets/local-chunk-Engine_01.js':'application/javascript','/rhwp_bg.wasm':'application/wasm','/fonts/NanumGothic-Regular.ttf':'font/ttf'};
+ const types={'/app.html':'text/html','/pdf-worker.mjs':'application/javascript','/assets/local-bundle.js':'application/javascript','/assets/local-chunk-Engine_01.js':'application/javascript','/rhwp_bg.wasm':'application/wasm','/fonts/NanumGothic-Regular.ttf':'font/ttf'};
  if(!(path in types))return new Response('Not Found',{status:404});
  return new Response(request.method==='HEAD'?null:'test-asset',{status:200,headers:{'Content-Type':types[path]}});
 }};
 const env={ASSETS:assets};
 for(const [route,assetPath,contentType] of [
  ['/local/','/app.html','text/html'],
+ ['/local/pdf-worker.mjs','/pdf-worker.mjs','application/javascript'],
  ['/local/assets/local-bundle.js','/assets/local-bundle.js','application/javascript'],
  ['/local/assets/local-chunk-Engine_01.js','/assets/local-chunk-Engine_01.js','application/javascript'],
  ['/local/rhwp_bg.wasm','/rhwp_bg.wasm','application/wasm'],
@@ -51,9 +52,12 @@ const htmlResponse=await worker.fetch(new Request('https://sunrise.example/local
 assert.match(htmlResponse.headers.get('content-security-policy'),/frame-src 'self'/);
 assert.match(htmlResponse.headers.get('content-security-policy'),/font-src 'self' blob:/);
 assert.equal(health.default_output,'professional');
-assert.deepEqual(health.optional_outputs,['explicit-raster','native-print']);
+assert.deepEqual(health.optional_outputs,['native-print']);
 console.log('Professional engine chunk routing, asset boundaries and print CSP: PASS');
 
 assert.equal((await worker.fetch(new Request('https://sunrise.example/local/fonts/NanumGothic-Regular.ttf',{method:'POST'}),env)).status,405);
 assert.equal((await worker.fetch(new Request('https://sunrise.example/local/fonts/unknown.ttf'),env)).status,404);
 console.log('Bundled font asset routing: PASS');
+
+assert.match(htmlResponse.headers.get('content-security-policy'),/worker-src 'self'/);
+assert.equal((await worker.fetch(new Request('https://sunrise.example/local/pdf-worker.mjs',{method:'POST'}),env)).status,405);

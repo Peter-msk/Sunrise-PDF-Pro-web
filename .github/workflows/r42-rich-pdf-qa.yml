@@ -1,0 +1,48 @@
+name: R42 rich HWP vector and review acceptance
+on:
+  pull_request:
+    branches: [main]
+    paths: ['browser-local/**', 'src/worker.js', 'scripts/verify-r42-pdfs.py', '.github/workflows/r42-rich-pdf-qa.yml']
+permissions:
+  contents: read
+jobs:
+  rich-conversion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build and run regression tests
+        run: npm run build
+      - name: Install PDF verification tools
+        run: |
+          if ! command -v pdftoppm; then sudo apt-get update && sudo apt-get install -y poppler-utils; fi
+          python -m pip install 'pypdf==5.9.0' 'PyMuPDF==1.26.6'
+      - name: Select Chrome
+        working-directory: browser-local
+        run: |
+          if command -v google-chrome; then echo "CHROME_BIN=$(command -v google-chrome)" >> "$GITHUB_ENV"; else npx playwright install --with-deps chromium; fi
+      - name: Start local Worker
+        run: |
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 > /tmp/r42-worker.log 2>&1 &
+          for i in $(seq 1 80); do
+            if curl -fsS http://127.0.0.1:8787/local/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/r42-worker.log
+          exit 1
+      - name: Export seven rich documents and test desktop/mobile review
+        run: node browser-local/tests/r42-rich-e2e.mjs
+      - name: Inspect and render every exported PDF page
+        run: python scripts/verify-r42-pdfs.py artifacts/r42-browser
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: r42-rich-conversion-pdfs
+          path: artifacts/r42-browser/
+          retention-days: 7
