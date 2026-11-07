@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 import fitz
+from PIL import Image
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
 from pptx import Presentation
@@ -34,11 +35,17 @@ class OfficeProbeTest(unittest.TestCase):
             sheet.page_setup.fitToHeight = 1
             book.save(xlsx)
             pptx = root / "slides.pptx"
+            picture = root / "red.png"
+            Image.new("RGB", (80, 50), (220, 30, 30)).save(picture)
             presentation = Presentation()
-            for title in ("First Slide", "Second Slide"):
+            for index, title in enumerate(("First Slide", "Second Slide")):
                 slide = presentation.slides.add_slide(presentation.slide_layouts[6])
                 textbox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(1))
                 textbox.text = title
+                if index == 1:
+                    slide.shapes.add_picture(str(picture), Inches(1), Inches(2), width=Inches(2))
+                    table = slide.shapes.add_table(2, 2, Inches(4), Inches(2), Inches(4), Inches(1)).table
+                    table.cell(0, 0).text = "TABLE MARKER"
             presentation.save(pptx)
             for source, expected_pages, expected_text in [(xlsx, 1, "North"), (pptx, 2, "Second Slide")]:
                 result = root / (source.stem + ".pdf")
@@ -46,6 +53,11 @@ class OfficeProbeTest(unittest.TestCase):
                 with fitz.open(result) as pdf:
                     self.assertEqual(len(pdf), expected_pages)
                     self.assertIn(expected_text, " ".join(p.get_text() for p in pdf))
+                    if source == pptx:
+                        self.assertIn("TABLE MARKER", pdf[1].get_text())
+                        self.assertGreaterEqual(len(pdf[1].get_images()), 1)
+                    if source == xlsx:
+                        self.assertGreater(len(pdf[0].get_drawings()), 0)
                 with self.assertRaises(ValueError):
                     probe.convert(source, result)
 

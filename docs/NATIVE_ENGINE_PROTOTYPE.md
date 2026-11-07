@@ -10,7 +10,7 @@
 
 ## 로컬 합성 문서 검사
 
-`python -m unittest discover -s tests -v`는 임시 Excel 1쪽·PowerPoint 2쪽을 직접 만들고 PDF 쪽수와 텍스트를 확인한다. 원본 대비 시각 충실도, xls/ppt/doc/docx 및 실제 업무 문서 시험은 별도다.
+`python -m unittest discover -s tests -v`는 임시 Excel 1쪽·PowerPoint 2쪽을 직접 만들고 PDF 쪽수, 텍스트, 표 글자, 이미지 객체와 Excel 벡터 객체 존재를 확인한다. 차트의 시각적 재현, 원본 대비 시각 충실도, xls/ppt/doc/docx 및 실제 업무 문서 시험은 별도다.
 
 개발자가 인지한 문서로 수동 실행: `python scripts/office_pdf_probe.py sample.pptx output.pdf`. 원본 덮어쓰기는 차단하고 변환 임시 디렉터리는 종료 시 삭제한다. 사용자의 실문서는 저장소나 테스트 아티팩트에 추가하지 않는다.
 
@@ -21,3 +21,7 @@
 3. 원본·출력 격리 보관, 접근권한, 암호화 전송, 보존/삭제 정책, 작업별 샌드박스와 자원·시간 제한, 매크로 및 외부 접속 차단, 잔여 프로세스 정리.
 4. 사용자에게 원본이 서버에 전송된다는 사실을 명확히 알린 뒤 업로드/다운로드/취소/오류 처리를 실제 연결. 현재 웹은 브라우저에서만 처리하므로 그 개인정보 처리 방식과 충돌한다.
 5. 실제 사용자 문서와 한컴/Excel/PowerPoint에서 저장한 기준 PDF를 페이지별로 대조. 없거나 재배포할 수 없는 글꼴은 정확히 표시한다. 임의 대체를 원본과 동일하다고 표시하지 않는다.
+
+## 웹 연결 준비
+
+`browser-local/src/remote-office-prototype.mjs`는 문서 파일을 같은 출처 `/api/v1/conversions`로 전송하고 PDF 응답을 검증하는 **미연결 클라이언트 초안**이다. 현재 서버 엔드포인트는 존재하지 않으며, UI에도 적용되지 않았다. 서버 연결 시 문서가 전송된다는 안내와 사용자 동작을 먼저 제공해야 한다. 서버 오류·취소와 PDF 형식 검사 테스트는 `node --test browser-local/tests/remote-office-prototype.mjs`로 독립 실행한다. 이 초안의 검사는 파일 안전성이나 출력 충실도를 보장하지 않는다.
