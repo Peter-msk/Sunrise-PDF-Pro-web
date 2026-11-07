@@ -63,19 +63,30 @@ export function validateTextGeometry(el){
     return {ok:false,reason:'SVG_TRANSFORM_UNSUPPORTED',positionedRuns};
   if(tag!=='text' && tag!=='tspan' && tag!=='textPath')
     return {ok:true,positionedRuns};
-  // The pinned renderer implements spacingAndGlyphs. Admit only one directly
-  // positioned character here: multi-glyph shaping and nested text require a
-  // separate fidelity proof and remain fail-closed.
+  // The pinned SVG-to-PDFKit renderer implements SVG textLength for
+  // spacing and spacingAndGlyphs across multi-character text. Validate the
+  // document length and child positioning before passing it through unchanged.
+  // Never replace glyphs with images or silently discard textLength.
   if(el.hasAttribute('textLength')||el.hasAttribute('lengthAdjust')||
      el.hasAttribute('textlength')||el.hasAttribute('lengthadjust')){
     const length=el.getAttribute('textLength');
     const values=length===null?null:validateSvgLengthList(length);
-    const direct=Array.from(String(el.textContent||''));
-    if(tag!=='text'||el.getAttribute('lengthAdjust')!=='spacingAndGlyphs'||
+    const adjustment=el.getAttribute('lengthAdjust')||'spacing';
+    const text=String(el.textContent||'');
+    const chars=Array.from(text);
+    const children=Array.from(el.children||[]);
+    const safeChildren=children.length<=64&&children.every(child=>
+      child.localName==='tspan' && !(child.children?.length) &&
+      !['x','y','dx','dy','rotate','transform','textLength','lengthAdjust'].some(a=>child.hasAttribute(a)));
+    if(!['text','tspan','textPath'].includes(tag)||
+       !['spacing','spacingAndGlyphs'].includes(adjustment)||
        !values||values.length!==1||values[0]<=0||values[0]>10000||
-       direct.length!==1||!/[\x21-\x7e]/u.test(direct[0])||el.children?.length||
-       el.hasAttribute('textlength')||el.hasAttribute('lengthadjust'))
+       !chars.length||chars.length>4096||
+       /[\u0000-\u001f\u007f]/u.test(text)||
+       el.hasAttribute('textlength')||el.hasAttribute('lengthadjust')||
+       !safeChildren)
       return {ok:false,reason:'TEXT_LENGTH_ADJUST_UNSUPPORTED',positionedRuns};
+    positionedRuns++;
   }
   if(el.hasAttribute('rotate')){
     const angles=parseSvgNumberList(el.getAttribute('rotate'));

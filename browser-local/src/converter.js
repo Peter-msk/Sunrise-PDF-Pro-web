@@ -4,7 +4,7 @@ import { tryProfessionalDocument } from './svg-professional.js';
 import { loadPdfFonts, installMeasureFonts } from './pdf-fonts.js';
 import { readDocumentBuffer } from './file-reader.js';
 import { svgPageSize } from './page-geometry.js';
-import { parseSafeSvg } from './svg-security.js';
+import { parseDocumentSvg } from './svg-embedded.js';
 import { loadBundledFonts } from './bundled-fonts.js';
 
 // File-size limits are intentionally absent. Runtime memory and page pixels
@@ -43,7 +43,7 @@ export async function prepareWasm(){
  await wasmPromise;
 }
 export function checkedSvg(svg){
- const root=parseSafeSvg(svg);
+ const root=parseDocumentSvg(svg);
  // Physical SVG viewport (mm, pt, in, px) determines paper size. The
  // viewBox only determines the drawing coordinate system inside that page.
  const {width,height}=svgPageSize({

@@ -9,7 +9,8 @@ const PRESENTATION=new Set([
   'stroke-linecap','stroke-linejoin','stroke-miterlimit','stroke-dasharray',
   'stroke-dashoffset','opacity','color','font-family','font-size',
   'font-style','font-weight','letter-spacing','word-spacing','text-anchor',
-  'clip-path','mask','stop-color','stop-opacity','display','visibility'
+  'clip-path','mask','stop-color','stop-opacity','display','visibility',
+  'marker','marker-start','marker-mid','marker-end'
 ]);
 const SIMPLE_NAME='[a-zA-Z_][a-zA-Z0-9_-]*';
 const SIMPLE_NAME_RE=new RegExp(`^${SIMPLE_NAME}$`);
