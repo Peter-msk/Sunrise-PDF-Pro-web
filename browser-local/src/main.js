@@ -45,8 +45,8 @@ function draw(){
   const labels={ready:'변환 대기',working:'변환 중',done:'변환 완료',failed:'변환 실패',invalid:'지원하지 않는 파일',cancelled:'취소됨 · 다시 변환 가능'};
   let message=labels[item.state]||'';
   if(item.error){message+=' · '+item.error;meta.classList.add('error');}
-  if(item.result?.substituteFamilies?.length)message+=' · 대체 글꼴 있음';
-  if(item.result?.warnings?.length)message+=' · 출력 안내 확인';
+  if(item.result?.substituteFamilies?.length)message+=' · 대체 글꼴: '+item.result.substituteFamilies.join(', ');
+  if(item.result?.warnings?.length)message+=' · '+item.result.warnings.join(' ');
   meta.textContent=message;body.append(name,meta);
   const actions=document.createElement('div');actions.className='file-actions';
   if(item.state==='done'){
