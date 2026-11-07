@@ -16,7 +16,7 @@ FILTERS = {
 }
 
 
-def convert(source, destination, *, executable="soffice", timeout=90):
+def convert(source, destination, *, executable="soffice", timeout=90, supervised=False):
     source, destination = Path(source), Path(destination)
     extension = source.suffix.lower()
     if extension not in FILTERS or not source.is_file():
@@ -36,11 +36,11 @@ def convert(source, destination, *, executable="soffice", timeout=90):
                 f"-env:UserInstallation={profile}", "--convert-to", "pdf:" + FILTERS[extension],
                 "--outdir", str(out), str(staged)]
         proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                start_new_session=(os.name == "posix"))
+                                start_new_session=(os.name == "posix" and not supervised))
         try:
             stdout, stderr = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired as exc:
-            if os.name == "posix":
+            if os.name == "posix" and not supervised:
                 os.killpg(proc.pid, signal.SIGKILL)
             else:
                 proc.kill()
@@ -70,9 +70,10 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--soffice", default="soffice")
     parser.add_argument("--timeout", type=int, default=90)
+    parser.add_argument("--supervised", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
-        convert(args.input, args.output, executable=args.soffice, timeout=args.timeout)
+        convert(args.input, args.output, executable=args.soffice, timeout=args.timeout, supervised=args.supervised)
     except (ValueError, OSError, RuntimeError, TimeoutError) as exc:
         parser.exit(1, f"Conversion failed: {exc}\n")
     print("PDF conversion completed")

@@ -2,8 +2,10 @@
 """Offline prototype routing; not an upload API or a security boundary."""
 import argparse
 import math
+import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -37,7 +39,35 @@ def inspect_pdf(path):
         raise ValueError('변환 결과가 유효한 PDF가 아닙니다.') from exc
 
 
-def convert(source, destination, *, timeout=120, run=subprocess.run):
+def run_supervised(args, *, stdin, stdout, stderr, timeout, check, env):
+    """Terminate POSIX process group on timeout, including inherited children.
+
+    Windows only terminates the immediate adapter; COM/child lifetime is unresolved.
+    """
+    proc = subprocess.Popen(args, stdin=stdin, stdout=stdout, stderr=stderr, env=env,
+                            start_new_session=(os.name == 'posix'))
+    try:
+        code = proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        if os.name == 'posix':
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        else:
+            proc.kill()
+        proc.wait()
+        raise
+    finally:
+        if os.name == 'posix':
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    return subprocess.CompletedProcess(args, code)
+
+
+def convert(source, destination, *, timeout=120, run=run_supervised):
     source, destination = Path(source), Path(destination)
     engine = engine_for(source)
     if not source.is_file():
@@ -49,10 +79,17 @@ def convert(source, destination, *, timeout=120, run=subprocess.run):
     adapter = Path(__file__).resolve().parent / ('hancom_pdf_probe.py' if engine == 'hancom' else 'office_pdf_probe.py')
     with tempfile.TemporaryDirectory(prefix='sunrise-orchestrator-') as tmp:
         candidate = Path(tmp) / 'result.pdf'
-        args = [sys.executable, str(adapter), str(source.resolve()), str(candidate)]
+        args = [sys.executable, str(adapter)]
+        if engine == 'libreoffice':
+            args.append('--supervised')
+            # Outer supervisor owns the group and should expire before the adapter.
+            args.extend(['--timeout', str(min(600, timeout + 5))])
+        args.extend([str(source.resolve()), str(candidate)])
+        env = os.environ.copy()
+        env.update({'TMPDIR': tmp, 'TMP': tmp, 'TEMP': tmp})
         try:
             result = run(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, timeout=timeout, check=False)
+                         stderr=subprocess.DEVNULL, timeout=timeout, check=False, env=env)
         except subprocess.TimeoutExpired as exc:
             raise TimeoutError('변환 시간이 초과되었습니다.') from exc
         if result.returncode != 0 or not candidate.is_file():
