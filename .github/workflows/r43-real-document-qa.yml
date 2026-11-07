@@ -55,6 +55,10 @@ jobs:
         env:
           SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
         run: node browser-local/tests/e2e.mjs
+      - name: Real 82-megapixel PNG to PDF in Chromium without full-size bitmap allocation
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/oversize-png-e2e.mjs
       - name: Verify rendered PDF text and no full-page raster
         run: |
           python -m pip install --disable-pip-version-check 'pypdf==5.9.0'
