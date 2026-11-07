@@ -25,3 +25,9 @@
 ## 웹 연결 준비
 
 `browser-local/src/remote-office-prototype.mjs`는 문서 파일을 같은 출처 `/api/v1/conversions`로 전송하고 PDF 응답을 검증하는 **미연결 클라이언트 초안**이다. 현재 서버 엔드포인트는 존재하지 않으며, UI에도 적용되지 않았다. 서버 연결 시 문서가 전송된다는 안내와 사용자 동작을 먼저 제공해야 한다. 서버 오류·취소와 PDF 형식 검사 테스트는 `node --test browser-local/tests/remote-office-prototype.mjs`로 독립 실행한다. 이 초안의 검사는 파일 안전성이나 출력 충실도를 보장하지 않는다.
+
+## 공통 변환 처리 초안
+
+`scripts/conversion_orchestrator.py`는 확장자를 기준으로 한컴과 LibreOffice 프로브를 선택하고, 임시 위치에 결과를 만든 뒤 PDF가 열리고 한 쪽 이상 존재하는지 확인한다. 검증 통과 전에 최종 파일을 만들지 않고 기존 파일도 덮어쓰지 않는다. 출력 검증은 원본 대비 레이아웃 일치나 누락 여부를 보증하지 않는다. 명령행의 시간 제한은 어댑터 프로세스 기준이며 **Windows COM 서버 및 LibreOffice 자식 전체 종료를 보장하지 않는다**. 운영 시 작업 격리와 자식 프로세스 정리를 별도 구현해야 한다. 업로드 API나 웹에 연결되어 있지 않다.
+
+공통 처리 단위 검증: `python -m unittest discover -s tests -p test_conversion_orchestrator.py -v`. 어댑터 모의 실행을 사용하므로 한컴 실제 변환 성공을 뜻하지 않는다. PyMuPDF 설치가 필요하다.
