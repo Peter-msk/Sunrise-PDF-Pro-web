@@ -5,6 +5,7 @@ import { readDocumentBuffer } from './file-reader.js';
 import { svgPageSize } from './page-geometry.js';
 import { parseDocumentSvg } from './svg-embedded.js';
 import { loadBundledFonts } from './bundled-fonts.js';
+import { loadDocumentLocalFonts } from './local-fonts.js';
 
 // File-size limits are intentionally absent. Runtime memory and page pixels
 // remain bounded by the browser/device; those are not upload-size limits.
@@ -138,8 +139,16 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    const {default:fontkit}=await import('@pdf-lib/fontkit');
    throwIfCancelled(signal);
    const selected=selectedFonts.length?await loadPdfFonts(selectedFonts,fontkit,signal):{faces:[]};
+   let local={faces:[]};
+   if(options.localFonts){
+    const probe=new HwpDocument(new Uint8Array(buf));
+    try{const pages=probe.pageCount();if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
+     local=await loadDocumentLocalFonts(probe,pages,options.localFonts,fontkit,signal,onProgress);
+    }finally{probe.free();}
+   }
    const bundled=await loadBundledFonts(fontkit,signal);
-   fontRegistry={faces:[...selected.faces,...bundled.faces]};
+   const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
+   fontRegistry={faces:[...selected.faces,...localOnly,...bundled.faces]};
    releaseMeasureFonts=await installMeasureFonts(fontRegistry,signal);
   }
   doc=new HwpDocument(new Uint8Array(buf));
@@ -166,7 +175,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
  * The caller owns the returned pages and must free their DOM/print job when done.
  * This is not a background server conversion and does not impose a file-byte cap.
  */
-export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontFiles=[]){
+export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontFiles=[],localFonts=null){
  throwIfCancelled(signal);
  const header=await file.slice(0,8).arrayBuffer();
  verifyFile(file,header);
@@ -185,8 +194,16 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
    const {default:fontkit}=await import('@pdf-lib/fontkit');
    throwIfCancelled(signal);
    const selected=fontFiles.length?await loadPdfFonts(fontFiles,fontkit,signal):{faces:[]};
+   let local={faces:[]};
+   if(localFonts){
+    const probe=new HwpDocument(new Uint8Array(buffer));
+    try{const pages=probe.pageCount();if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
+     local=await loadDocumentLocalFonts(probe,pages,localFonts,fontkit,signal,onProgress);
+    }finally{probe.free();}
+   }
    const bundled=await loadBundledFonts(fontkit,signal);
-   fontRegistry={faces:[...selected.faces,...bundled.faces]};
+   const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
+   fontRegistry={faces:[...selected.faces,...localOnly,...bundled.faces]};
    release=await installMeasureFonts(fontRegistry,signal);
   }
   throwIfCancelled(signal);
@@ -205,3 +222,4 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
   return {pages,fontRegistry};
  }finally{try{doc?.free();}finally{release();}}
 }
+
