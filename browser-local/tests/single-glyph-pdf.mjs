@@ -24,3 +24,19 @@ test('PDF output scales single character width to SVG textLength without page im
   const bytes=await readFile(path);assert.doesNotMatch(bytes.toString('latin1'),/\/Subtype\s*\/Image\b/);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+
+test('R43 multi-character textLength remains selectable vector text in PDFKit',async t=>{
+ if(spawnSync('pdftotext',['-v']).error){t.skip('pdftotext unavailable');return;}
+ const dir=await mkdtemp(join(tmpdir(),'sunrise-multi-glyph-'));
+ try{
+  const path=join(dir,'multi.pdf'),output=createWriteStream(path);
+  const pdf=new PDFDocument({size:[350,120],margin:0,compress:false});pdf.pipe(output);
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="350" height="120"><text x="10" y="35" font-size="20" font-family="Helvetica" textLength="200" lengthAdjust="spacingAndGlyphs">WIDE TEXT</text><text x="10" y="80" font-size="20" font-family="Helvetica" textLength="120" lengthAdjust="spacing">HELLO WORLD</text></svg>';
+  const warnings=[];SVGtoPDF(pdf,svg,0,0,{assumePt:true,warningCallback:w=>warnings.push(w)});
+  pdf.end();await finished(output);assert.deepEqual(warnings,[]);
+  const result=spawnSync('pdftotext',['-bbox',path,'-'],{encoding:'utf8'});assert.equal(result.status,0);
+  assert.ok(result.stdout.includes('WIDE')&&result.stdout.includes('HELLO'));
+  const bytes=await readFile(path);assert.doesNotMatch(bytes.toString('latin1'),/\/Subtype\s*\/Image\b/);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});

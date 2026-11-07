@@ -85,6 +85,23 @@ export function resolveFont(registry,family,weight='normal',style='normal',text=
   return null;
 }
 
+/** Keep all original Unicode characters when one font cannot cover a full
+ * run but the selected and bundled faces collectively can. A caller may turn
+ * the result into adjacent SVG tspans; no replacement glyph is fabricated. */
+export function resolveFontRuns(registry,family,weight,style,text){
+ const chars=Array.from(String(text||''));
+ if(!chars.length||chars.length>2048)return null;
+ const runs=[];
+ for(const char of chars){
+  const face=resolveFont(registry,family,weight,style,char);
+  if(!face)return null;
+  if(runs.length&&runs.at(-1).face.name===face.name)runs.at(-1).text+=char;
+  else runs.push({text:char,face});
+  if(runs.length>256)return null;
+ }
+ return runs;
+}
+
 export function missingCodepoint(face,text){
   if(!face)return null;
   // Helvetica's standard encoding does not promise Korean Unicode coverage.

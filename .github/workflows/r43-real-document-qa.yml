@@ -1,0 +1,82 @@
+name: R43 real-document failure gates (SVG fonts textLength huge PNG)
+on:
+  push:
+    branches: [fix/r41-real-doc-svg-font-text-image-20261107]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'browser-local/**'
+      - '.github/workflows/r43-real-document-qa.yml'
+permissions:
+  contents: read
+jobs:
+  r43-object-preserving-pdf:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build, unit-test, and validate static assets
+        run: npm run build
+      - name: Test sanitization of SVG pictures copied from R42
+        run: |
+          npm --prefix browser-local install --no-save --ignore-scripts --no-audit --no-fund jsdom@31.0.0
+          node --test browser-local/tests/svg-embedded.mjs
+      - name: Ensure PDF rendering tools
+        run: |
+          if ! command -v pdftoppm >/dev/null; then sudo apt-get update && sudo apt-get install -y poppler-utils; fi
+      - name: Verify Wrangler dry-run bundle
+        run: npx --yes wrangler@4 deploy --dry-run --outdir /tmp/sunrise-r43-dry-run
+      - name: Install headless Chromium
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Fetch genuine HWP and HWPX samples
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 3 https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 3 https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx -o r29-browser-fixtures/genuine.hwpx
+      - name: Start local production-shaped Worker
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 > /tmp/r43-worker.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8787/local/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/r43-worker.log
+          exit 1
+      - name: Real browser HWP HWPX professional PDF ZIP
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/e2e.mjs
+      - name: Verify rendered PDF text and no full-page raster
+        run: |
+          python -m pip install --disable-pip-version-check 'pypdf==5.9.0'
+          python - <<'PY'
+          from pathlib import Path
+          from pypdf import PdfReader
+          for ext in ('hwp','hwpx'):
+              f=Path('r29-browser-real-evidence')/('browser-genuine-'+ext+'.pdf')
+              d=PdfReader(str(f),strict=True)
+              assert len(d.pages)>0,ext
+              assert ''.join(p.extract_text() or '' for p in d.pages).strip(),ext
+              for page in d.pages:
+                  xobj=page.get('/Resources',{}).get('/XObject',{})
+                  for obj in (xobj.get_object().values() if xobj else []):
+                      assert obj.get_object().get('/Subtype')!='/Image',ext
+              print(ext,len(d.pages),'selectable text, vector PASS')
+          PY
+      - name: Attach QA PDF artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sunrise-r43-regression-evidence
+          path: r29-browser-real-evidence/
+          retention-days: 7
+          if-no-files-found: warn

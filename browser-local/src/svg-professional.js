@@ -3,7 +3,7 @@
  * SVG-to-PDFKit and PDFKit are MIT dependencies, loaded only when selected.
  * checkedSvg() must sanitize each page before invoking this module.
  */
-import {resolveFont,missingCodepoint,splitFontFamilies,familyKey} from './pdf-fonts.js';
+import {resolveFont,resolveFontRuns,missingCodepoint,splitFontFamilies,familyKey} from './pdf-fonts.js';
 import {validateTextGeometry} from './svg-text-geometry.js';
 import {flattenLocalSvgStyles} from './svg-style.js';
 import {loadBrowserPdfBackend} from './pdfkit-backend.js';
@@ -13,7 +13,7 @@ const SUPPORTED=new Set([
   'svg','g','title','desc','metadata','defs','symbol','use',
   'rect','line','polyline','polygon','path','circle','ellipse',
   'image','text','tspan','textPath','a','clipPath','mask',
-  'linearGradient','radialGradient','stop','pattern'
+  'linearGradient','radialGradient','stop','pattern','marker'
 ]);
 // Only SVG presentation properties known to be supported by the SVG renderer.
 // Unknown CSS rejects the default vector conversion before output is published.
@@ -22,7 +22,26 @@ const PRESENTATION=new Set([
   'stroke-linecap','stroke-linejoin','stroke-miterlimit','stroke-dasharray',
   'stroke-dashoffset','opacity','color','font-family','font-size',
   'font-style','font-weight','letter-spacing','word-spacing','text-anchor',
-  'clip-path','mask','stop-color','stop-opacity','display','visibility'
+  'clip-path','mask','stop-color','stop-opacity','display','visibility',
+  'marker','marker-start','marker-mid','marker-end'
+]);
+// SVG default values that are semantically inert for PDFKit. Drop only these
+// exact safe defaults; preserve/reject every other unsupported styling request.
+const SAFE_NOOP_ATTRIBUTES=new Map([
+ ['filter',new Set(['none'])],
+ ['mix-blend-mode',new Set(['normal'])],
+ ['isolation',new Set(['auto'])],
+ ['paint-order',new Set(['normal'])],
+ ['font-variant',new Set(['normal'])],
+ ['writing-mode',new Set(['horizontal-tb'])],
+ ['unicode-bidi',new Set(['normal'])],
+ ['shape-rendering',new Set(['auto'])],
+ ['text-rendering',new Set(['auto'])],
+ ['externalResourcesRequired',new Set(['false'])],
+ ['dominant-baseline',new Set(['auto'])],
+ ['alignment-baseline',new Set(['baseline','auto'])],
+ ['baseline-shift',new Set(['baseline','0'])],
+ ['direction',new Set(['ltr'])]
 ]);
 const UNSUPPORTED_ATTRIBUTES=new Set([
   'filter','mix-blend-mode','isolation','paint-order',
@@ -103,9 +122,12 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
     const styleError=inlineStyleToAttributes(el);
     if(styleError)return {ok:false,reason:styleError};
     changed ||= hadInlineStyle;
-    for(const attr of el.attributes){
+    for(const attr of Array.from(el.attributes)){
       const name=attr.name;
       const value=String(attr.value||'').trim();
+      if(SAFE_NOOP_ATTRIBUTES.get(name)?.has(value)){
+        el.removeAttribute(name);changed=true;continue;
+      }
       if(name==='xmlns'||name==='xmlns:xlink'){
         if(value!==(name==='xmlns'?'http://www.w3.org/2000/svg':'http://www.w3.org/1999/xlink'))
           return {ok:false,reason:'SVG_NAMESPACE_UNSUPPORTED'};
@@ -114,7 +136,11 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
       if(/(?:href|src)$/i.test(name)&&value&&!value.startsWith('#')&&
         !/^data:image\/(?:png|jpeg);base64,[a-z0-9+/]+={0,2}$/i.test(value))
         return {ok:false,reason:'SVG_EXTERNAL_RESOURCE'};
-      if(/^on/i.test(name)||UNSUPPORTED_ATTRIBUTES.has(name)||unsafeReference(value))
+      // A valid embedded PNG/JPEG may contain // inside its base64 payload.
+      // That is binary data, not a protocol-relative network reference.
+      const embeddedImage=el.localName==='image'&&/(?:^|:)href$/.test(name)&&
+        /^data:image\/(?:png|jpeg);base64,[a-z0-9+/]+={0,2}$/i.test(value);
+      if(/^on/i.test(name)||UNSUPPORTED_ATTRIBUTES.has(name)||(!embeddedImage&&unsafeReference(value)))
         return {ok:false,reason:'SVG_UNSAFE_ATTRIBUTE'};
     }
     const geometry=validateTextGeometry(el);
@@ -128,10 +154,40 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
       if(value.trim()){
         hasText=true;textPages++;
         const face=resolveFont(fontRegistry,currentFamily,currentWeight,currentStyle,value);
-        if(!face)return {ok:false,reason:'FONT_FAMILY_OR_VARIANT_UNAVAILABLE',
-          fontFamily:String(currentFamily||'기본 글꼴').slice(0,120),
-          fontWeight:String(currentWeight||'normal').slice(0,24),
-          fontStyle:String(currentStyle||'normal').slice(0,24)};
+        if(!face){
+          const runs=resolveFontRuns(fontRegistry,currentFamily,currentWeight,currentStyle,value);
+          const canSplit=runs?.length>1 && runs.length<=128 &&
+            (el.localName==='text'||el.localName==='tspan') &&
+            !el.children?.length && !el.hasAttribute('textLength') &&
+            !['x','y','dx','dy','rotate'].some(n=>{
+              const raw=el.getAttribute(n);
+              return raw&&/[,\s]+/.test(raw.trim());
+            }) && el.ownerDocument?.createElementNS;
+          if(canSplit){
+            const familyName=splitFontFamilies(currentFamily)[0]||'기본 글꼴';
+            el.textContent='';
+            for(const run of runs){
+              const span=el.ownerDocument.createElementNS('http://www.w3.org/2000/svg','tspan');
+              span.textContent=run.text;
+              span.setAttribute('font-family',run.face.family);
+              span.setAttribute('font-weight',run.face.bold?'bold':'normal');
+              span.setAttribute('font-style',run.face.italic?'italic':'normal');
+              el.appendChild(span);
+              substituteFamilies.add(familyName.slice(0,48)+' → '+run.face.family);
+            }
+            changed=true;
+            for(const child of Array.from(el.children).reverse())
+              stack.push({el:child,family:currentFamily,weight:currentWeight,style:currentStyle});
+            continue;
+          }
+          const missing=[...value].find(c=>!/\s/u.test(c)&&
+            !fontRegistry.faces.some(font=>font.characterSet?.has(c.codePointAt(0))));
+          const glyph=missing?' (미지원 문자 U+'+missing.codePointAt(0).toString(16).toUpperCase()+')':'';
+          return {ok:false,reason:'FONT_FAMILY_OR_VARIANT_UNAVAILABLE'+glyph,
+            fontFamily:String(currentFamily||'기본 글꼴').slice(0,120),
+            fontWeight:String(currentWeight||'normal').slice(0,24),
+            fontStyle:String(currentStyle||'normal').slice(0,24)};
+        }
         if(face.isFallback){
           const original=splitFontFamilies(currentFamily)[0]||'기본 글꼴';
           if(familyKey(original)!==familyKey(face.family)||

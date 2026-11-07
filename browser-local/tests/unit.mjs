@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {familyKey,splitFontFamilies,requestedStyle,resolveFont,missingCodepoint,loadPdfFonts,installMeasureFonts} from '../src/pdf-fonts.js';
+import {familyKey,splitFontFamilies,requestedStyle,resolveFont,resolveFontRuns,missingCodepoint,loadPdfFonts,installMeasureFonts} from '../src/pdf-fonts.js';
 import {preflightProfessionalSvg,tryProfessionalDocument,localPngBytes} from '../src/svg-professional.js';
 import {parseSvgNumberList,validateSvgTransform,validateTextGeometry} from '../src/svg-text-geometry.js';
 import {flattenLocalSvgStyles} from '../src/svg-style.js';
@@ -100,6 +100,16 @@ test('R40 font substitution handles enterprise HWP family lists without adding f
  assert.equal(resolveFont(registry,screenshot,'normal','normal','漢'),null);
 });
 
+test('R43 mixed glyph coverage splits one text run without losing Unicode characters',()=>{
+ const serif={...face('Nanum Myeongjo'),isFallback:true,genericFamily:'serif'};
+ serif.characterSet=new Set(['한','글'].map(c=>c.codePointAt(0)));
+ const symbol={...face('Symbols'),isFallback:true,genericFamily:'symbol'};
+ symbol.characterSet=new Set(['①'].map(c=>c.codePointAt(0)));
+ const runs=resolveFontRuns({faces:[serif,symbol]},'HY신문명조','normal','normal','한①글');
+ assert.deepEqual(runs?.map(r=>r.text),['한','①','글']);
+ assert.equal(resolveFontRuns({faces:[serif,symbol]},'HY신문명조','normal','normal','한★글'),null);
+});
+
 test('multiple local font files are parsed, variants tracked, never fetched',async()=>{
  const files=['Malgun-Regular.ttf','Malgun-Bold.otf'].map((name,i)=>({name,async arrayBuffer(){return new Uint8Array([i,1,2,3]).buffer;}}));
  const parser={create:bytes=>({familyName:'맑은 고딕',subfamilyName:bytes[0]?'Bold':'Regular',
@@ -163,6 +173,23 @@ test('no external SVG images, CSS selectors, unsupported filters, or event handl
   assert.equal(preflightProfessionalSvg(checked).reason,'SVG_UNSAFE_ATTRIBUTE');
   img.removeAttribute('onclick');img.setAttribute('class','external-style');
   assert.equal(preflightProfessionalSvg(checked).reason,'CLASS_STYLE_UNRESOLVED');
+ });
+});
+
+test('R43 neutral SVG presentation defaults are safe but filters and event handlers remain blocked',async()=>{
+ const root=el('svg',{},[el('rect',{filter:'none','text-rendering':'auto',externalResourcesRequired:'false'})]);
+ await withDOM(root,()=>{
+  assert.equal(preflightProfessionalSvg(checked).ok,true);
+  assert.equal(root.children[0].hasAttribute('filter'),false);
+  root.children[0].setAttribute('filter','url(#hiddenFilter)');
+  assert.equal(preflightProfessionalSvg(checked).reason,'SVG_UNSAFE_ATTRIBUTE');
+  root.children[0].removeAttribute('filter');
+  root.children[0].setAttribute('onclick','alert(1)');
+  assert.equal(preflightProfessionalSvg(checked).reason,'SVG_UNSAFE_ATTRIBUTE');
+ });
+ const image=el('image',{href:'data:image/png;base64,AAAA//AA'});
+ await withDOM(el('svg',{},[image]),()=>{
+  assert.equal(preflightProfessionalSvg(checked).ok,true);
  });
 });
 
@@ -277,16 +304,28 @@ test('R36 positional text arrays preserve SVG glyph positions and reject corrupt
  text.setAttribute('x','3');text.setAttribute('rotate','3,3');
  assert.equal(validateTextGeometry(text).reason,'GLYPH_ROTATION_UNSUPPORTED');
  text.removeAttribute('rotate');text.setAttribute('textLength','100');
- assert.equal(validateTextGeometry(text).reason,'TEXT_LENGTH_ADJUST_UNSUPPORTED');
+ assert.equal(validateTextGeometry(text).ok,true);
 });
 
-test('single-character textLength is restricted to validated glyph scaling',()=>{
+test('R43 SVG textLength accepts bounded multi-character Korean while retaining source geometry',()=>{
  const one=el('text',{textLength:'9.1333',lengthAdjust:'spacingAndGlyphs'},[],'C');
  assert.equal(validateTextGeometry(one).ok,true);
- for(const bad of ['0','-1','10%','20000','NaN']){one.setAttribute('textLength',bad);assert.equal(validateTextGeometry(one).ok,false);}
- one.setAttribute('textLength','8');one.setAttribute('lengthAdjust','spacing');assert.equal(validateTextGeometry(one).ok,false);
- const multi=el('text',{textLength:'8',lengthAdjust:'spacingAndGlyphs'},[],'AB');assert.equal(validateTextGeometry(multi).ok,false);
- const nested=el('text',{textLength:'8',lengthAdjust:'spacingAndGlyphs'},[el('tspan',{},[],'A')],'A');assert.equal(validateTextGeometry(nested).ok,false);
+ for(const bad of ['0','-1','10%','20000','NaN']){
+  one.setAttribute('textLength',bad);
+  assert.equal(validateTextGeometry(one).reason,'TEXT_LENGTH_ADJUST_UNSUPPORTED');
+ }
+ one.setAttribute('textLength','8');one.setAttribute('lengthAdjust','spacing');
+ assert.equal(validateTextGeometry(one).ok,true);
+ const multi=el('text',{textLength:'80',lengthAdjust:'spacingAndGlyphs'},[],'한글문서');
+ assert.equal(validateTextGeometry(multi).ok,true);
+ const spaced=el('tspan',{textLength:'120',lengthAdjust:'spacing'},[],'PDF TEXT');
+ assert.equal(validateTextGeometry(spaced).ok,true);
+ const nested=el('text',{textLength:'80',lengthAdjust:'spacingAndGlyphs'},[el('tspan',{},[],'A')],'A');
+ assert.equal(validateTextGeometry(nested).ok,true);
+ nested.children[0].setAttribute('dx','5');
+ assert.equal(validateTextGeometry(nested).reason,'TEXT_LENGTH_ADJUST_UNSUPPORTED');
+ multi.setAttribute('lengthAdjust','unknown');
+ assert.equal(validateTextGeometry(multi).ok,false);
 });
 
 test('R36 preflight conservatively routes unsupported glyph transforms to page raster',async()=>{
