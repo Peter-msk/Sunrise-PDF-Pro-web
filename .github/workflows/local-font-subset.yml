@@ -19,7 +19,7 @@ jobs:
         run: |
           mkdir -p fontcandidate
           curl -fL --retry 3 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf' -o fontcandidate/original.otf
-          curl -fL --retry 3 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/LICENSE' -o fontcandidate/LICENSE.txt
+          curl -fL --retry 3 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE' -o fontcandidate/LICENSE.txt
           sha256sum fontcandidate/original.otf > fontcandidate/source.sha256
       - name: Create symbol subset
         run: |
