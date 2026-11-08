@@ -27,6 +27,41 @@ export function validateStaticGif(bytes){
  if(!ended||frames!==1)fail();
  return {width,height};
 }
+// A PNG colour-key mask preserves GIF's binary transparency without an alpha
+// channel. PDFKit can then embed the image without asynchronous alpha decoding.
+export async function encodeGifPixels(pixels,width,height,signal){
+ if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||width*height>MAX_PIXELS||pixels.length!==width*height*4)throw Error('GIF 그림 픽셀 형식이 잘못되었습니다.');
+ if(typeof CompressionStream!=='function')throw Error('이 브라우저는 GIF 그림 변환을 지원하지 않습니다.');
+ const colours=new Set();let transparent=false;
+ for(let i=0;i<pixels.length;i+=4){
+  const alpha=pixels[i+3];if(alpha===0){transparent=true;continue;}
+  if(alpha!==255)throw Error('GIF 그림 투명도를 보존할 수 없습니다.');
+  colours.add((pixels[i]<<16)|(pixels[i+1]<<8)|pixels[i+2]);
+  if(colours.size>256)throw Error('GIF 그림 색상 수가 지원 범위를 초과했습니다.');
+ }
+ let key=0;if(transparent){while(colours.has(key)&&key<0xffffff)key++;if(colours.has(key))throw Error('GIF 그림 투명 색상을 보존할 수 없습니다.');}
+ const stride=width*3+1,rows=new Uint8Array(stride*height);
+ for(let y=0;y<height;y++){
+  if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
+  let dest=y*stride+1;
+  for(let x=0;x<width;x++){
+   const i=(y*width+x)*4;
+   if(pixels[i+3]===0){rows[dest++]=(key>>>16)&255;rows[dest++]=(key>>>8)&255;rows[dest++]=key&255;}
+   else{rows[dest++]=pixels[i];rows[dest++]=pixels[i+1];rows[dest++]=pixels[i+2];}
+  }
+ }
+ const compressed=new Uint8Array(await new Response(new Blob([rows]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer());
+ if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
+ const crc=bytes=>{let c=0xffffffff;for(const b of bytes){c^=b;for(let k=0;k<8;k++)c=(c>>>1)^((c&1)?0xedb88320:0);}return (c^0xffffffff)>>>0;};
+ const chunk=(type,data)=>{const buf=new Uint8Array(data.length+12),view=new DataView(buf.buffer);view.setUint32(0,data.length);for(let n=0;n<4;n++)buf[4+n]=type.charCodeAt(n);buf.set(data,8);view.setUint32(8+data.length,crc(buf.subarray(4,8+data.length)));return buf;};
+ const hdr=new Uint8Array(13),view=new DataView(hdr.buffer);view.setUint32(0,width);view.setUint32(4,height);hdr[8]=8;hdr[9]=2;
+ const parts=[new Uint8Array([137,80,78,71,13,10,26,10]),chunk('IHDR',hdr)];
+ if(transparent)parts.push(chunk('tRNS',new Uint8Array([0,(key>>>16)&255,0,(key>>>8)&255,0,key&255])));
+ parts.push(chunk('IDAT',compressed),chunk('IEND',new Uint8Array()));
+ const png=new Uint8Array(await new Blob(parts,{type:'image/png'}).arrayBuffer());
+ let binary='';for(let i=0;i<png.length;i+=8192)binary+=String.fromCharCode(...png.subarray(i,i+8192));
+ return 'data:image/png;base64,'+btoa(binary);
+}
 export async function normalizeGifSvg(svg,signal,{decode=globalThis.createImageBitmap,documentRef=globalThis.document}={}){
  const parser=new DOMParser(),doc=parser.parseFromString(svg,'image/svg+xml');
  if(doc.querySelector('parsererror')||doc.doctype||doc.documentElement?.localName!=='svg')throw Error('SVG 출력 형식 오류');
@@ -48,8 +83,10 @@ export async function normalizeGifSvg(svg,signal,{decode=globalThis.createImageB
    if(bitmap.width!==width||bitmap.height!==height)throw Error('GIF 그림 크기가 일치하지 않습니다.');
    canvas=documentRef.createElement('canvas');canvas.width=width;canvas.height=height;
    const context=canvas.getContext('2d');if(!context)throw Error('GIF 그림을 처리할 수 없습니다.');
-   context.drawImage(bitmap,0,0);refs[0].value=canvas.toDataURL('image/png');changed=true;
+   context.drawImage(bitmap,0,0);const pixels=context.getImageData(0,0,width,height).data;
+   refs[0].value=await encodeGifPixels(pixels,width,height,signal);changed=true;
   }finally{bitmap?.close?.();if(canvas){canvas.width=1;canvas.height=1;}}
  }
  return changed?new XMLSerializer().serializeToString(doc.documentElement):svg;
 }
+
