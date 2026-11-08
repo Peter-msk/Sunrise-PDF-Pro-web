@@ -43,6 +43,8 @@ export async function runBrowserFontTest(){
  const bundled=await loadBundledFonts(fontkit);
  const runs=resolveFontRuns(bundled,'미설치 글꼴','normal','normal','한㎡글');
  if(!runs||runs.map(r=>r.text).join('')!=='한㎡글'||!runs.some(r=>r.face.family==='Sunrise Symbols'))throw Error('Symbol font fallback did not resolve mixed text');
+ const marks=resolveFontRuns(bundled,'미설치 글꼴','normal','normal','한․∼글');
+ if(!marks||marks.map(r=>r.text).join('')!=='한․∼글'||!marks.some(r=>r.face.family==='Sunrise Marks'))throw Error('Marks fallback did not resolve text');
  const gif='R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
  const gifSvg='<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><image href="data:image/gif;base64,'+gif+'" x="0" y="0" width="20" height="20"/></svg>';
  const normalized=await normalizeGifSvg(gifSvg);

@@ -5,7 +5,7 @@ const requested=[];
 const assets={fetch:async request=>{
  const path=new URL(request.url).pathname;
  requested.push(path);
- const types={'/app.html':'text/html','/pdf-worker.mjs':'application/javascript','/assets/local-bundle.js':'application/javascript','/assets/local-chunk-Engine_01.js':'application/javascript','/rhwp_bg.wasm':'application/wasm','/fonts/NanumGothic-Regular.ttf':'font/ttf','/fonts/SunriseSymbols.otf':'font/otf'};
+ const types={'/app.html':'text/html','/pdf-worker.mjs':'application/javascript','/assets/local-bundle.js':'application/javascript','/assets/local-chunk-Engine_01.js':'application/javascript','/rhwp_bg.wasm':'application/wasm','/fonts/NanumGothic-Regular.ttf':'font/ttf','/fonts/SunriseSymbols.otf':'font/otf','/fonts/SunriseMarks.ttf':'font/ttf'};
  if(!(path in types))return new Response('Not Found',{status:404});
  return new Response(request.method==='HEAD'?null:'test-asset',{status:200,headers:{'Content-Type':types[path]}});
 }};
@@ -17,7 +17,8 @@ for(const [route,assetPath,contentType] of [
  ['/local/assets/local-chunk-Engine_01.js','/assets/local-chunk-Engine_01.js','application/javascript'],
  ['/local/rhwp_bg.wasm','/rhwp_bg.wasm','application/wasm'],
  ['/local/fonts/NanumGothic-Regular.ttf','/fonts/NanumGothic-Regular.ttf','font/ttf'],
- ['/local/fonts/SunriseSymbols.otf','/fonts/SunriseSymbols.otf','font/otf']
+ ['/local/fonts/SunriseSymbols.otf','/fonts/SunriseSymbols.otf','font/otf'],
+ ['/local/fonts/SunriseMarks.ttf','/fonts/SunriseMarks.ttf','font/ttf']
 ]){
  for(const method of ['GET','HEAD']){
   const response=await worker.fetch(new Request('https://sunrise.example'+route,{method}),env);

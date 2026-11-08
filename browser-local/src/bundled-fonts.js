@@ -5,7 +5,7 @@ import {loadPdfFonts,familyKey} from './pdf-fonts.js';
 const FONT_FILES=[
  ['NanumMyeongjo-Regular.ttf','serif'],['NanumMyeongjo-Bold.ttf','serif'],
  ['NanumGothic-Regular.ttf','sans'],['NanumGothic-Bold.ttf','sans'],
- ['SunriseSymbols.otf','symbol']
+ ['SunriseSymbols.otf','symbol'],['SunriseMarks.ttf','symbol']
 ];
 const FAMILY_ALIASES={
  symbol:[],
