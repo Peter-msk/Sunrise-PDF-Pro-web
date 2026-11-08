@@ -17,6 +17,7 @@ try{
  const context=await browser.newContext();
  const page=await context.newPage();
  await page.goto('http://127.0.0.1:4190/');
+ await page.locator('details.advanced summary').click();
  await page.locator('#use-local-fonts').check();
  await page.reload();
  if(!await page.locator('#use-local-fonts').isChecked())throw Error('Font preference did not persist');
