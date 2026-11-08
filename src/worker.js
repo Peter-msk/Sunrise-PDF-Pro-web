@@ -99,10 +99,10 @@ export default {
       if(!['GET','HEAD'].includes(method))return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       return localAsset(request,env,'/pdf-worker.mjs',method,'application/javascript; charset=utf-8');
     }
-    const fontPath=/^\/local\/fonts\/(Nanum(?:Gothic|Myeongjo)-(?:Regular|Bold)\.ttf)$/.exec(path);
+    const fontPath=/^\/local\/fonts\/(Nanum(?:Gothic|Myeongjo)-(?:Regular|Bold)\.ttf|SunriseSymbols\.otf)$/.exec(path);
     if(fontPath){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
-      return localAsset(request,env,'/fonts/'+fontPath[1],method,'font/ttf');
+      return localAsset(request,env,'/fonts/'+fontPath[1],method,fontPath[1].endsWith('.otf')?'font/otf':'font/ttf');
     }
     if(path==='/local/rhwp_bg.wasm'){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
