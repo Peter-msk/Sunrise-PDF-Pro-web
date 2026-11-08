@@ -1,0 +1,30 @@
+name: Prepare local private-document QA runtime
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/local-private-qa-runtime.yml'
+permissions:
+  contents: read
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci && npm run build
+        working-directory: browser-local
+      - run: npx playwright install chromium --only-shell
+        working-directory: browser-local
+      - name: Package public application and browser
+        run: |
+          mkdir -p qa-runtime
+          cp -a browser-local/dist qa-runtime/dist
+          cp -a "$HOME/.cache/ms-playwright/chromium_headless_shell-"* qa-runtime/chromium
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: local-private-qa-runtime
+          path: qa-runtime
+          retention-days: 1
