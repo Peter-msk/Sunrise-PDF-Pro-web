@@ -16,7 +16,7 @@ try{
   await sleep(200);
  }
  if(!ready)throw Error('Vite timeout');
- browser=await chromium.launch({channel,headless:false});
+ browser=await chromium.launch({channel,headless:true});
  const context=await browser.newContext();
  const page=await context.newPage();
  const cdp=await context.newCDPSession(page);
