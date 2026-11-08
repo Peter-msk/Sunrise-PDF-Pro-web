@@ -46,3 +46,8 @@ test('animation is removed without changing static SVG content',()=>{
  const root=node('svg',{},[animation,node('path',{d:'M0 0L1 1'})]);
  assert.equal(parseSafeSvg('',parse(root)),root);assert.equal(animation.removed,true);
 });
+
+test('embedded GIF fails with a precise format message and remains blocked',()=>{
+ const root=node('svg',{},[node('image',{href:'data:image/gif;base64,R0lGODlhAQABAA=='})]);
+ assert.throws(()=>parseSafeSvg('',parse(root)),/GIF 그림.*지원하지/);
+});
