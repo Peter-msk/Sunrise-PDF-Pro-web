@@ -2,6 +2,7 @@ import fontkit from '@pdf-lib/fontkit';
 import {loadDocumentLocalFonts,svgFontFamilies} from '../src/local-fonts.js';
 import {installMeasureFonts} from '../src/pdf-fonts.js';
 import {tryProfessionalDocument} from '../src/svg-professional.js';
+import {normalizeGifSvg} from '../src/svg-gif.js';
 
 export async function runBrowserFontTest(){
  const response=await fetch('/fonts/NanumGothic-Regular.ttf');
@@ -36,6 +37,14 @@ export async function runBrowserFontTest(){
   }finally{release();}
  }
  if(completed!==32)throw Error('Expected 32 cases, got '+completed);
+ const gif='R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+ const gifSvg='<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><image href="data:image/gif;base64,'+gif+'" x="0" y="0" width="20" height="20"/></svg>';
+ const normalized=await normalizeGifSvg(gifSvg);
+ if(!normalized.includes('data:image/png;base64,')||normalized.includes('data:image/gif'))throw Error('Static GIF conversion failed');
+ const imageDoc={renderPageSvgWithProfile:()=>gifSvg};
+ const imagePdf=await tryProfessionalDocument(imageDoc,1,{checkedSvg:async()=>({svg:normalized,width:100,height:100}),rasterPage:async()=>({blob:new Blob(['preview'])}),fontRegistry:{faces:[]}});
+ if(imagePdf.pdf.size<100||imagePdf.vectorPages!==1)throw Error('GIF picture PDF conversion failed');
  console.log('PASS 32 SVG/PDF cases: text 4 x font declarations 4 x page sizes 2');
  return output;
 }
+
