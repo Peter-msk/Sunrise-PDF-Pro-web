@@ -264,7 +264,8 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     for(let i=0;i<count;i++){
       cancel();
       onProgress({stage:'professional',page:i+1,total:count});
-      const checked=checkedSvg(hwpDoc.renderPageSvgWithProfile(i,'print'));
+      const checked=await checkedSvg(hwpDoc.renderPageSvgWithProfile(i,'print'));
+      cancel();
       const preflight=preflightProfessionalSvg(checked,{fontRegistry});
       const width=checked.width*PX_TO_PT,height=checked.height*PX_TO_PT;
       for(const family of preflight.substituteFamilies||[])substituteFamilies.add(family);
@@ -329,3 +330,4 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     throw error;
   }
 }
+
