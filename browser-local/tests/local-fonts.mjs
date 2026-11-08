@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {File} from 'node:buffer';
-import {requestLocalFontAccess,svgFontFamilies,loadDocumentLocalFonts} from '../src/local-fonts.js';
+import {requestLocalFontAccess,requireLocalFonts,svgFontFamilies,loadDocumentLocalFonts} from '../src/local-fonts.js';
 globalThis.File ||= File;
 class Parser {
  parseFromString(svg){
@@ -33,4 +33,10 @@ test('cancellation prevents font bytes from being read',async()=>{
 test('inline font family overrides the presentation attribute',()=>{
  const names=svgFontFamilies(JSON.stringify([{'font-family':'wrong',style:'font-family: correct'}]));
  assert.deepEqual([...names.values()],['correct']);
+});
+
+test('empty OS enumeration produces a clear error',()=>{
+ assert.throws(()=>requireLocalFonts([]),/목록을 읽지 못했습니다/);
+ assert.throws(()=>requireLocalFonts(null),/목록을 읽지 못했습니다/);
+ const fonts=[{family:'Arial'}];assert.equal(requireLocalFonts(fonts),fonts);
 });
