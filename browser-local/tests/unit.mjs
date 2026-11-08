@@ -169,7 +169,9 @@ test('no external SVG images, CSS selectors, unsupported filters, or event handl
   img.setAttribute('href','data:image/png;base64,iVBORw0KGgo=');
   assert.equal(preflightProfessionalSvg(checked).ok,true);
   img.setAttribute('filter','url(#blur)');
-  assert.equal(preflightProfessionalSvg(checked).reason,'SVG_UNSAFE_ATTRIBUTE');
+  const unsupportedFilter=preflightProfessionalSvg(checked);
+  assert.equal(unsupportedFilter.reason,'SVG_UNSAFE_ATTRIBUTE');
+  assert.equal(unsupportedFilter.unsupportedAttribute,'filter');
   img.removeAttribute('filter');img.setAttribute('onclick','evil()');
   assert.equal(preflightProfessionalSvg(checked).reason,'SVG_UNSAFE_ATTRIBUTE');
   img.removeAttribute('onclick');img.setAttribute('class','external-style');
