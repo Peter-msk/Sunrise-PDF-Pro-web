@@ -8,6 +8,11 @@ export function requestLocalFontAccess(host=globalThis){
  return host.queryLocalFonts();
 }
 
+export function requireLocalFonts(fonts){
+ if(!Array.isArray(fonts)||!fonts.length)throw Error('PC 글꼴 목록을 읽지 못했습니다. 브라우저 설정과 글꼴 설치 상태를 확인하세요.');
+ return fonts;
+}
+
 export function svgFontFamilies(svg,Parser=globalThis.DOMParser){
  const doc=new Parser().parseFromString(svg,'image/svg+xml');
  if(doc.querySelector('parsererror')||doc.documentElement?.localName!=='svg')throw Error('문서의 글꼴 정보를 확인할 수 없습니다.');
