@@ -1,0 +1,34 @@
+name: Windows native font access
+on:
+  pull_request:
+    paths:
+      - 'browser-local/**'
+      - '.github/workflows/native-font-windows.yml'
+permissions:
+  contents: read
+jobs:
+  native-font:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chrome, msedge]
+    defaults:
+      run:
+        working-directory: browser-local
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run build
+      - name: Fetch public HWP test fixture
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force tests/fixtures | Out-Null
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -OutFile tests/fixtures/ci-sample.hwp
+      - name: Verify real local fonts and HWP conversion
+        env:
+          SUNRISE_BROWSER_CHANNEL: ${{ matrix.browser }}
+        run: node tests/native-font-windows.mjs
