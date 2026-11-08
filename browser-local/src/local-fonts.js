@@ -1,4 +1,5 @@
 import {familyKey,splitFontFamilies,loadPdfFonts} from './pdf-fonts.js';
+import {flattenLocalSvgStyles} from './svg-style.js';
 
 // Capture permission during the actual button click; keep font bytes in memory only.
 export function requestLocalFontAccess(host=globalThis){
@@ -9,12 +10,16 @@ export function requestLocalFontAccess(host=globalThis){
 
 export function svgFontFamilies(svg,Parser=globalThis.DOMParser){
  const doc=new Parser().parseFromString(svg,'image/svg+xml');
- if(doc.querySelector('parsererror'))throw Error('문서의 글꼴 정보를 확인할 수 없습니다.');
+ if(doc.querySelector('parsererror')||doc.documentElement?.localName!=='svg')throw Error('문서의 글꼴 정보를 확인할 수 없습니다.');
+ if(doc.querySelector('style')){
+  const result=flattenLocalSvgStyles(doc.documentElement);
+  if(!result.ok)throw Error('문서 글꼴 스타일을 확인할 수 없습니다: '+result.reason);
+ }
  const names=new Map();
  for(const el of doc.querySelectorAll('[font-family],[style]')){
   const style=el.getAttribute('style')||'';
   const match=/(?:^|;)\s*font-family\s*:\s*([^;]+)/i.exec(style);
-  for(const name of splitFontFamilies(el.getAttribute('font-family')||match?.[1]||'')){
+  for(const name of splitFontFamilies(match?.[1]||el.getAttribute('font-family')||'')){
    const clean=name.trim().replace(/^['"]|['"]$/g,'');
    const key=familyKey(clean);
    if(key&&!['serif','sans-serif','monospace','system-ui'].includes(key))names.set(key,clean);
