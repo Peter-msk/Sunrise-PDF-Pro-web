@@ -1,0 +1,23 @@
+name: Local QA build
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/local-qa-build.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci && npm run build
+        working-directory: browser-local
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: local-private-qa-dist
+          path: browser-local/dist
+          retention-days: 1
