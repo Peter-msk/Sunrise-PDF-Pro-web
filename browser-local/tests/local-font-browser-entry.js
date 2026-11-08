@@ -3,6 +3,9 @@ import {loadDocumentLocalFonts,svgFontFamilies} from '../src/local-fonts.js';
 import {installMeasureFonts} from '../src/pdf-fonts.js';
 import {tryProfessionalDocument} from '../src/svg-professional.js';
 import {normalizeGifSvg} from '../src/svg-gif.js';
+import {loadBrowserPdfBackend} from '../src/pdfkit-backend.js';
+import {loadBundledFonts} from '../src/bundled-fonts.js';
+import {resolveFontRuns} from '../src/pdf-fonts.js';
 
 export async function runBrowserFontTest(){
  const response=await fetch('/fonts/NanumGothic-Regular.ttf');
@@ -37,12 +40,20 @@ export async function runBrowserFontTest(){
   }finally{release();}
  }
  if(completed!==32)throw Error('Expected 32 cases, got '+completed);
+ const bundled=await loadBundledFonts(fontkit);
+ const runs=resolveFontRuns(bundled,'미설치 글꼴','normal','normal','한㎡글');
+ if(!runs||runs.map(r=>r.text).join('')!=='한㎡글'||!runs.some(r=>r.face.family==='Sunrise Symbols'))throw Error('Symbol font fallback did not resolve mixed text');
  const gif='R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
  const gifSvg='<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><image href="data:image/gif;base64,'+gif+'" x="0" y="0" width="20" height="20"/></svg>';
  const normalized=await normalizeGifSvg(gifSvg);
  if(!normalized.includes('data:image/png;base64,')||normalized.includes('data:image/gif'))throw Error('Static GIF conversion failed');
  const imageDoc={renderPageSvgWithProfile:()=>gifSvg};
- const imagePdf=await Promise.race([tryProfessionalDocument(imageDoc,1,{checkedSvg:async()=>({svg:normalized,width:100,height:100}),rasterPage:async()=>({blob:new Blob(['preview'])}),fontRegistry:{faces:[]}}),new Promise((_,reject)=>setTimeout(()=>reject(Error('GIF PDF test timeout')),15000))]);
+ const stages=[];
+ const debugLoader=async()=>{const libs=await loadBrowserPdfBackend();const Original=libs.PDFDocument;
+  class Tracked extends Original{constructor(...args){super(...args);this.on('end',()=>stages.push('stream-end'));this.on('error',()=>stages.push('stream-error'));}end(...args){stages.push('pdf-end');return super.end(...args);}}
+  return {...libs,PDFDocument:Tracked,SVGtoPDF:(...args)=>{stages.push('svg-start');const r=libs.SVGtoPDF(...args);stages.push('svg-end');return r;},toBlob:(...args)=>{stages.push('blob-start');return libs.toBlob(...args).then(x=>{stages.push('blob-end');return x;});}};
+ };
+ const imagePdf=await Promise.race([tryProfessionalDocument(imageDoc,1,{checkedSvg:async()=>({svg:normalized,width:100,height:100}),rasterPage:async()=>({blob:new Blob(['preview'])}),fontRegistry:{faces:[]},loadLibraries:debugLoader,onProgress:()=>stages.push('page')}),new Promise((_,reject)=>setTimeout(()=>reject(Error('GIF PDF test timeout: '+stages.join(','))),15000))]);
  if(imagePdf.pdf.size<100||imagePdf.vectorPages!==1)throw Error('GIF picture PDF conversion failed');
  console.log('PASS 32 SVG/PDF cases: text 4 x font declarations 4 x page sizes 2');
  return output;
