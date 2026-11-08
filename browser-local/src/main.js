@@ -4,7 +4,7 @@ import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
-import {requestLocalFontAccess} from './local-fonts.js';
+import {requestLocalFontAccess,requireLocalFonts} from './local-fonts.js';
 const $=id=>document.getElementById(id);
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
@@ -79,7 +79,7 @@ $('convert').addEventListener('click',async()=>{
  let fontsRequest=null;try{if($('use-local-fonts').checked&&pending.some(i=>isHwp(i.file)))fontsRequest=requestLocalFontAccess();}catch(error){status('PC 글꼴 연결 실패: '+String(error.message||error));return;}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();let completed=0;
  try{
-  let localFonts=null;if(fontsRequest){try{localFonts=await fontsRequest;if(!Array.isArray(localFonts)||!localFonts.length)throw Error('PC 글꼴 목록을 읽지 못했습니다. 브라우저 설정과 글꼴 설치 상태를 확인하세요.');}catch(error){if(!['NotAllowedError','SecurityError'].includes(error?.name))throw error;throw Error('PC 글꼴 접근을 허용해 주세요. 브라우저 사이트 설정도 확인하세요. '+String(error?.message||error));}}
+  let localFonts=null;if(fontsRequest){try{localFonts=requireLocalFonts(await fontsRequest);}catch(error){if(!['NotAllowedError','SecurityError'].includes(error?.name))throw error;throw Error('PC 글꼴 접근을 허용해 주세요. 브라우저 사이트 설정도 확인하세요. '+String(error?.message||error));}}
   await runBatch(pending,async(file,item)=>{
    const result=await convertToPdf(file,info=>{
     const part=info.stage==='load'?Math.min(.15,.15*info.loaded/Math.max(1,info.total)):info.stage==='fonts'?.15+.15*info.page/Math.max(1,info.total):.30+.69*info.page/Math.max(1,info.total);
@@ -104,7 +104,7 @@ $('print-prepare').addEventListener('click',async()=>{
  if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;
  let fontsRequest=null;try{if($('use-local-fonts').checked)fontsRequest=requestLocalFontAccess();}catch(error){status('PC 글꼴 연결 실패: '+String(error.message||error));return;}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();
- try{let localFonts=null;if(fontsRequest){try{localFonts=await fontsRequest;if(!Array.isArray(localFonts)||!localFonts.length)throw Error('PC 글꼴 목록을 읽지 못했습니다. 브라우저 설정과 글꼴 설치 상태를 확인하세요.');}catch(error){if(!['NotAllowedError','SecurityError'].includes(error?.name))throw error;throw Error('PC 글꼴 접근을 허용해 주세요. '+String(error?.message||error));}}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.');}
+ try{let localFonts=null;if(fontsRequest){try{localFonts=requireLocalFonts(await fontsRequest);}catch(error){if(!['NotAllowedError','SecurityError'].includes(error?.name))throw error;throw Error('PC 글꼴 접근을 허용해 주세요. '+String(error?.message||error));}}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.');}
  catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+String(error?.message||error));}
  finally{busy=false;controller=null;draw();}
 });
