@@ -9,6 +9,7 @@ permissions:
 jobs:
   native-font:
     runs-on: windows-2022
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
