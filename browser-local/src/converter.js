@@ -6,6 +6,7 @@ import { svgPageSize } from './page-geometry.js';
 import { parseDocumentSvg } from './svg-embedded.js';
 import { loadBundledFonts } from './bundled-fonts.js';
 import { loadDocumentLocalFonts } from './local-fonts.js';
+import { normalizeGifSvg } from './svg-gif.js';
 
 // File-size limits are intentionally absent. Runtime memory and page pixels
 // remain bounded by the browser/device; those are not upload-size limits.
@@ -157,7 +158,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
   if(options.engine==='professional'){
    // A failed object-preserving export must stay failed, never become an image PDF.
    return await tryProfessionalDocument(doc,count,{
-    checkedSvg,rasterPage,signal,fontRegistry,onProgress,allowRasterFallback:false
+    checkedSvg:async svg=>checkedSvg(await normalizeGifSvg(svg,signal)),rasterPage,signal,fontRegistry,onProgress,allowRasterFallback:false
    });
   }
  }catch(error){
@@ -214,7 +215,7 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
   const pages=[];
   for(let i=0;i<count;i++){
    throwIfCancelled(signal);
-   pages.push(checkedSvg(doc.renderPageSvgWithProfile(i,'print')));
+   pages.push(checkedSvg(await normalizeGifSvg(doc.renderPageSvgWithProfile(i,'print'),signal)));
    onProgress({stage:'print',page:i+1,total:count});
    await new Promise(resolve=>setTimeout(resolve,0));
   }
@@ -222,4 +223,5 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
   return {pages,fontRegistry};
  }finally{try{doc?.free();}finally{release();}}
 }
+
 
