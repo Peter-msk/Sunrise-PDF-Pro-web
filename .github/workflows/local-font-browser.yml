@@ -1,0 +1,30 @@
+name: Local font browser acceptance
+on:
+  pull_request:
+    paths:
+      - 'browser-local/**'
+      - '.github/workflows/local-font-browser.yml'
+permissions:
+  contents: read
+jobs:
+  browser-font:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: browser-local
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/local-font-browser.mjs
+      - name: Install PDF verification tools
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - name: Check embedded font and text
+        run: |
+          pdffonts /tmp/sunrise-local-font-test.pdf
+          pdffonts /tmp/sunrise-local-font-test.pdf | grep -i Nanum
+          pdftotext /tmp/sunrise-local-font-test.pdf - | grep '한글'
