@@ -2,13 +2,14 @@ import {chromium} from 'playwright';
 import {spawn} from 'node:child_process';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {writeFileSync} from 'node:fs';
+import {get} from 'node:http';
 const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','4190','--strictPort'],{stdio:'inherit'});
 let browser;
 try{
  let ready=false;
  for(let i=0;i<100;i++){
   if(server.exitCode!==null)throw Error('Vite exited');
-  try{if((await fetch('http://127.0.0.1:4190/')).ok){ready=true;break;}}catch{}
+  try{const code=await new Promise((resolve,reject)=>get('http://127.0.0.1:4190/',res=>{res.resume();resolve(res.statusCode);}).on('error',reject));if(code===200){ready=true;break;}if(i===0)console.log('Vite HTTP status:',code);}catch(error){if(i===0)console.log('Vite startup:',error.message);}
   await sleep(200);
  }
  if(!ready)throw Error('Vite timeout');
