@@ -4,8 +4,8 @@ import {installMeasureFonts,resolveFont} from '../src/pdf-fonts.js';
 import {tryProfessionalDocument} from '../src/svg-professional.js';
 
 export async function verifyInstalledFont(fonts){
- const item=fonts.find(f=>f.family.toLowerCase()==='arial'&&f.style.toLowerCase()==='regular');
- if(!item)throw Error('Windows Arial Regular not available to the browser');
+ const item=fonts.find(f=>f.postscriptName==='ArialMT')||fonts.find(f=>f.family.toLowerCase()==='arial'&&/^(regular|normal|표준)$/i.test(f.style));
+ if(!item)throw Error('Windows Arial Regular unavailable; count='+fonts.length+' Arial variants='+JSON.stringify(fonts.filter(f=>/arial/i.test(f.family)).slice(0,5).map(f=>({family:f.family,style:f.style,postscriptName:f.postscriptName}))));
  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="794" height="1123"><text font-family="Arial" x="30" y="80" font-size="24">Actual Windows font</text></svg>';
  const doc={renderPageSvgWithProfile:()=>svg};
  const registry=await loadDocumentLocalFonts(doc,1,fonts,fontkit);
