@@ -6,7 +6,7 @@ globalThis.File ||= File;
 class Parser {
  parseFromString(svg){
   const elements=JSON.parse(svg).map(attributes=>({getAttribute:name=>attributes[name]??null}));
-  return {querySelector:()=>null,querySelectorAll:()=>elements};
+  return {documentElement:{localName:'svg'},querySelector:()=>null,querySelectorAll:()=>elements};
  }
 }
 globalThis.DOMParser=Parser;
@@ -28,4 +28,9 @@ test('loads only document-matching faces, keeps original aliases, and reports fa
 test('cancellation prevents font bytes from being read',async()=>{
  let called=0;const controller=new AbortController();controller.abort();
  await assert.rejects(loadDocumentLocalFonts({renderPageSvgWithProfile(){called++;}},1,[],{},controller.signal),{name:'AbortError'});assert.equal(called,0);
+});
+
+test('inline font family overrides the presentation attribute',()=>{
+ const names=svgFontFamilies(JSON.stringify([{'font-family':'wrong',style:'font-family: correct'}]));
+ assert.deepEqual([...names.values()],['correct']);
 });
