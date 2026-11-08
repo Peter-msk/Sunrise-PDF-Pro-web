@@ -42,7 +42,7 @@ export async function runBrowserFontTest(){
  const normalized=await normalizeGifSvg(gifSvg);
  if(!normalized.includes('data:image/png;base64,')||normalized.includes('data:image/gif'))throw Error('Static GIF conversion failed');
  const imageDoc={renderPageSvgWithProfile:()=>gifSvg};
- const imagePdf=await tryProfessionalDocument(imageDoc,1,{checkedSvg:async()=>({svg:normalized,width:100,height:100}),rasterPage:async()=>({blob:new Blob(['preview'])}),fontRegistry:{faces:[]}});
+ const imagePdf=await Promise.race([tryProfessionalDocument(imageDoc,1,{checkedSvg:async()=>({svg:normalized,width:100,height:100}),rasterPage:async()=>({blob:new Blob(['preview'])}),fontRegistry:{faces:[]}}),new Promise((_,reject)=>setTimeout(()=>reject(Error('GIF PDF test timeout')),15000))]);
  if(imagePdf.pdf.size<100||imagePdf.vectorPages!==1)throw Error('GIF picture PDF conversion failed');
  console.log('PASS 32 SVG/PDF cases: text 4 x font declarations 4 x page sizes 2');
  return output;
