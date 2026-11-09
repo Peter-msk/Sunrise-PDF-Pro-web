@@ -43,16 +43,22 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   await new Promise(resolve=>setTimeout(resolve,0));
  }
  const faces=[],seen=new Set();
+ let unreadable=0,matched=0;
  for(const item of available){
   const keys=[item.family,item.fullName,item.postscriptName].filter(Boolean).map(familyKey);
   const requested=[...new Set(keys.filter(key=>needed.has(key)))];
   if(!requested.length)continue;
+  matched++;
   if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
-  const blob=await item.blob();
-  const file=new File([blob],'local-font.ttf',{type:'font/ttf'});
   let loaded;
-  try{loaded=await loadPdfFonts([file],parser,signal);}
-  catch(error){if(error?.name==='AbortError')throw error;continue;}
+  try{
+   const blob=await item.blob();
+   const file=new File([blob],'local-font.ttf',{type:'font/ttf'});
+   loaded=await loadPdfFonts([file],parser,signal);
+  }catch(error){
+   if(error?.name==='AbortError'||signal?.aborted)throw error;
+   unreadable++;continue;
+  }
   const face=loaded.faces[0];
   const identity=familyKey(item.postscriptName||item.fullName||item.family)+'|'+face.bold+'|'+face.italic;
   if(seen.has(identity))continue;
@@ -62,5 +68,5 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   face.aliases=[...new Set([...face.aliases,...keys,...requested])];
   faces.push(face);
  }
- return {faces};
+ return {faces,requestedFamilies:needed.size,matchedFontData:matched,unreadableFonts:unreadable};
 }
