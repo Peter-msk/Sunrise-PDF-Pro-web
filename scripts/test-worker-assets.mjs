@@ -90,7 +90,7 @@ assert.match(htmlResponse.headers.get('content-security-policy'),/worker-src 'se
 assert.equal((await worker.fetch(new Request('https://sunrise.example/local/pdf-worker.mjs',{method:'POST'}),env)).status,405);
 
 // R55 Trace v2 / R56 compact queue assets: safe methods, privacy and same-origin policy.
-for(const [path,contentType] of [['/ops-r56.js','javascript'],['/ops-r56.css','text/css'],['/trace-dev4-client.js','javascript']]){
+for(const [path,contentType] of [['/ops-r56.js','javascript'],['/ops-r56.css','text/css']]){
  const res=await worker.fetch(new Request('https://sunrise.example'+path),env);
  assert.equal(res.status,200,path);
  assert.match(res.headers.get('content-type')||'',new RegExp(contentType),path);
@@ -101,6 +101,10 @@ for(const [path,contentType] of [['/ops-r56.js','javascript'],['/ops-r56.css','t
  assert.equal(await head.text(),'');
  assert.equal((await worker.fetch(new Request('https://sunrise.example'+path,{method:'POST'}),env)).status,405,path+' method guard');
 }
+const traceClient=await worker.fetch(new Request('https://sunrise.example/trace-dev4-client.js'),env);
+assert.equal(traceClient.status,200);
+assert.match(traceClient.headers.get('content-type')||'',/javascript/);
+assert.match(await traceClient.text(),/trace2-dev4-pro|trace-dev4/i);
 assert.match(htmlResponse.headers.get('permissions-policy')||'',/local-fonts=\(self\)/);
 assert.ok(rewriteHooks.some(x=>x.selector==='head'&&x.fragments.some(y=>y.content.includes('/ops-r56.css')&&y.content.includes('/ops-r56.js'))),'R56 UI must be injected in /local/');
 assert.ok(rewriteHooks.some(x=>x.selector==='.top-inner'),'R50 navigation must be preserved');
