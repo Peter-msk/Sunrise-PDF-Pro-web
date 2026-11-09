@@ -169,7 +169,9 @@ test('no external SVG images, CSS selectors, unsupported filters, or event handl
   img.setAttribute('href','data:image/png;base64,iVBORw0KGgo=');
   assert.equal(preflightProfessionalSvg(checked).ok,true);
   img.setAttribute('filter','url(#blur)');
-  assert.equal(preflightProfessionalSvg(checked).reason,'SVG_UNSAFE_ATTRIBUTE');
+  const unsupportedFilter=preflightProfessionalSvg(checked);
+  assert.equal(unsupportedFilter.reason,'SVG_UNSAFE_ATTRIBUTE');
+  assert.equal(unsupportedFilter.unsupportedAttribute,'filter');
   img.removeAttribute('filter');img.setAttribute('onclick','evil()');
   assert.equal(preflightProfessionalSvg(checked).reason,'SVG_UNSAFE_ATTRIBUTE');
   img.removeAttribute('onclick');img.setAttribute('class','external-style');
@@ -581,4 +583,12 @@ test('default professional conversion rejects unsupported pages and discards the
   assert.deepEqual(state.profiles,[[0,'print']]);
   assert.equal(state.rasters,0);assert.equal(state.destroyed,1);
  });
+});
+
+test('symbol fallback preserves original text alongside a selected font',()=>{
+ const selected={...face('원본'),characterSet:new Set([0xd55c,0xae00])};
+ const symbol={name:'Symbols',family:'Sunrise Symbols',aliases:[familyKey('Sunrise Symbols')],bold:false,italic:false,isFallback:true,genericFamily:'symbol',characterSet:new Set([0x33a1,0xff65])};
+ const runs=resolveFontRuns({faces:[selected,symbol]},'원본','normal','normal','한㎡글');
+ assert.deepEqual(runs.map(r=>r.text),['한','㎡','글']);
+ assert.deepEqual(runs.map(r=>r.face.name),['FakeRegular','Symbols','FakeRegular']);
 });

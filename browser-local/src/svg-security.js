@@ -34,6 +34,8 @@ export function parseSafeSvg(svg,parser=new DOMParser()){
       if(/^on/i.test(name)||/^on/i.test(attr.name))
         throw Error('문서 SVG의 이벤트 속성은 허용되지 않습니다.');
       if(name==='href'||name==='src'){
+        if(element.localName==='image'&&/^data:image\/gif[;,]/i.test(value))
+          throw Error('문서에 포함된 GIF 그림은 현재 PDF 변환에서 지원하지 않습니다.');
         if(/^data:image\/(?:png|jpeg);base64,/i.test(value))value=value.replace(/\s+/g,'');
         if(value&&!LOCAL.test(value)&&!(element.localName==='image'&&IMAGE.test(value)))
           throw Error('문서 SVG의 외부 자원 참조는 허용되지 않습니다.');

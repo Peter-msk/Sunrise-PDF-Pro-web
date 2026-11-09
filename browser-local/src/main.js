@@ -1,13 +1,18 @@
 import {createPdfViewer} from './pdf-viewer.js';
+import {emitProEvent,startProTelemetry,classifyProError,proFeature} from './pro-telemetry.js';
 import {renderNativePrintPages} from './converter.js';
 import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
+import {requestLocalFontAccess} from './local-fonts.js';
+import {settleInstalledFonts} from './local-font-policy.mjs';
 const $=id=>document.getElementById(id);
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
 const status=value=>{$('status').textContent=value;};
+try{$('use-local-fonts').checked=localStorage.getItem('sunrise-local-fonts')==='enabled';}catch{}
+$('use-local-fonts').addEventListener('change',()=>{try{localStorage.setItem('sunrise-local-fonts',$('use-local-fonts').checked?'enabled':'disabled');}catch{}clearPrint();});
 function clearPrint(){if(printJob){printJob.dispose();printJob=null;}}
 function clearArchive(){if(archiveUrl)URL.revokeObjectURL(archiveUrl);archiveUrl=null;$('download-all').hidden=true;$('download-all').removeAttribute('href');}
 function release(item){if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
@@ -28,7 +33,7 @@ function show(item){
 function sync(){
  const pending=items.some(i=>['ready','failed','cancelled'].includes(i.state));
  $('convert').disabled=!ready||busy||!pending;$('reset').disabled=busy||!items.length;$('cancel').disabled=!busy;
- for(const id of ['source','pdf-font','pdf-engine'])$(id).disabled=busy;
+ for(const id of ['source','pdf-font','pdf-engine','use-local-fonts'])$(id).disabled=busy;
  $('print-prepare').disabled=!ready||busy||!active||!isHwp(active.file)||active.state==='invalid';$('print-save').disabled=busy||!printJob;
  $('total-count').textContent=items.length;$('done-count').textContent=items.filter(i=>i.state==='done').length;
  $('failed-count').textContent=items.filter(i=>['failed','invalid'].includes(i.state)).length;
@@ -72,17 +77,24 @@ $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from
 $('pdf-engine').addEventListener('change',()=>{clearPrint();status('변경한 출력 방식은 다음 변환부터 적용됩니다.');sync();});
 $('convert').addEventListener('click',async()=>{
  if(busy||!ready)return;const pending=items.filter(i=>['ready','failed','cancelled'].includes(i.state));if(!pending.length)return;
- const fontFiles=Array.from($('pdf-font').files||[]),engine=$('pdf-engine').value;controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();let completed=0;
+ const fontFiles=Array.from($('pdf-font').files||[]),engine=$('pdf-engine').value;
+ let fontsRequest=null,fontAccessNotice='';try{if($('use-local-fonts').checked&&pending.some(i=>isHwp(i.file)))fontsRequest=requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
+ controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();let completed=0;
  try{
+  let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice;}
   await runBatch(pending,async(file,item)=>{
+   emitProEvent('convert_start',{feature:proFeature(file)});
    const result=await convertToPdf(file,info=>{
-    const part=info.stage==='load'?Math.min(.15,.15*info.loaded/Math.max(1,info.total)):.15+.84*info.page/Math.max(1,info.total);
+    item._proDiagStage=info.stage==='load'?'load':info.stage==='fonts'?'fonts':'render';
+    const part=info.stage==='load'?Math.min(.15,.15*info.loaded/Math.max(1,info.total)):info.stage==='fonts'?.15+.15*info.page/Math.max(1,info.total):.30+.69*info.page/Math.max(1,info.total);
     $('progress').value=Math.min(99,Math.round((completed+part)/pending.length*100));
-    status(file.name+' · '+(info.stage==='load'?'문서 읽는 중':info.page+'/'+info.total+'쪽 변환 중')+' · '+(completed+1)+'/'+pending.length+'개');
-   },signal,{fontFiles,engine});return result;
+    status(file.name+' · '+(info.stage==='load'?'문서 읽는 중':info.stage==='fonts'?'필요한 글꼴 확인 중':info.page+'/'+info.total+'쪽 변환 중')+' · '+(completed+1)+'/'+pending.length+'개');
+   },signal,{fontFiles,engine,localFonts});if(fontAccessNotice&&isHwp(file))result.warnings=[...(result.warnings||[]),fontAccessNotice];return result;
   },signal,item=>{
+   if(item.state==='done')emitProEvent('convert_success',{feature:proFeature(item.file),stage:'pdf'});
    if(item.state==='done'){item.pdfUrl=URL.createObjectURL(item.result.pdf);item.imgUrl=URL.createObjectURL(item.result.preview);completed++;show(item);}
-   else if(item.state==='failed'||item.state==='cancelled')completed++;
+   else if(item.state==='failed'){emitProEvent('convert_failure',{feature:proFeature(item.file),stage:item._proDiagStage||'unknown',error_code:classifyProError(item.error)});completed++;}
+   else if(item.state==='cancelled')completed++;
    draw();
   });
   if(!signal.aborted){
@@ -95,8 +107,10 @@ $('convert').addEventListener('click',async()=>{
  finally{busy=false;controller=null;draw();}
 });
 $('print-prepare').addEventListener('click',async()=>{
- if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();
- try{const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]));if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.');}
+ if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;
+ let fontsRequest=null,printFontNotice='';try{if($('use-local-fonts').checked)fontsRequest=requestLocalFontAccess();}catch(error){printFontNotice='PC 글꼴 API를 사용할 수 없어 내장 글꼴로 인쇄합니다.';}
+ controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();
+ try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;printFontNotice=access.notice;}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.'+(printFontNotice?' · '+printFontNotice:''));}
  catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+String(error?.message||error));}
  finally{busy=false;controller=null;draw();}
 });
@@ -105,3 +119,6 @@ $('cancel').addEventListener('click',()=>controller?.abort());
 $('reset').addEventListener('click',()=>{for(const item of items)release(item);items=[];clearPrint();clearArchive();$('progress').value=0;show(null);draw();status('새 문서를 선택해 주세요.');});
 viewer.open(null);status('변환 준비 완료. 한글·엑셀·이미지를 여러 개 선택할 수 있습니다.');sync();
 window.addEventListener('pagehide',()=>{controller?.abort();viewer.dispose();clearPrint();clearArchive();for(const item of items)release(item);});
+
+
+startProTelemetry();

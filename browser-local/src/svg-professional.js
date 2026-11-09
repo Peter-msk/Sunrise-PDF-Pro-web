@@ -140,7 +140,9 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
       // That is binary data, not a protocol-relative network reference.
       const embeddedImage=el.localName==='image'&&/(?:^|:)href$/.test(name)&&
         /^data:image\/(?:png|jpeg);base64,[a-z0-9+/]+={0,2}$/i.test(value);
-      if(/^on/i.test(name)||UNSUPPORTED_ATTRIBUTES.has(name)||(!embeddedImage&&unsafeReference(value)))
+      if(UNSUPPORTED_ATTRIBUTES.has(name))
+        return {ok:false,reason:'SVG_UNSAFE_ATTRIBUTE',unsupportedAttribute:name};
+      if(/^on/i.test(name)||(!embeddedImage&&unsafeReference(value)))
         return {ok:false,reason:'SVG_UNSAFE_ATTRIBUTE'};
     }
     const geometry=validateTextGeometry(el);
@@ -262,7 +264,8 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     for(let i=0;i<count;i++){
       cancel();
       onProgress({stage:'professional',page:i+1,total:count});
-      const checked=checkedSvg(hwpDoc.renderPageSvgWithProfile(i,'print'));
+      const checked=await checkedSvg(hwpDoc.renderPageSvgWithProfile(i,'print'));
+      cancel();
       const preflight=preflightProfessionalSvg(checked,{fontRegistry});
       const width=checked.width*PX_TO_PT,height=checked.height*PX_TO_PT;
       for(const family of preflight.substituteFamilies||[])substituteFamilies.add(family);
@@ -270,7 +273,8 @@ export async function tryProfessionalDocument(hwpDoc,count,{
         if(!allowRasterFallback){
           const fontInfo=preflight.fontFamily?' 필요한 글꼴: '+preflight.fontFamily+
             (preflight.fontWeight?' (굵기 '+preflight.fontWeight+', 스타일 '+preflight.fontStyle+')':'')+'.':'';
-          throw Error((i+1)+'쪽의 글자·도형 보존 변환을 완료할 수 없습니다 ('+preflight.reason+').'+fontInfo+' 원본 글꼴과 문서 지원 범위를 확인하세요.');
+          const attrInfo=preflight.unsupportedAttribute?' · 미지원 SVG 속성: '+preflight.unsupportedAttribute:'';
+          throw Error((i+1)+'쪽의 글자·도형 보존 변환을 완료할 수 없습니다 ('+preflight.reason+attrInfo+').'+fontInfo+' 원본 글꼴과 문서 지원 범위를 확인하세요.');
         }
         // This page has not yet modified PDFKit; safe to rasterize just it.
         onProgress({stage:'professional-raster',page:i+1,total:count});
@@ -326,3 +330,4 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     throw error;
   }
 }
+

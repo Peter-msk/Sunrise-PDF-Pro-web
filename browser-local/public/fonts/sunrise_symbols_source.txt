@@ -1,0 +1,6 @@
+Sunrise Symbols is a renamed, symbol-only subset of Noto Sans CJK KR Regular, release Sans2.004, under SIL OFL 1.1. The copyright and license in sunrise_symbols_OFL.txt apply.
+Source: https://github.com/notofonts/noto-cjk/tree/Sans2.004/Sans/OTF/Korean
+Original SHA-256: 6bcb2a0703aa137e874fc2dffa85f6c21ba9a67fa329e81b8c801663af7e992a
+Subset SHA-256: f781d5c02eaa95129107e1d860421d60da4c9700beb672e1302c474f626b5992
+Ranges: U+0370-03FF,U+2000-206F,U+2100-22FF,U+2460-24FF,U+3000-303F,U+3200-33FF,U+FF00-FFEF. Generated with fontTools 4.60.1, no hinting, then renamed via fontTools.
+This is a substitute only for supported characters; it does not preserve original font identity or cover every CJK glyph.

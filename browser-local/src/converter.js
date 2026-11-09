@@ -5,6 +5,10 @@ import { readDocumentBuffer } from './file-reader.js';
 import { svgPageSize } from './page-geometry.js';
 import { parseDocumentSvg } from './svg-embedded.js';
 import { loadBundledFonts } from './bundled-fonts.js';
+import { loadDocumentLocalFonts } from './local-fonts.js';
+import { normalizeGifSvg } from './svg-gif.js';
+import { normalizeEmbeddedPngSvg } from './svg-embedded-raster-budget.mjs';
+import { normalizeSvgGrayscale } from './svg-safe-grayscale.mjs';
 
 // File-size limits are intentionally absent. Runtime memory and page pixels
 // remain bounded by the browser/device; those are not upload-size limits.
@@ -138,8 +142,16 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    const {default:fontkit}=await import('@pdf-lib/fontkit');
    throwIfCancelled(signal);
    const selected=selectedFonts.length?await loadPdfFonts(selectedFonts,fontkit,signal):{faces:[]};
+   let local={faces:[]};
+   if(options.localFonts){
+    const probe=new HwpDocument(new Uint8Array(buf));
+    try{const pages=probe.pageCount();if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
+     local=await loadDocumentLocalFonts(probe,pages,options.localFonts,fontkit,signal,onProgress);
+    }finally{probe.free();}
+   }
    const bundled=await loadBundledFonts(fontkit,signal);
-   fontRegistry={faces:[...selected.faces,...bundled.faces]};
+   const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
+   fontRegistry={faces:[...selected.faces,...localOnly,...bundled.faces]};
    releaseMeasureFonts=await installMeasureFonts(fontRegistry,signal);
   }
   doc=new HwpDocument(new Uint8Array(buf));
@@ -147,9 +159,32 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
   if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
   if(options.engine==='professional'){
    // A failed object-preserving export must stay failed, never become an image PDF.
-   return await tryProfessionalDocument(doc,count,{
-    checkedSvg,rasterPage,signal,fontRegistry,onProgress,allowRasterFallback:false
+   const resizedPngs=[],svgFilterStats=[];
+   const result=await tryProfessionalDocument(doc,count,{
+    checkedSvg:async svg=>{
+     const gifSvg=await normalizeGifSvg(svg,signal);
+     const pngResult=await normalizeEmbeddedPngSvg(gifSvg,signal);
+     resizedPngs.push(...pngResult.resized);
+     const grayResult=await normalizeSvgGrayscale(pngResult.svg,signal);
+     if(grayResult.filtersApplied)svgFilterStats.push(grayResult);
+     return checkedSvg(grayResult.svg);
+    },rasterPage,signal,fontRegistry,onProgress,allowRasterFallback:false
    });
+   if(resizedPngs.length){
+    const unique=[...new Map(resizedPngs.map(img=>[
+     img.sourceWidth+'x'+img.sourceHeight+'>'+img.width+'x'+img.height,img])).values()];
+    result.warnings=[...(result.warnings||[]),...unique.map(img=>
+     '문서의 대형 PNG '+img.sourceWidth+'×'+img.sourceHeight+' → '+
+     img.width+'×'+img.height+' 픽셀로 축소했습니다. 글자·도형은 SVG로 유지됩니다.')];
+   }
+   if(svgFilterStats.length){
+    const count=svgFilterStats.reduce((sum,page)=>sum+page.filtersApplied,0);
+    const pictures=svgFilterStats.reduce((sum,page)=>sum+page.imagesChanged,0);
+    result.warnings=[...(result.warnings||[]),
+     '지원되는 회색조 SVG 필터 '+count+'개를 벡터 색상으로 보존·정규화했습니다'+
+     (pictures?' (해당 필터의 내장 그림 '+pictures+'개는 객체 단위 픽셀 색상 변환)':'')+'.'];
+   }
+   return result;
   }
  }catch(error){
   if(error instanceof RangeError || /out of memory|memory allocation|allocation failed/i.test(String(error?.message))){
@@ -166,7 +201,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
  * The caller owns the returned pages and must free their DOM/print job when done.
  * This is not a background server conversion and does not impose a file-byte cap.
  */
-export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontFiles=[]){
+export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontFiles=[],localFonts=null){
  throwIfCancelled(signal);
  const header=await file.slice(0,8).arrayBuffer();
  verifyFile(file,header);
@@ -185,8 +220,16 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
    const {default:fontkit}=await import('@pdf-lib/fontkit');
    throwIfCancelled(signal);
    const selected=fontFiles.length?await loadPdfFonts(fontFiles,fontkit,signal):{faces:[]};
+   let local={faces:[]};
+   if(localFonts){
+    const probe=new HwpDocument(new Uint8Array(buffer));
+    try{const pages=probe.pageCount();if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
+     local=await loadDocumentLocalFonts(probe,pages,localFonts,fontkit,signal,onProgress);
+    }finally{probe.free();}
+   }
    const bundled=await loadBundledFonts(fontkit,signal);
-   fontRegistry={faces:[...selected.faces,...bundled.faces]};
+   const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
+   fontRegistry={faces:[...selected.faces,...localOnly,...bundled.faces]};
    release=await installMeasureFonts(fontRegistry,signal);
   }
   throwIfCancelled(signal);
@@ -197,7 +240,7 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
   const pages=[];
   for(let i=0;i<count;i++){
    throwIfCancelled(signal);
-   pages.push(checkedSvg(doc.renderPageSvgWithProfile(i,'print')));
+   pages.push(checkedSvg(await normalizeGifSvg(doc.renderPageSvgWithProfile(i,'print'),signal)));
    onProgress({stage:'print',page:i+1,total:count});
    await new Promise(resolve=>setTimeout(resolve,0));
   }
@@ -205,3 +248,5 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
   return {pages,fontRegistry};
  }finally{try{doc?.free();}finally{release();}}
 }
+
+

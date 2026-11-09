@@ -8,7 +8,7 @@
     "build": "node scripts/copy-wasm.mjs && vite build",
     "dev": "node scripts/copy-wasm.mjs && vite --host 127.0.0.1",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "test": "node --test tests/svg-embedded.mjs tests/multi-format.mjs tests/multi-format-pdf.mjs tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs",
+    "test": "node --test tests/svg-gif.mjs tests/local-fonts.mjs tests/svg-embedded.mjs tests/multi-format.mjs tests/multi-format-pdf.mjs tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs",
     "check:source": "node scripts/check-source.mjs",
     "test:local": "npm run check:source && npm test",
     "diagnose": "node scripts/diagnose-local.mjs",
@@ -35,3 +35,5 @@
     "vite": "8.3.2"
   }
 }
+
+

@@ -1,0 +1,5 @@
+Sunrise Marks is a renamed subset of DejaVu Sans 2.37, distributed under the included Bitstream Vera font license, with DejaVu changes in the public domain. The copyright notice and permission text are in sunrise_marks_license.txt.
+Source: https://dejavu-fonts.github.io/
+Original DejaVuSans.ttf SHA-256: ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280
+Subset SHA-256: c46399732947c51004cc10660b5f977fb981ccd1b473106882e36a99ce1edfc6
+Ranges U+2000-206F,U+2100-22FF,U+2460-24FF; subset with fontTools then renamed Sunrise Marks. This is a fallback and does not guarantee original font fidelity.
