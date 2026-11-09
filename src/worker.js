@@ -1,4 +1,7 @@
 import {handleProAdmin} from './admin/handler.js';
+import {sitePage,siteCSS} from './site-home.js';
+import {traceDev4Route,TRACE_DEV4_RELEASE} from './trace-dev4-runtime.js';
+import {validSecrets,findSession,verifyCsrf,originMatches} from './admin/auth.js'; // TRACE_DEV4_SOURCE
 // Sunrise PDF PRO Web | Cloudflare Workers edge gateway R28
 // Independent of sunrise-pdf-editor; no conversion without verified origin.
 const HTML = "<!doctype html>\n<html lang=\"ko\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<meta name=\"description\" content=\"Sunrise PDF PRO Web — HWP/HWPX 웹 변환 서비스 스테이징\">\n<title>Sunrise PDF PRO | Web</title>\n<link rel=\"stylesheet\" href=\"/style.css\">\n<script src=\"/app.js\" defer></script>\n</head>\n<body>\n<div class=\"shell\">\n<aside class=\"sidebar\">\n<div class=\"brand\"><span class=\"logo\">S</span><span><strong>SUNRISE</strong><small>PDF PRO · WEB</small></span></div>\n<p class=\"navlabel\">WORKSPACE</p>\n<div class=\"navitem selected\">▣ &nbsp; HWP / HWPX → PDF</div>\n<div class=\"navitem\">◷ &nbsp; 변환 내역</div>\n<div class=\"sidefoot\"><b>사용자 설치 불필요</b><p>웹에서 문서를 선택하고 변환 상태를 확인합니다. 변환 엔진은 서버에서 구동됩니다.</p><small>WEB STAGING · R27 UI</small></div>\n</aside>\n<main class=\"main\">\n<header class=\"top\">\n<div><p class=\"eyebrow\">DOCUMENT CONVERSION</p><h1>HWP · HWPX <em>→ PDF</em></h1><p class=\"intro\">한컴 설치 없이 문서를 열람하고 PDF로 변환하는 웹서비스</p></div>\n<div class=\"account\"><span id=\"badge\" class=\"badge warn\">서버 연결 확인 중</span><span id=\"userLabel\">로그인 전</span><button id=\"logout\" class=\"textbutton\" hidden>로그아웃</button></div>\n</header>\n<div class=\"content\"><div class=\"notice\" role=\"status\"><span class=\"statusdot\"></span><div><strong>공식 rhwp 무료 브라우저 변환 사용 가능</strong><p><a href=\"/local/\">HWP/HWPX → PDF 로컬 변환기 열기</a> · 파일을 서버로 전송하지 않습니다.</p></div><span class=\"state\">API 불필요</span></div>\n<div class=\"notice\" role=\"status\"><span class=\"statusdot\"></span><div><strong id=\"serviceTitle\">웹 화면 준비</strong><p id=\"serviceDetail\">서버 엔진 연결을 확인 중입니다.</p></div><span id=\"serviceMode\" class=\"state\">확인 중</span></div>\n<div class=\"twocol\">\n<section class=\"panel\">\n<div class=\"panelhead\"><div><span class=\"step\">01 / FILE</span><h2>원본 문서 선택</h2></div><span class=\"chip\">.HWP · .HWPX</span></div>\n<label class=\"upload\" id=\"drop\"><input type=\"file\" id=\"file\" accept=\".hwp,.hwpx\"><span class=\"uploadico\">↑</span><strong>파일을 선택하거나 드래그하세요</strong><small>최대 20MiB · 브라우저에서 파일 형식 1차 검사</small></label>\n<p class=\"fileinfo\" id=\"fileInfo\">선택된 문서가 없습니다.</p>\n<div class=\"actions\"><button id=\"preview\" class=\"secondary\" disabled>원본 미리보기</button><button id=\"convert\" class=\"primary\" disabled>PDF로 변환</button></div>\n<p class=\"help\" id=\"fileHelp\">서버가 준비되지 않은 동안 문서는 업로드되지 않습니다.</p>\n</section>\n<section class=\"panel\">\n<div class=\"panelhead\"><div><span class=\"step\">02 / RESULT</span><h2>변환 결과</h2></div><span class=\"chip\" id=\"stage\">작업 대기</span></div>\n<div id=\"result\" class=\"result\"><div class=\"pdfico\">PDF</div><b>결과 미리보기 영역</b><small>실제 엔진이 생성한 PDF만 다운로드할 수 있습니다.</small></div>\n<div class=\"track\"><div id=\"fill\"></div></div>\n<p id=\"feedback\" class=\"feedback\" aria-live=\"polite\">서버 연결을 확인하고 있습니다.</p>\n<div class=\"actions\"><button id=\"cancel\" class=\"secondary\" disabled>작업 취소</button><a id=\"download\" class=\"primary download\" hidden>PDF 다운로드</a></div>\n</section>\n</div>\n<section class=\"panel history\"><div class=\"panelhead\"><div><span class=\"step\">03 / HISTORY</span><h2>내 변환 작업</h2></div><button id=\"refresh\" class=\"secondary compact\" disabled>새로고침</button></div><div id=\"jobs\" class=\"historylist\"><p class=\"muted\">변환 서버 로그인 후 작업이 표시됩니다.</p></div></section>\n<footer>Sunrise PDF PRO Web · GitHub → Cloudflare Pages 스테이징 · 서버 변환 연동 전</footer>\n</div>\n</main>\n</div>\n<div class=\"modal\" id=\"loginLayer\" hidden>\n<form class=\"loginbox\" id=\"loginForm\"><div class=\"logo loginlogo\">S</div><p class=\"eyebrow\">SECURE ACCESS</p><h2>웹서비스 로그인</h2><p>변환 서버에서 발급한 계정으로 로그인하세요.</p>\n<label>사용자 계정<input id=\"username\" autocomplete=\"username\" maxlength=\"48\" required></label>\n<label>비밀번호<input id=\"password\" type=\"password\" autocomplete=\"current-password\" maxlength=\"256\" required></label>\n<button id=\"loginButton\" class=\"primary\" type=\"submit\">로그인</button><p id=\"loginError\" class=\"error\" aria-live=\"polite\"></p></form>\n</div>\n</body></html>";
@@ -86,13 +89,30 @@ async function localAsset(request, env, assetPath, method, contentType) {
 export default {
   async fetch(request,env){
     const url=new URL(request.url),path=url.pathname,method=request.method.toUpperCase();
+    // TRACE_DEV4_SOURCE: separate public collector and authenticated admin routes.
+    if(path==='/trace-dev4-client.js'||path==='/trace-dev4-admin.js'||path==='/trace-dev4-admin.css')
+      return traceDev4Route(request,env);
+    if(path==='/api/public/trace-dev4')return traceDev4Route(request,env);
+    if(path==='/admin/traces'||path==='/admin/traces/'||path.startsWith('/api/admin/trace-dev4/')){
+      if(!env?.PRO_ADMIN_DB?.prepare||!validSecrets(env))return new Response('ADMIN_NOT_CONFIGURED',{status:503});
+      let session;try{session=await findSession(request,env.PRO_ADMIN_DB);}catch{return new Response('ADMIN_SESSION_FAILED',{status:500});}
+      if(!session)return path.startsWith('/admin/traces')?Response.redirect(new URL('/admin/login/',request.url),302):new Response('ADMIN_LOGIN_REQUIRED',{status:401});
+      if(!['GET','HEAD'].includes(method)&&(!originMatches(request)||!await verifyCsrf(request,session)))
+        return new Response('CSRF_DENIED',{status:403});
+      return traceDev4Route(request,env);
+    }
     const adminResponse=await handleProAdmin(request,env);
-    if(adminResponse)return adminResponse;
+    if(adminResponse){
+      if(method==='GET'&&path.startsWith('/admin/')&&adminResponse.headers.get('content-type')?.includes('text/html'))return new HTMLRewriter().on('#side',{element(e){e.append('<a href="/admin/traces/">◈ <span>Trace v2 DEV4</span></a>',{html:true});}}).transform(adminResponse);
+      return adminResponse;
+    }
     const target=originConfig(env);
     if(path==='/local')return Response.redirect(new URL('/local/',request.url),302);
     if(path==='/local/'||path==='/local/index.html'){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
-      return localAsset(request,env,'/app.html',method,'text/html; charset=utf-8');
+      const original=await localAsset(request,env,'/app.html',method,'text/html; charset=utf-8');
+      if(method==='HEAD'||original.status!==200)return original;
+      return new HTMLRewriter().on('head',{element(e){e.append('<link rel="stylesheet" href="/site-nav.css"><script src="/trace-dev4-client.js"></script>',{html:true});}}).on('.top-inner',{element(e){e.append('<nav id="pro-site-navigation" aria-label="주요 메뉴"><a href="/">메인</a><a href="/features/">기능</a><a href="/contact/">문의</a><a href="/admin/">관리자</a></nav>',{html:true});}}).transform(original);
     }
     if(/^\/local\/assets\/(?:local-bundle\.js|local-chunk-[A-Za-z0-9_-]+\.js)$/.test(path)){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
@@ -123,7 +143,11 @@ export default {
       return relay(request,env,target);
     }
     if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:POLICY});
-    if(path==='/'||path==='/index.html')return Response.redirect(new URL('/local/',request.url),302);
+    if(path==='/'||path==='/index.html')return safe(sitePage('home'),200,method,'text/html; charset=utf-8');
+    if(path==='/features')return Response.redirect(new URL('/features/',request.url),302);
+    if(path==='/features/'||path==='/features/index.html')return safe(sitePage('features'),200,method,'text/html; charset=utf-8');
+    if(path==='/site-home.css')return safe(siteCSS,200,method,'text/css; charset=utf-8');
+    if(path==='/site-nav.css')return safe('#pro-site-navigation{display:flex;align-items:center;gap:16px;margin-left:auto;margin-right:24px}#pro-site-navigation a{font-size:13px;color:#c7e5ff;text-decoration:none}@media(max-width:820px){#pro-site-navigation{flex-wrap:wrap;gap:12px;margin:0}}',200,method,'text/css; charset=utf-8');
     if(path==='/style.css')return safe(CSS,200,method,'text/css; charset=utf-8');
     if(path==='/app.js')return safe(APP,200,method,'application/javascript; charset=utf-8');
     return new Response('Not Found',{status:404,headers:POLICY});
