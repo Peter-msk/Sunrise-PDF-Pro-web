@@ -7,6 +7,8 @@ import { parseDocumentSvg } from './svg-embedded.js';
 import { loadBundledFonts } from './bundled-fonts.js';
 import { loadDocumentLocalFonts } from './local-fonts.js';
 import { normalizeGifSvg } from './svg-gif.js';
+import { normalizeEmbeddedPngSvg } from './svg-embedded-raster-budget.mjs';
+import { normalizeSvgGrayscale } from './svg-safe-grayscale.mjs';
 
 // File-size limits are intentionally absent. Runtime memory and page pixels
 // remain bounded by the browser/device; those are not upload-size limits.
@@ -157,9 +159,32 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
   if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
   if(options.engine==='professional'){
    // A failed object-preserving export must stay failed, never become an image PDF.
-   return await tryProfessionalDocument(doc,count,{
-    checkedSvg:async svg=>checkedSvg(await normalizeGifSvg(svg,signal)),rasterPage,signal,fontRegistry,onProgress,allowRasterFallback:false
+   const resizedPngs=[],svgFilterStats=[];
+   const result=await tryProfessionalDocument(doc,count,{
+    checkedSvg:async svg=>{
+     const gifSvg=await normalizeGifSvg(svg,signal);
+     const pngResult=await normalizeEmbeddedPngSvg(gifSvg,signal);
+     resizedPngs.push(...pngResult.resized);
+     const grayResult=await normalizeSvgGrayscale(pngResult.svg,signal);
+     if(grayResult.filtersApplied)svgFilterStats.push(grayResult);
+     return checkedSvg(grayResult.svg);
+    },rasterPage,signal,fontRegistry,onProgress,allowRasterFallback:false
    });
+   if(resizedPngs.length){
+    const unique=[...new Map(resizedPngs.map(img=>[
+     img.sourceWidth+'x'+img.sourceHeight+'>'+img.width+'x'+img.height,img])).values()];
+    result.warnings=[...(result.warnings||[]),...unique.map(img=>
+     '문서의 대형 PNG '+img.sourceWidth+'×'+img.sourceHeight+' → '+
+     img.width+'×'+img.height+' 픽셀로 축소했습니다. 글자·도형은 SVG로 유지됩니다.')];
+   }
+   if(svgFilterStats.length){
+    const count=svgFilterStats.reduce((sum,page)=>sum+page.filtersApplied,0);
+    const pictures=svgFilterStats.reduce((sum,page)=>sum+page.imagesChanged,0);
+    result.warnings=[...(result.warnings||[]),
+     '지원되는 회색조 SVG 필터 '+count+'개를 벡터 색상으로 보존·정규화했습니다'+
+     (pictures?' (해당 필터의 내장 그림 '+pictures+'개는 객체 단위 픽셀 색상 변환)':'')+'.'];
+   }
+   return result;
   }
  }catch(error){
   if(error instanceof RangeError || /out of memory|memory allocation|allocation failed/i.test(String(error?.message))){
