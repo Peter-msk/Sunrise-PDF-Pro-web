@@ -73,8 +73,7 @@ async function update(req,db,fp){
   const exists=await db.prepare('SELECT 1 yes FROM pro_trace_dev4 WHERE fingerprint=? LIMIT 1').bind(fp).first();if(!exists)return fail('NOT_FOUND',404);
   const rows=await db.batch([
    db.prepare("INSERT OR IGNORE INTO pro_trace_dev4_incidents(fingerprint,status,note,revision,created_at,updated_at) VALUES(?,'new','',0,?,?)").bind(fp,now,now),
-   db.prepare("UPDATE pro_trace_dev4_incidents SET status=?,note=?,fix_commit=?,revision=revision+1,updated_at=?,resolved_at=CASE WHEN ?='resolved' THEN ? WHEN ?='reopened' THEN NULL ELSE resolved_at END WHERE fingerprint=? AND revision=?").bind(b.status,b.note.trim(),b.fix_commit,now,b.status,now,b.status,fp,b.revision),
-   db.prepare('INSERT INTO pro_trace_dev4_audit(fingerprint,status,note,fix_commit,revision,happened_at) SELECT fingerprint,status,note,fix_commit,revision,? FROM pro_trace_dev4_incidents WHERE fingerprint=? AND changes()>0').bind(now,fp)
+   db.prepare("UPDATE pro_trace_dev4_incidents SET status=?,note=?,fix_commit=?,revision=revision+1,updated_at=?,resolved_at=CASE WHEN ?='resolved' THEN ? WHEN ?='reopened' THEN NULL ELSE resolved_at END WHERE fingerprint=? AND revision=?").bind(b.status,b.note.trim(),b.fix_commit,now,b.status,now,b.status,fp,b.revision)
   ]);
   if(rows[1]?.meta?.changes!==1)return fail('REVISION_CONFLICT',409);
   return output({ok:true,revision:b.revision+1});
