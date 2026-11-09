@@ -75,7 +75,7 @@ async function update(req,db,fp){
    db.prepare("INSERT OR IGNORE INTO pro_trace_dev4_incidents(fingerprint,status,note,revision,created_at,updated_at) VALUES(?,'new','',0,?,?)").bind(fp,now,now),
    db.prepare("UPDATE pro_trace_dev4_incidents SET status=?,note=?,fix_commit=?,revision=revision+1,updated_at=?,resolved_at=CASE WHEN ?='resolved' THEN ? WHEN ?='reopened' THEN NULL ELSE resolved_at END WHERE fingerprint=? AND revision=?").bind(b.status,b.note.trim(),b.fix_commit,now,b.status,now,b.status,fp,b.revision)
   ]);
-  if(rows[1]?.meta?.changes!==1)return fail('REVISION_CONFLICT',409);
+  if((rows[1]?.meta?.changes||0)<1)return fail('REVISION_CONFLICT',409);
   return output({ok:true,revision:b.revision+1});
  }catch{return fail('INCIDENT_UPDATE_FAILED',503);}
 }
