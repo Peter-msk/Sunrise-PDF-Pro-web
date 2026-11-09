@@ -131,7 +131,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
   throw Error('파일 읽기 실패: 브라우저 가용 메모리 또는 파일 접근 상태를 확인하세요. '+String(e?.message||e));
  }
  throwIfCancelled(signal);
- let doc=null,releaseMeasureFonts=()=>{};
+ let doc=null,releaseMeasureFonts=()=>{},pcFontStats=null;
  try{
   // A professional PDF must use the same faces during rhwp line measurement
   // and during PDFKit glyph embedding, or text wraps can drift.
@@ -151,6 +151,10 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    }
    const bundled=await loadBundledFonts(fontkit,signal);
    const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
+   pcFontStats=options.localFonts?{
+     listed:options.localFonts.length,selected:localOnly.length,
+     required:local.requestedFamilies||0,unreadable:local.unreadableFonts||0
+   }:null;
    fontRegistry={faces:[...selected.faces,...localOnly,...bundled.faces]};
    releaseMeasureFonts=await installMeasureFonts(fontRegistry,signal);
   }
@@ -183,6 +187,13 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     result.warnings=[...(result.warnings||[]),
      '지원되는 회색조 SVG 필터 '+count+'개를 벡터 색상으로 보존·정규화했습니다'+
      (pictures?' (해당 필터의 내장 그림 '+pictures+'개는 객체 단위 픽셀 색상 변환)':'')+'.'];
+   }
+   if(pcFontStats){
+    const pcNote=pcFontStats.selected>0
+     ?'PC 설치 글꼴 '+pcFontStats.selected+'개를 이 문서의 PDF 글꼴 등록에 사용했습니다. 출력물에서 서체와 줄바꿈을 확인하세요.'
+     :'PC 글꼴 목록을 확인했지만 이번 문서에 일치하는 서체를 등록하지 못했습니다. 내장 또는 직접 추가한 글꼴로 대체될 수 있습니다.';
+    const readNote=pcFontStats.unreadable>0?' 지원되지 않는 PC 글꼴 '+pcFontStats.unreadable+'개는 건너뛰었습니다.':'';
+    result.warnings=[...(result.warnings||[]),pcNote+readNote];
    }
    return result;
   }

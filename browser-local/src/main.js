@@ -1,3 +1,4 @@
+import './r56-ui.js';
 import {createPdfViewer} from './pdf-viewer.js';
 import {emitProEvent,startProTelemetry,classifyProError,proFeature} from './pro-telemetry.js';
 import {renderNativePrintPages} from './converter.js';
@@ -7,12 +8,11 @@ import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
 import {requestLocalFontAccess} from './local-fonts.js';
 import {settleInstalledFonts} from './local-font-policy.mjs';
+const USE_PC_FONTS_BY_DEFAULT=true;
 const $=id=>document.getElementById(id);
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
 const status=value=>{$('status').textContent=value;};
-try{$('use-local-fonts').checked=localStorage.getItem('sunrise-local-fonts')==='enabled';}catch{}
-$('use-local-fonts').addEventListener('change',()=>{try{localStorage.setItem('sunrise-local-fonts',$('use-local-fonts').checked?'enabled':'disabled');}catch{}clearPrint();});
 function clearPrint(){if(printJob){printJob.dispose();printJob=null;}}
 function clearArchive(){if(archiveUrl)URL.revokeObjectURL(archiveUrl);archiveUrl=null;$('download-all').hidden=true;$('download-all').removeAttribute('href');}
 function release(item){if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
@@ -33,7 +33,7 @@ function show(item){
 function sync(){
  const pending=items.some(i=>['ready','failed','cancelled'].includes(i.state));
  $('convert').disabled=!ready||busy||!pending;$('reset').disabled=busy||!items.length;$('cancel').disabled=!busy;
- for(const id of ['source','pdf-font','pdf-engine','use-local-fonts'])$(id).disabled=busy;
+ for(const id of ['source','pdf-font','pdf-engine'])$(id).disabled=busy;
  $('print-prepare').disabled=!ready||busy||!active||!isHwp(active.file)||active.state==='invalid';$('print-save').disabled=busy||!printJob;
  $('total-count').textContent=items.length;$('done-count').textContent=items.filter(i=>i.state==='done').length;
  $('failed-count').textContent=items.filter(i=>['failed','invalid'].includes(i.state)).length;
@@ -44,7 +44,7 @@ function draw(){
  if(!items.length){const li=document.createElement('li');li.className='empty';li.textContent='선택한 문서가 여기에 표시됩니다.';list.append(li);}
  const names=uniquePdfNames(items.map(i=>i.file));
  items.forEach((item,index)=>{
-  const li=document.createElement('li');li.className='file-row';li.dataset.id=String(item.id);li.dataset.state=item.state;li.classList.toggle('is-active',active===item);
+  const li=document.createElement('li');li.className='file-row';li.dataset.id=String(item.id);li.dataset.bytes=String(item.file.size);li.dataset.state=item.state;li.classList.toggle('is-active',active===item);
   const icon=document.createElement('span');icon.className='file-icon';icon.textContent=(inputKind(item.file)||'FILE').toUpperCase();
   const body=document.createElement('div'),name=document.createElement('div'),meta=document.createElement('div');name.className='file-name';name.textContent=item.file.name;meta.className='file-meta';
   const labels={ready:'변환 대기',working:'변환 중',done:'변환 완료',failed:'변환 실패',invalid:'지원하지 않는 파일',cancelled:'취소됨 · 다시 변환 가능'};
@@ -78,10 +78,10 @@ $('pdf-engine').addEventListener('change',()=>{clearPrint();status('변경한 �
 $('convert').addEventListener('click',async()=>{
  if(busy||!ready)return;const pending=items.filter(i=>['ready','failed','cancelled'].includes(i.state));if(!pending.length)return;
  const fontFiles=Array.from($('pdf-font').files||[]),engine=$('pdf-engine').value;
- let fontsRequest=null,fontAccessNotice='';try{if($('use-local-fonts').checked&&pending.some(i=>isHwp(i.file)))fontsRequest=requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
+ let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&pending.some(i=>isHwp(i.file)))fontsRequest=requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();let completed=0;
  try{
-  let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice;}
+  let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');}
   await runBatch(pending,async(file,item)=>{
    emitProEvent('convert_start',{feature:proFeature(file)});
    const result=await convertToPdf(file,info=>{
@@ -108,9 +108,9 @@ $('convert').addEventListener('click',async()=>{
 });
 $('print-prepare').addEventListener('click',async()=>{
  if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;
- let fontsRequest=null,printFontNotice='';try{if($('use-local-fonts').checked)fontsRequest=requestLocalFontAccess();}catch(error){printFontNotice='PC 글꼴 API를 사용할 수 없어 내장 글꼴로 인쇄합니다.';}
+ let fontsRequest=null,printFontNotice='';try{if(USE_PC_FONTS_BY_DEFAULT)fontsRequest=requestLocalFontAccess();}catch(error){printFontNotice='PC 글꼴 API를 사용할 수 없어 내장 글꼴로 인쇄합니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();
- try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;printFontNotice=access.notice;}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.'+(printFontNotice?' · '+printFontNotice:''));}
+ try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.'+(printFontNotice?' · '+printFontNotice:''));}
  catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+String(error?.message||error));}
  finally{busy=false;controller=null;draw();}
 });
