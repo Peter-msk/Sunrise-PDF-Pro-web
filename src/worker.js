@@ -1,6 +1,7 @@
 import {handleProAdmin} from './admin/handler.js';
 import {sitePage,siteCSS} from './site-home.js';
 import {traceDev4Route,TRACE_DEV4_RELEASE} from './trace-dev4-runtime.js';
+import {OPERATIONS_R56_JS,OPERATIONS_R56_CSS} from './pro-operations-r56.js';
 import {validSecrets,findSession,verifyCsrf,originMatches} from './admin/auth.js'; // TRACE_DEV4_SOURCE
 // Sunrise PDF PRO Web | Cloudflare Workers edge gateway R28
 // Independent of sunrise-pdf-editor; no conversion without verified origin.
@@ -63,6 +64,7 @@ async function relay(request,env,target) {
 const LOCAL_RHWP_WASM_SHA256="54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989";
 const LOCAL_RHWP_WASM_BYTES=11821756;
 const LOCAL_POLICY={...POLICY,
+ 'Permissions-Policy':'camera=(), microphone=(), geolocation=(), local-fonts=(self)',
  'Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self' blob:; frame-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
 };
 async function localAsset(request, env, assetPath, method, contentType) {
@@ -89,6 +91,13 @@ async function localAsset(request, env, assetPath, method, contentType) {
 export default {
   async fetch(request,env){
     const url=new URL(request.url),path=url.pathname,method=request.method.toUpperCase();
+    // R56 UI adapter, preserving the existing converter assets.
+    if(path==='/ops-r56.js'||path==='/ops-r56.css'){
+      if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
+      return new Response(method==='HEAD'?null:path.endsWith('.js')?OPERATIONS_R56_JS:OPERATIONS_R56_CSS,{
+        status:200,headers:{...LOCAL_POLICY,'Content-Type':path.endsWith('.js')?'text/javascript; charset=utf-8':'text/css; charset=utf-8','Cache-Control':'no-store'}
+      });
+    }
     // TRACE_DEV4_SOURCE: separate public collector and authenticated admin routes.
     if(path==='/trace-dev4-client.js'||path==='/trace-dev4-admin.js'||path==='/trace-dev4-admin.css')
       return traceDev4Route(request,env);
@@ -112,7 +121,7 @@ export default {
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       const original=await localAsset(request,env,'/app.html',method,'text/html; charset=utf-8');
       if(method==='HEAD'||original.status!==200)return original;
-      return new HTMLRewriter().on('head',{element(e){e.append('<link rel="stylesheet" href="/site-nav.css"><script src="/trace-dev4-client.js"></script>',{html:true});}}).on('.top-inner',{element(e){e.append('<nav id="pro-site-navigation" aria-label="주요 메뉴"><a href="/">메인</a><a href="/features/">기능</a><a href="/contact/">문의</a><a href="/admin/">관리자</a></nav>',{html:true});}}).transform(original);
+      return new HTMLRewriter().on('head',{element(e){e.append('<link rel="stylesheet" href="/site-nav.css"><link rel="stylesheet" href="/ops-r56.css"><script src="/trace-dev4-client.js"></script><script src="/ops-r56.js"></script>',{html:true});}}).on('.top-inner',{element(e){e.append('<nav id="pro-site-navigation" aria-label="주요 메뉴"><a href="/">메인</a><a href="/features/">기능</a><a href="/contact/">문의</a><a href="/admin/">관리자</a></nav>',{html:true});}}).transform(original);
     }
     if(/^\/local\/assets\/(?:local-bundle\.js|local-chunk-[A-Za-z0-9_-]+\.js)$/.test(path)){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
@@ -151,5 +160,20 @@ export default {
     if(path==='/style.css')return safe(CSS,200,method,'text/css; charset=utf-8');
     if(path==='/app.js')return safe(APP,200,method,'application/javascript; charset=utf-8');
     return new Response('Not Found',{status:404,headers:POLICY});
+  },
+  // 04:00 KST daily (19:00 UTC) - fixed retention, no documents or raw error text.
+  async scheduled(_event,env,ctx){
+    if(!env?.PRO_ADMIN_DB?.prepare||!env?.PRO_ADMIN_DB?.batch)return;
+    ctx.waitUntil((async()=>{
+      const now=Math.floor(Date.now()/1000);
+      try{
+        await env.PRO_ADMIN_DB.batch([
+          env.PRO_ADMIN_DB.prepare('DELETE FROM pro_trace_dev4 WHERE happened_at<?').bind(now-14*86400),
+          env.PRO_ADMIN_DB.prepare('DELETE FROM pro_trace_dev4_audit WHERE happened_at<?').bind(now-90*86400),
+          env.PRO_ADMIN_DB.prepare('DELETE FROM pro_telemetry WHERE happened_at<?').bind(now-30*86400),
+          env.PRO_ADMIN_DB.prepare('DELETE FROM pro_admin_sessions WHERE expires_at<?').bind(now)
+        ]);
+      }catch{console.warn('R56_RETENTION_FAILED');}
+    })());
   }
 };
