@@ -1,16 +1,12 @@
 /* Sunrise PDF PRO R56: non-invasive operations UI, including deployed R55 asset compatibility. */
 (()=>{'use strict';
  if(window.__sunriseOperationsR56)return;window.__sunriseOperationsR56=true;
- const pending=[],known=new Map();
+ // Queue metadata is bound to the row itself, not a separate FIFO.
  const byId=id=>document.getElementById(id);
- const extension=file=>String(file?.name||'').split('.').pop().toUpperCase();
  const sizeLabel=size=>{
   if(!Number.isFinite(size)||size<0)return '—';
   return size>=1048576?(size/1048576).toFixed(2)+' MB':size>=1024?(size/1024).toFixed(1)+' KB':Math.round(size)+' B';
  };
- function capture(files){for(const file of Array.from(files||[]))pending.push({size:file.size,extension:extension(file)});}
- document.addEventListener('change',event=>{if(event.target?.id==='source')capture(event.target.files);},true);
- document.addEventListener('drop',event=>{if(event.target?.closest?.('#drop'))capture(event.dataTransfer?.files);},true);
  // The legacy compiled bundle reads this checkbox, so enforce the new invariant before each click.
  document.addEventListener('click',event=>{
   if(!event.target?.closest?.('#convert, #print-prepare'))return;
@@ -23,9 +19,8 @@
   const list=byId('file-list');if(!list)return;
   const rows=Array.from(list.children).filter(row=>row.classList.contains('file-row'));
   rows.forEach((row,index)=>{
-   const id=row.dataset.id;
-   let info=known.get(id);
-   if(!info){info=pending.shift()||null;if(info)known.set(id,info);}
+   const bytes=Number(row.dataset.bytes);
+   const rowSize=Number.isSafeInteger(bytes)&&bytes>=0?bytes:null;
    if(row.dataset.r56!=='1'){
     const name=row.querySelector('.file-name');
     const body=name?.parentElement;
@@ -37,16 +32,15 @@
     for(const action of Array.from(actions.children)){if(action!==remove)tools.append(action);}
     body.className='file-body';body.append(tools);
     if(name){name.title=name.textContent;name.setAttribute('aria-label',name.textContent);}
-    const fmt=rowCell('file-size',info?sizeLabel(info.size):'—');
-    const ext=rowCell('file-extension',info?.extension||icon?.textContent||'FILE');
+    const fmt=rowCell('file-size',rowSize===null?'—':sizeLabel(rowSize));
+    const ext=rowCell('file-extension',String(icon?.textContent||'FILE').trim().toUpperCase());
     const remark=document.createElement('span');remark.className='file-remark';
     if(remove){remove.classList.add('file-delete');remove.setAttribute('aria-label',(name?.textContent||'문서')+' 파일 목록에서 삭제');remark.append(remove);}
     row.replaceChildren(rowCell('file-number',String(index+1)),body,fmt,ext,remark);
     row.dataset.r56='1';
    }
    const number=row.querySelector('.file-number');if(number)number.textContent=String(index+1);
-   const size=row.querySelector('.file-size');if(size&&info)size.textContent=sizeLabel(info.size);
-   const ext=row.querySelector('.file-extension');if(ext&&info)ext.textContent=info.extension;
+   const size=row.querySelector('.file-size');if(size)size.textContent=rowSize===null?'—':sizeLabel(rowSize);
    const meta=row.querySelector('.file-meta');if(meta)meta.title=meta.textContent;
   });
  }
