@@ -1,6 +1,6 @@
 import init, { HwpDocument } from '@rhwp/core';
 import { tryProfessionalDocument } from './svg-professional.js';
-import { loadPdfFonts, installMeasureFonts } from './pdf-fonts.js';
+import { loadPdfFonts, installMeasureFonts, familyKey } from './pdf-fonts.js';
 import { readDocumentBuffer } from './file-reader.js';
 import { svgPageSize } from './page-geometry.js';
 import { parseDocumentSvg } from './svg-embedded.js';
@@ -151,14 +151,26 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
     local=await loadDocumentLocalFonts(doc,pages,options.localFonts,fontkit,signal,onProgress);
    }
+   onProgress({stage:'fonts',page:1,total:1,detail:'bundled'});
    const bundled=await loadBundledFonts(fontkit,signal);
    const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
+   // Do not register every alias of six bundled fonts as a separate CSS face.
+   // Only load aliases actually named in the HWP SVG. PDF face aliases remain
+   // intact for embedding, while measurement avoids dozens of redundant loads.
+   const required=new Set((local.requestedNames||[]).map(familyKey));
+   const tailoredBundled=options.localFonts
+    ?bundled.faces.map(face=>({...face,cssAliases:(face.cssAliases||[]).filter(name=>required.has(familyKey(name)))}))
+    :bundled.faces;
    pcFontStats=options.localFonts?{
      listed:options.localFonts.length,selected:localOnly.length,
-     required:local.requestedFamilies||0,unreadable:local.unreadableFonts||0
+     required:local.requestedFamilies||0,unreadable:local.unreadableFonts||0,
+     timedOut:local.timedOutFonts||0,budgetSkipped:local.skippedByBudget||0
    }:null;
-   fontRegistry={faces:[...selected.faces,...localOnly,...bundled.faces]};
-   releaseMeasureFonts=await installMeasureFonts(fontRegistry,signal);
+   fontRegistry={faces:[...selected.faces,...localOnly,...tailoredBundled]};
+   onProgress({stage:'fonts',page:1,total:1,detail:'measure'});
+   releaseMeasureFonts=await installMeasureFonts(fontRegistry,signal,
+    undefined,undefined,{skipUnavailable:true,maxTotalMs:18000,perFaceMs:3500});
+   onProgress({stage:'fonts',page:1,total:1,detail:'complete'});
   }
   if(!doc)doc=new HwpDocument(new Uint8Array(buf));
   const count=doc.pageCount();
@@ -200,7 +212,12 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
       :'이번 문서에서 PC 글꼴 후보를 등록하지 못했습니다. 원본 지정 서체와 PC 설치 서체의 이름을 확인하세요.';
     const bundledNote=bundledUsed?' 내장 대체 글꼴 '+bundledUsed+'개가 PDF 출력에 사용됐습니다.':'';
     const readNote=pcFontStats.unreadable>0?' PC 글꼴 '+pcFontStats.unreadable+'개는 읽을 수 없어 건너뛰었습니다.':'';
-    result.warnings=[...(result.warnings||[]),pcNote+bundledNote+readNote];
+    const fontTimeoutNote=pcFontStats.timedOut||pcFontStats.budgetSkipped
+     ?' 글꼴 읽기 지연 '+(pcFontStats.timedOut+pcFontStats.budgetSkipped)+'건으로 일부 PC 서체를 사용하지 못했습니다.':'';
+    const measure=releaseMeasureFonts.stats;
+    const measureNote=measure?.skipped
+     ?' 측정용 글꼴 '+measure.skipped+'건을 제시간에 불러오지 못해 줄바꿈에 차이가 있을 수 있습니다.':'';
+    result.warnings=[...(result.warnings||[]),pcNote+bundledNote+readNote+fontTimeoutNote+measureNote];
    }
    return result;
   }
@@ -245,6 +262,7 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
      local=await loadDocumentLocalFonts(probe,pages,localFonts,fontkit,signal,onProgress);
     }finally{probe.free();}
    }
+   onProgress({stage:'fonts',page:1,total:1,detail:'bundled'});
    const bundled=await loadBundledFonts(fontkit,signal);
    const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
    fontRegistry={faces:[...selected.faces,...localOnly,...bundled.faces]};

@@ -3,6 +3,7 @@
  * Font bytes come only from user-selected files; no system-font enumeration,
  * remote font URL, or CJK font redistribution is performed.
  */
+import {boundedFontStep} from './font-timeout.mjs';
 const GLYPH_WHITESPACE=/\s/u;
 const GENERIC_FAMILIES=new Set(['sans-serif','serif','monospace','system-ui']);
 
@@ -159,13 +160,16 @@ export async function loadPdfFonts(fontFiles,parser,signal){
  * No system or remote font is fetched.
  */
 export async function installMeasureFonts(registry,signal,
-  fontSet=globalThis.document?.fonts,FontFaceImpl=globalThis.FontFace){
+  fontSet=globalThis.document?.fonts,FontFaceImpl=globalThis.FontFace,
+  {skipUnavailable=false,maxTotalMs=18000,perFaceMs=3500}={}){
   const faces=registry?.faces||[];
   if(!faces.length)return ()=>{};
   if(!fontSet?.add||!fontSet?.delete||typeof FontFaceImpl!=='function')
     throw Error('이 브라우저는 사용자 글꼴의 임시 로딩을 지원하지 않습니다.');
-  const installed=[],registeredIds=new Set();
+  const installed=[],registeredIds=new Set(),start=Date.now();
+  const stats={loaded:0,skipped:0,timedOut:0,budgetExceeded:false};
   const cleanup=()=>{for(const font of installed)fontSet.delete(font);};
+  cleanup.stats=stats;
   try{
     const explicitlyProvided=new Set(faces.filter(face=>!face.isFallback).flatMap(face=>
       [face.family,...(face.cssAliases||[])].map(name=>familyKey(name)+'|'+face.bold+'|'+face.italic)));
@@ -176,12 +180,29 @@ export async function installMeasureFonts(registry,signal,
         if(face.isFallback&&explicitlyProvided.has(id))continue;
         if(registeredIds.has(id))continue;
         if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
-        const cssFace=new FontFaceImpl(family,face.bytes,{
-          style:face.italic?'italic':'normal',weight:face.bold?'700':'400'
-        });
-        const loaded=await cssFace.load();
-        if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
-        fontSet.add(loaded);installed.push(loaded);registeredIds.add(id);
+        const remaining=maxTotalMs-(Date.now()-start);
+        if(skipUnavailable&&remaining<=0){
+          stats.budgetExceeded=true;stats.skipped++;
+          continue;
+        }
+        try{
+          const cssFace=new FontFaceImpl(family,face.bytes,{
+            style:face.italic?'italic':'normal',weight:face.bold?'700':'400'
+          });
+          const loaded=skipUnavailable
+            ?await boundedFontStep(()=>cssFace.load(),{
+              signal,timeoutMs:Math.min(perFaceMs,Math.max(1,remaining)),
+              code:'CSS_FONT_FACE_TIMEOUT'})
+            :await cssFace.load();
+          if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
+          fontSet.add(loaded);installed.push(loaded);registeredIds.add(id);
+          stats.loaded++;
+        }catch(error){
+          if(error?.name==='AbortError'||signal?.aborted)throw error;
+          if(!skipUnavailable)throw error;
+          stats.skipped++;
+          if(error?.name==='TimeoutError')stats.timedOut++;
+        }
       }
     }
     return cleanup;

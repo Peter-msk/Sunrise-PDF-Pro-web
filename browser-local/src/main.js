@@ -93,7 +93,9 @@ $('convert').addEventListener('click',async()=>{
    emitProEvent('convert_start',{feature:proFeature(file)});
    emitProEvent('convert_progress',{feature:proFeature(file),stage:'parse',duration_ms:0});
    const result=await convertToPdf(file,info=>{
-    item._proDiagStage=info.stage==='load'?'load':info.stage==='fonts'?'fonts':'render';
+    item._proDiagStage=info.stage==='load'?'load':
+     info.stage==='fonts'?(info.detail==='read'?'font_read':info.detail==='bundled'?'font_bundle':
+      info.detail==='measure'?'font_measure':info.detail==='scan'?'font_scan':'fonts'):'render';
     // One event on each phase transition, then at most once per 45s.
     // Only enum phase + duration go to D1; no file name, bytes or page text.
     const phaseNow=performance.now();
@@ -108,7 +110,10 @@ $('convert').addEventListener('click',async()=>{
     const part=info.stage==='load'?Math.min(.15,.15*info.loaded/Math.max(1,info.total)):info.stage==='fonts'?.15+.15*info.page/Math.max(1,info.total):.30+.69*info.page/Math.max(1,info.total);
     $('progress').value=Math.min(99,Math.round((completed+part)/pending.length*100));
     conversionClock.update(completed,part,info.stage==='fonts'?'글꼴 검사':info.stage==='load'?'문서 읽기':'페이지 출력');
-    status(file.name+' · '+(info.stage==='load'?'문서 읽는 중':info.stage==='fonts'?'필요한 글꼴 확인 중':info.page+'/'+info.total+'쪽 변환 중')+' · '+(completed+1)+'/'+pending.length+'개');
+    const fontStatus=info.detail==='read'?'PC 글꼴 파일 읽는 중':
+     info.detail==='bundled'?'기본 글꼴 준비 중':info.detail==='measure'?'PDF 측정용 글꼴 준비 중':
+     info.detail==='complete'?'PDF 출력 시작 중':'문서에 필요한 글꼴 검색 중';
+    status(file.name+' · '+(info.stage==='load'?'문서 읽는 중':info.stage==='fonts'?fontStatus:info.page+'/'+info.total+'쪽 변환 중')+' · '+(completed+1)+'/'+pending.length+'개');
    },signal,{fontFiles,engine,localFonts});if(fontAccessNotice&&isHwp(file))result.warnings=[...(result.warnings||[]),fontAccessNotice];return result;
   },signal,item=>{
    if(item.state==='working'){conversionClock.itemStart();draw();return;}
