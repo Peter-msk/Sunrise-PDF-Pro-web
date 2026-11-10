@@ -115,7 +115,10 @@ $('convert').addEventListener('click',async()=>{
    const durationMs=Number.isFinite(item._proStartedMs)?Math.max(0,Math.round(performance.now()-item._proStartedMs)):0;
    item._proDurationMs=durationMs;
    if(item.state==='done')emitProEvent('convert_success',{feature:proFeature(item.file),stage:'pdf',duration_ms:durationMs});
-   if(item.state==='done'){item.pdfUrl=URL.createObjectURL(item.result.pdf);completed++;show(item);}
+   if(item.state==='done'){
+    item.pdfUrl=URL.createObjectURL(item.result.pdf);completed++;
+    // PDF.js preview must not run concurrently with the next HWP WASM render.
+   }
    else if(item.state==='failed'){emitProEvent('convert_failure',{feature:proFeature(item.file),stage:item._proDiagStage||'unknown',error_code:classifyProError(item.error),duration_ms:durationMs});completed++;}
    else if(item.state==='cancelled'){
     emitProEvent('convert_cancel',{feature:proFeature(item.file),
@@ -132,7 +135,15 @@ $('convert').addEventListener('click',async()=>{
    if(done>1){try{status('완료 파일 ZIP을 준비하는 중입니다.');const blob=await makePdfArchive(items,signal,(i,n)=>status('ZIP 준비 중 · '+i+'/'+n+'개'));archiveUrl=URL.createObjectURL(blob);$('download-all').href=archiveUrl;$('download-all').hidden=false;status('완료 '+done+'개'+(failed?' · 확인 필요 '+failed+'개':'')+'. ZIP 또는 개별 PDF를 다운로드하세요.');}catch(error){if(error?.name!=='AbortError')status('개별 PDF 다운로드 가능 · ZIP 생성 실패: '+String(error.message||error));else status('ZIP 생성이 취소되었습니다. 완료한 PDF는 개별 다운로드할 수 있습니다.');}}
   }else status('작업이 취소되었습니다. 완료된 PDF는 개별 다운로드할 수 있습니다.');
  }catch(error){const cancelled=signal.aborted||error?.name==='AbortError';status(cancelled?'작업이 취소되었습니다. 완료 PDF는 개별 다운로드 가능합니다.':'작업 실패: '+String(error?.message||error));conversionClock.finish(cancelled?'cancelled':'failed');}
- finally{if(conversionClock.active)conversionClock.finish(signal.aborted?'cancelled':pending.some(i=>i.state==='failed')?'partial':'done');busy=false;controller=null;draw();}
+ finally{
+  if(conversionClock.active)conversionClock.finish(signal.aborted?'cancelled':pending.some(i=>i.state==='failed')?'partial':'done');
+  busy=false;controller=null;
+  try{
+   draw();
+   const selected=active?.state==='done'?active:items.find(i=>i.state==='done');
+   if(selected)show(selected);
+  }catch(error){console.warn('R63_FINAL_PREVIEW_FAILED',error?.name||'Error');}
+ }
 });
 $('print-prepare').addEventListener('click',async()=>{
  if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;
