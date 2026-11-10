@@ -35,6 +35,9 @@ export function svgFontFamilies(svg,Parser=globalThis.DOMParser){
 
 export async function loadDocumentLocalFonts(doc,count,available,parser,signal,onProgress=()=>{}){
  const needed=new Map();
+ // Report the beginning of this expensive synchronous WASM/SVG scan before
+ // rendering the first page so the UI can identify where it is stalled.
+ onProgress({stage:'fonts',page:0,total:count});
  for(let i=0;i<count;i++){
   if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
   const page=svgFontFamilies(doc.renderPageSvgWithProfile(i,'print'));
