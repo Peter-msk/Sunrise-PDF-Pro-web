@@ -218,6 +218,7 @@ test('local arrow markers are preserved and external marker references are rejec
 
 test('professional vector success registers selected fonts and reports only text candidates',async()=>{
  const root=el('svg',{},[el('text',{'font-family':'맑은 고딕'},[],korean)]);
+ const registeredFaces={faces:[{...f.faces[0],isLocal:true},f.faces[1]]};
  await withDOM(root,async()=>{
   const state={registered:[],called:0};let finish;
   const pending=new Promise(resolve=>finish=resolve);
@@ -228,7 +229,7 @@ test('professional vector success registers selected fonts and reports only text
    destroy(){state.destroyed=true;finish(new Blob([]));}
   }
   const result=await tryProfessionalDocument({renderPageSvgWithProfile:()=>'<svg/>'},1,{
-   checkedSvg:()=>checked,rasterPage:async()=>({blob:new Blob(['preview'])}),fontRegistry:f,
+   checkedSvg:()=>checked,rasterPage:async()=>({blob:new Blob(['preview'])}),fontRegistry:registeredFaces,
    loadLibraries:async()=>({PDFDocument:FakePDF,registerStdFonts:()=>{},Helvetica:{},toBlob:()=>pending,
     SVGtoPDF:(doc,svg,x,y,opts)=>{
       state.called++;assert.equal(opts.width,595.5);
@@ -241,6 +242,7 @@ test('professional vector success registers selected fonts and reports only text
   assert.equal(result.rasterPages,0);
   assert.equal(result.textCandidatePages,1);
   assert.equal(result.searchablePages,null); // not verified by a PDF text extractor
+  assert.deepEqual(result.fontUsage,{local:1,bundled:0,selected:1});
   assert.deepEqual(state.registered,['FakeRegular','FakeBold']);
   assert.equal(state.called,1);
  });

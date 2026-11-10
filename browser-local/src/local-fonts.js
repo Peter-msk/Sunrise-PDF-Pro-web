@@ -21,10 +21,13 @@ export function svgFontFamilies(svg,Parser=globalThis.DOMParser){
   if(!result.ok)throw Error('문서 글꼴 스타일을 확인할 수 없습니다: '+result.reason);
  }
  const names=new Map();
- for(const el of doc.querySelectorAll('[font-family],[style]')){
-  const style=el.getAttribute('style')||'';
+ // querySelectorAll() excludes documentElement itself. HWP pages frequently
+ // place the inherited font-family on <svg>; omitting it silently substitutes.
+ const elements=[doc.documentElement,...doc.querySelectorAll('[font-family],[style]')];
+ for(const el of elements){
+  const style=el.getAttribute?.('style')||'';
   const match=/(?:^|;)\s*font-family\s*:\s*([^;]+)/i.exec(style);
-  for(const name of splitFontFamilies(match?.[1]||el.getAttribute('font-family')||'')){
+  for(const name of splitFontFamilies(match?.[1]||el.getAttribute?.('font-family')||'')){
    const clean=name.trim().replace(/^['"]|['"]$/g,'');
    const key=familyKey(clean);
    if(key&&!['serif','sans-serif','monospace','system-ui'].includes(key))names.set(key,clean);
@@ -68,6 +71,7 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   if(seen.has(identity))continue;
   seen.add(identity);
   face.name='LocalFont'+(faces.length+1);
+  face.isLocal=true; // Provenance marker for the PDF font callback, not a user identifier.
   face.cssAliases=requested.map(key=>needed.get(key));
   face.aliases=[...new Set([...face.aliases,...keys,...requested])];
   faces.push(face);

@@ -14,21 +14,30 @@ export function uniquePdfNames(files){
 
 // One document at a time: rhwp layout and browser font measurement are shared.
 export async function runBatch(items,convert,signal,onChange=()=>{}){
+ // UI rendering is an observer, not part of document conversion. A failed
+ // PDF.js/view update must never prevent the next document from being handled.
+ const notify=item=>{
+  try{onChange(item);}
+  catch(error){console.warn('BATCH_UI_OBSERVER_FAILED',error?.name||'Error');}
+ };
  for(const item of items){
   if(item.state==='done')continue;
   if(signal?.aborted)break;
-  item.state='working';item.error='';onChange(item);
+  item.state='working';item.error='';notify(item);
   try{
    const result=await convert(item.file,item);
    if(signal?.aborted)throw new DOMException('작업이 취소되었습니다.','AbortError');
    item.result=result;item.state='done';
   }catch(error){
    if(error?.name==='AbortError'||signal?.aborted){
-    item.state='cancelled';item.error='변환이 취소되었습니다.';onChange(item);break;
+    item.state='cancelled';item.error='변환이 취소되었습니다.';notify(item);break;
    }
    item.state='failed';item.error=String(error?.message||error).slice(0,500);
   }
-  onChange(item);
+  notify(item);
+  // Allow the UI thread to release completed document resources before
+  // starting the next large HWP; it is not a timeout or an artificial delay.
+  await new Promise(resolve=>setTimeout(resolve,0));
  }
  return items;
 }
