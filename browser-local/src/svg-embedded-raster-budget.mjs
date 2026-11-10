@@ -83,7 +83,8 @@ export async function normalizeEmbeddedPngSvg(svg,signal,{
   toDataURL=browserDataURL,
   atobImpl=globalThis.atob,
   maxPixels=MAX_RASTER_PIXELS,
-  maxPageEmbeddedSourceBytes=MAX_PAGE_EMBEDDED_SOURCE_BYTES
+  maxPageEmbeddedSourceBytes=MAX_PAGE_EMBEDDED_SOURCE_BYTES,
+  imageTimeoutMs=IMAGE_OPERATION_TIMEOUT_MS
 }={}){
   cancelled(signal);
   const doc=parse(svg);
@@ -147,7 +148,7 @@ export async function normalizeEmbeddedPngSvg(svg,signal,{
       // Request the bounded decoded bitmap size. Do not first create a giant bitmap.
       bitmap=await waitForImageOperation(decode(new Blob([full],{type:'image/png'}),{
         resizeWidth:target.width,resizeHeight:target.height,resizeQuality:'high'
-      }),signal,IMAGE_OPERATION_TIMEOUT_MS,'PNG_RESIZE_DECODE_TIMEOUT',late=>late?.close?.());
+      }),signal,imageTimeoutMs,'PNG_RESIZE_DECODE_TIMEOUT',late=>late?.close?.());
       cancelled(signal);
       if(bitmap.width!==target.width||bitmap.height!==target.height)
         throw Error('PNG_RESIZE_DECODE_DIMENSIONS_MISMATCH');
@@ -158,10 +159,10 @@ export async function normalizeEmbeddedPngSvg(svg,signal,{
       context.drawImage(bitmap,0,0,target.width,target.height);
       const blob=await waitForImageOperation(new Promise((ok,bad)=>canvas.toBlob(
         result=>result?ok(result):bad(Error('PNG_RESIZE_ENCODE_FAILED')),'image/png')),
-        signal,IMAGE_OPERATION_TIMEOUT_MS,'PNG_RESIZE_ENCODE_TIMEOUT');
+        signal,imageTimeoutMs,'PNG_RESIZE_ENCODE_TIMEOUT');
       cancelled(signal);
       const replacement=await waitForImageOperation(toDataURL(blob),signal,
-      IMAGE_OPERATION_TIMEOUT_MS,'PNG_RESIZE_DATAURL_TIMEOUT');
+      imageTimeoutMs,'PNG_RESIZE_DATAURL_TIMEOUT');
       if(!PNG_DATA.test(replacement))throw Error('PNG_RESIZE_ENCODE_FAILED');
       const report={...target,pictureType:'embedded PNG',alphaPreservedBy:'PNG'};
       cache.set(raw,{replacement,report});
