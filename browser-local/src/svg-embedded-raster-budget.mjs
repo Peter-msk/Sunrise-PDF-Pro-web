@@ -4,7 +4,9 @@
  * Never fetches a URL, strips an image, or rasterizes the surrounding page.
  * Must run before parseDocumentSvg() and the PDFKit vector renderer.
  */
+import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 const PNG_DATA = /^data:image\/png;base64,([a-z0-9+/]+={0,2})$/i;
+const IMAGE_OPERATION_TIMEOUT_MS = 20_000;
 const PNG_SIGNATURE = [137,80,78,71,13,10,26,10];
 const MAX_RASTER_PIXELS = 9_000_000;
 const MAX_CANVAS_SIDE = 8192;
@@ -81,7 +83,8 @@ export async function normalizeEmbeddedPngSvg(svg,signal,{
   toDataURL=browserDataURL,
   atobImpl=globalThis.atob,
   maxPixels=MAX_RASTER_PIXELS,
-  maxPageEmbeddedSourceBytes=MAX_PAGE_EMBEDDED_SOURCE_BYTES
+  maxPageEmbeddedSourceBytes=MAX_PAGE_EMBEDDED_SOURCE_BYTES,
+  imageTimeoutMs=IMAGE_OPERATION_TIMEOUT_MS
 }={}){
   cancelled(signal);
   const doc=parse(svg);
@@ -143,9 +146,9 @@ export async function normalizeEmbeddedPngSvg(svg,signal,{
       cancelled(signal);
       if(typeof decode!=='function')throw Error('PNG_RESIZE_NOT_SUPPORTED');
       // Request the bounded decoded bitmap size. Do not first create a giant bitmap.
-      bitmap=await decode(new Blob([full],{type:'image/png'}),{
+      bitmap=await waitForImageOperation(decode(new Blob([full],{type:'image/png'}),{
         resizeWidth:target.width,resizeHeight:target.height,resizeQuality:'high'
-      });
+      }),signal,imageTimeoutMs,'PNG_RESIZE_DECODE_TIMEOUT',late=>late?.close?.());
       cancelled(signal);
       if(bitmap.width!==target.width||bitmap.height!==target.height)
         throw Error('PNG_RESIZE_DECODE_DIMENSIONS_MISMATCH');
@@ -154,10 +157,12 @@ export async function normalizeEmbeddedPngSvg(svg,signal,{
       if(!context)throw Error('PNG_RESIZE_CANVAS_UNAVAILABLE');
       context.clearRect(0,0,target.width,target.height);
       context.drawImage(bitmap,0,0,target.width,target.height);
-      const blob=await new Promise((ok,bad)=>canvas.toBlob(
-        result=>result?ok(result):bad(Error('PNG_RESIZE_ENCODE_FAILED')),'image/png'));
+      const blob=await waitForImageOperation(new Promise((ok,bad)=>canvas.toBlob(
+        result=>result?ok(result):bad(Error('PNG_RESIZE_ENCODE_FAILED')),'image/png')),
+        signal,imageTimeoutMs,'PNG_RESIZE_ENCODE_TIMEOUT');
       cancelled(signal);
-      const replacement=await toDataURL(blob);
+      const replacement=await waitForImageOperation(toDataURL(blob),signal,
+      imageTimeoutMs,'PNG_RESIZE_DATAURL_TIMEOUT');
       if(!PNG_DATA.test(replacement))throw Error('PNG_RESIZE_ENCODE_FAILED');
       const report={...target,pictureType:'embedded PNG',alphaPreservedBy:'PNG'};
       cache.set(raw,{replacement,report});
