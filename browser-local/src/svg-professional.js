@@ -201,7 +201,11 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
         // A PC font selected from a later declared family also needs normalization
         // so both the SVG measurement and PDF callback use the same font.
         const primary=splitFontFamilies(currentFamily)[0]||'기본 글꼴';
-        const alternateFace=!face.aliases?.includes(familyKey(primary));
+        // Standard PDF fonts (e.g. Helvetica) have no embedded aliases.
+        // Never rewrite their family to "undefined": only embedded PC fonts
+        // selected from later CSS entries need alias normalization.
+        const alternateFace=!face.standard&&Array.isArray(face.aliases)&&
+          !face.aliases.includes(familyKey(primary));
         if(face.isFallback||alternateFace){
           const original=primary;
           if(familyKey(original)!==familyKey(face.family)||

@@ -127,6 +127,7 @@ test('plain ASCII SVG can use standard Helvetica, Hangul without font rejects',a
  const root=el('svg',{xmlns:'http://www.w3.org/2000/svg'},[el('text',{},[],'HELLO')]);
  await withDOM(root,()=>{
   assert.equal(preflightProfessionalSvg(checked).ok,true);
+  assert.equal(root.children[0].hasAttribute('font-family'),false,'Standard Helvetica must not inject an undefined font-family');
   root.children[0].childNodes=[{nodeType:3,nodeValue:korean}];
   assert.equal(preflightProfessionalSvg(checked).reason,'FONT_GLYPH_MISSING');
   assert.equal(preflightProfessionalSvg(checked,{fontRegistry:f}).ok,true);
