@@ -275,6 +275,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
   let vectorPages=0,rasterPages=0;
   const fallbackPages=[];
   const substituteFamilies=new Set();
+  const usedLocal=new Set(),usedBundled=new Set(),usedManual=new Set();
   try{
     for(const face of fontRegistry.faces)pdf.registerFont(face.name,face.bytes);
     for(let i=0;i<count;i++){
@@ -311,6 +312,9 @@ export async function tryProfessionalDocument(hwpDoc,count,{
           fontCallback:(family,bold,italic)=>{
             const face=resolveFont(fontRegistry,family,bold?'bold':'normal',italic?'italic':'normal');
             if(!face)throw Error('FONT_FAMILY_OR_VARIANT_UNAVAILABLE');
+            if(face.isLocal)usedLocal.add(face.name);
+            else if(face.isFallback)usedBundled.add(face.name);
+            else if(!face.standard)usedManual.add(face.name);
             return face.name;
           },
           imageCallback:link=>{
@@ -340,7 +344,9 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     const preview=previewBlob||null;
     const renderMode=rasterPages===0?'professional':vectorPages===0?'raster':'mixed';
     return {pdf:blob,preview,pages:count,bytes:blob.size,renderMode,
-      vectorPages,rasterPages,fallbackPages,textCandidatePages,searchablePages:null,substituteFamilies:[...substituteFamilies]};
+      vectorPages,rasterPages,fallbackPages,textCandidatePages,searchablePages:null,
+      fontUsage:{local:usedLocal.size,bundled:usedBundled.size,selected:usedManual.size},
+      substituteFamilies:[...substituteFamilies]};
   }catch(error){
     if(typeof pdf.destroy==='function')pdf.destroy();
     else if(!ended){ended=true;pdf.end();}
