@@ -71,6 +71,7 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   if(seen.has(identity))continue;
   seen.add(identity);
   face.name='LocalFont'+(faces.length+1);
+  face.isLocal=true; // Provenance marker for the PDF font callback, not a user identifier.
   face.cssAliases=requested.map(key=>needed.get(key));
   face.aliases=[...new Set([...face.aliases,...keys,...requested])];
   faces.push(face);
