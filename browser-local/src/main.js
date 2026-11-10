@@ -93,17 +93,27 @@ $('convert').addEventListener('click',async()=>{
    emitProEvent('convert_start',{feature:proFeature(file)});
    emitProEvent('convert_progress',{feature:proFeature(file),stage:'parse',duration_ms:0});
    const result=await convertToPdf(file,info=>{
+    const phases=new Set(['svg_build','svg_normalize','image_gif','image_png',
+     'image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done',
+     'pdf_finalize','pdf_stream','pdf_done']);
     item._proDiagStage=info.stage==='load'?'load':
      info.stage==='fonts'?(info.detail==='read'?'font_read':info.detail==='bundled'?'font_bundle':
-      info.detail==='measure'?'font_measure':info.detail==='scan'?'font_scan':'fonts'):'render';
-    // One event on each phase transition, then at most once per 45s.
-    // Only enum phase + duration go to D1; no file name, bytes or page text.
+      info.detail==='measure'?'font_measure':info.detail==='scan'?'font_scan':'fonts'):
+     phases.has(info.detail)?info.detail:'render';
+    // Keep diagnostics private and sampled. Always include last-page
+    // phase transitions and PDF finalization, where the production stall occurs.
     const phaseNow=performance.now();
-    if(item._lastDiagPhase!==item._proDiagStage||
-      phaseNow-(item._lastDiagSentMs||0)>=45000){
+    const gap=phaseNow-(item._lastDiagSentMs||0);
+    const changed=item._lastDiagPhase!==item._proDiagStage;
+    const important=info.page===info.total&&
+     ['svg_build','image_png','svg_vector','pdf_finalize','pdf_stream','pdf_done']
+      .includes(item._proDiagStage);
+    if((item._proProgressEvents||0)<100&&
+      ((changed&&(gap>=750||important))||gap>=45000)){
       emitProEvent('convert_progress',{feature:proFeature(file),
        stage:item._proDiagStage,
        duration_ms:Math.max(0,Math.round(phaseNow-item._proStartedMs))});
+      item._proProgressEvents=(item._proProgressEvents||0)+1;
       item._lastDiagPhase=item._proDiagStage;
       item._lastDiagSentMs=phaseNow;
     }
@@ -113,7 +123,19 @@ $('convert').addEventListener('click',async()=>{
     const fontStatus=info.detail==='read'?'PC 글꼴 파일 읽는 중':
      info.detail==='bundled'?'기본 글꼴 준비 중':info.detail==='measure'?'PDF 측정용 글꼴 준비 중':
      info.detail==='complete'?'PDF 출력 시작 중':'문서에 필요한 글꼴 검색 중';
-    status(file.name+' · '+(info.stage==='load'?'문서 읽는 중':info.stage==='fonts'?fontStatus:info.page+'/'+info.total+'쪽 변환 중')+' · '+(completed+1)+'/'+pending.length+'개');
+    const stepLabels={
+     svg_build:'문서 SVG 생성',svg_normalize:'SVG 전처리',
+     image_gif:'GIF 그림 확인',image_png:'PNG 그림 확인·조정',
+     image_filter:'그림 효과 검사',svg_sanitize:'SVG 안전 검사',
+     svg_preflight:'글꼴·벡터 사전 검사',svg_vector:'SVG 벡터 PDF 출력',
+     svg_vector_done:'페이지 PDF 출력 완료',
+     pdf_finalize:'PDF 최종 저장 준비',pdf_stream:'PDF 바이트 생성 대기',
+     pdf_done:'PDF 바이트 생성 완료'
+    };
+    const message=info.stage==='load'?'문서 읽는 중':
+     info.stage==='fonts'?fontStatus:
+     stepLabels[info.detail]||'페이지 변환';
+    status(file.name+' · '+message+' · '+info.page+'/'+info.total+'쪽 · '+(completed+1)+'/'+pending.length+'개');
    },signal,{fontFiles,engine,localFonts});if(fontAccessNotice&&isHwp(file))result.warnings=[...(result.warnings||[]),fontAccessNotice];return result;
   },signal,item=>{
    if(item.state==='working'){conversionClock.itemStart();draw();return;}
