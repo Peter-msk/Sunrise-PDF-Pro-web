@@ -44,6 +44,14 @@ button,.download{font-size:14px;min-height:44px}.caption,.counter{font-size:13px
 .files .file-remark .file-delete{color:#9a3a3a;border-color:#ecd0d0}
 .files .empty{min-width:590px;text-align:center;padding:12px}
 @media(max-width:820px){.file-list-scroll{max-height:270px}.files .file-inline-tools button,.files .file-inline-tools a{min-height:27px}}
+.conversion-clock{margin:10px 0;padding:10px 12px;background:#f1f6fd;border:1px solid #d5e1f0;border-radius:9px}
+.conversion-clock[hidden]{display:none!important}
+.conversion-clock-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.conversion-clock-cell{display:flex;flex-direction:column;gap:4px;border-radius:6px;background:#fff;padding:8px 10px;min-width:0}
+.conversion-clock-label{font-size:11px;color:#4c647a}
+.conversion-clock-cell strong{font-size:15px;color:#193c5e;font-variant-numeric:tabular-nums}
+.conversion-clock-hint{display:block;font-size:11px;color:#5c718a;margin-top:7px}
+@media(max-width:760px){.conversion-clock-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head><body>
 <header class="topbar"><div class="top-inner"><div class="brand"><div class="mark">S</div><div><b>SUNRISE</b><small>PDF PRO · WEB</small></div></div><div class="privacy">문서 서버 전송 없음</div></div></header>
