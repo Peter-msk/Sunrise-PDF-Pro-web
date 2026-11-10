@@ -179,12 +179,19 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    // A failed object-preserving export must stay failed, never become an image PDF.
    const resizedPngs=[],svgFilterStats=[];
    const result=await tryProfessionalDocument(doc,count,{
-    checkedSvg:async svg=>{
+    checkedSvg:async(svg,meta={})=>{
+     const progress=detail=>onProgress({
+      stage:'professional',page:meta.page||1,total:meta.total||count,detail
+     });
+     progress('image_gif');
      const gifSvg=await normalizeGifSvg(svg,signal);
+     progress('image_png');
      const pngResult=await normalizeEmbeddedPngSvg(gifSvg,signal);
      resizedPngs.push(...pngResult.resized);
+     progress('image_filter');
      const grayResult=await normalizeSvgGrayscale(pngResult.svg,signal);
      if(grayResult.filtersApplied)svgFilterStats.push(grayResult);
+     progress('svg_sanitize');
      return checkedSvg(grayResult.svg);
     },rasterPage,signal,fontRegistry,onProgress,allowRasterFallback:false
    });
