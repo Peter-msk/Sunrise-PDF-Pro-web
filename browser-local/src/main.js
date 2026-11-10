@@ -89,9 +89,22 @@ $('convert').addEventListener('click',async()=>{
   await runBatch(pending,async(file,item)=>{
    item._proDiagStage='load';
    item._proStartedMs=performance.now();
+   item._lastDiagPhase='parse';item._lastDiagSentMs=item._proStartedMs;
    emitProEvent('convert_start',{feature:proFeature(file)});
+   emitProEvent('convert_progress',{feature:proFeature(file),stage:'parse',duration_ms:0});
    const result=await convertToPdf(file,info=>{
     item._proDiagStage=info.stage==='load'?'load':info.stage==='fonts'?'fonts':'render';
+    // One event on each phase transition, then at most once per 45s.
+    // Only enum phase + duration go to D1; no file name, bytes or page text.
+    const phaseNow=performance.now();
+    if(item._lastDiagPhase!==item._proDiagStage||
+      phaseNow-(item._lastDiagSentMs||0)>=45000){
+      emitProEvent('convert_progress',{feature:proFeature(file),
+       stage:item._proDiagStage,
+       duration_ms:Math.max(0,Math.round(phaseNow-item._proStartedMs))});
+      item._lastDiagPhase=item._proDiagStage;
+      item._lastDiagSentMs=phaseNow;
+    }
     const part=info.stage==='load'?Math.min(.15,.15*info.loaded/Math.max(1,info.total)):info.stage==='fonts'?.15+.15*info.page/Math.max(1,info.total):.30+.69*info.page/Math.max(1,info.total);
     $('progress').value=Math.min(99,Math.round((completed+part)/pending.length*100));
     conversionClock.update(completed,part,info.stage==='fonts'?'글꼴 검사':info.stage==='load'?'문서 읽기':'페이지 출력');
@@ -104,7 +117,11 @@ $('convert').addEventListener('click',async()=>{
    if(item.state==='done')emitProEvent('convert_success',{feature:proFeature(item.file),stage:'pdf',duration_ms:durationMs});
    if(item.state==='done'){item.pdfUrl=URL.createObjectURL(item.result.pdf);completed++;show(item);}
    else if(item.state==='failed'){emitProEvent('convert_failure',{feature:proFeature(item.file),stage:item._proDiagStage||'unknown',error_code:classifyProError(item.error),duration_ms:durationMs});completed++;}
-   else if(item.state==='cancelled')completed++;
+   else if(item.state==='cancelled'){
+    emitProEvent('convert_cancel',{feature:proFeature(item.file),
+     stage:item._proDiagStage||'unknown',duration_ms:durationMs});
+    completed++;
+   }
    if(['done','failed','cancelled'].includes(item.state))conversionClock.itemDone(completed);
    draw();
   });
