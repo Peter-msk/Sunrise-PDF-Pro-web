@@ -41,12 +41,12 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
  const needed=new Map();
  // Report before the expensive synchronous WASM/SVG scan.
  if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
- onProgress({stage:'fonts',page:0,total:count});
+ onProgress({stage:'fonts',page:0,total:count,detail:'scan'});
  for(let i=0;i<count;i++){
   if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
   const page=svgFontFamilies(doc.renderPageSvgWithProfile(i,'print'));
   for(const [key,name] of page)needed.set(key,name);
-  onProgress({stage:'fonts',page:i+1,total:count});
+  onProgress({stage:'fonts',page:i+1,total:count,detail:'scan'});
   await new Promise(resolve=>setTimeout(resolve,0));
  }
  const faces=[],seen=new Set(),attempted=new Set();
