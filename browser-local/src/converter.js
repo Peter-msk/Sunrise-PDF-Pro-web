@@ -144,10 +144,12 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    const selected=selectedFonts.length?await loadPdfFonts(selectedFonts,fontkit,signal):{faces:[]};
    let local={faces:[]};
    if(options.localFonts){
-    const probe=new HwpDocument(new Uint8Array(buf));
-    try{const pages=probe.pageCount();if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
-     local=await loadDocumentLocalFonts(probe,pages,options.localFonts,fontkit,signal,onProgress);
-    }finally{probe.free();}
+    // Reuse the same rhwp document for font discovery AND PDF generation.
+    // A second HwpDocument could reparse hundreds of MB of input on the UI thread.
+    doc=new HwpDocument(new Uint8Array(buf));
+    const pages=doc.pageCount();
+    if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
+    local=await loadDocumentLocalFonts(doc,pages,options.localFonts,fontkit,signal,onProgress);
    }
    const bundled=await loadBundledFonts(fontkit,signal);
    const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
@@ -158,7 +160,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    fontRegistry={faces:[...selected.faces,...localOnly,...bundled.faces]};
    releaseMeasureFonts=await installMeasureFonts(fontRegistry,signal);
   }
-  doc=new HwpDocument(new Uint8Array(buf));
+  if(!doc)doc=new HwpDocument(new Uint8Array(buf));
   const count=doc.pageCount();
   if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
   if(options.engine==='professional'){
