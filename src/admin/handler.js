@@ -17,7 +17,7 @@ const cleanText=(value,limit)=>typeof value==='string'&&value.trim().length>0&&v
 const validId=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const eventKinds=new Set(['visit','convert_start','convert_progress','convert_success','convert_failure','convert_cancel','render_error','active_30s']);
 const allowedFeatures=new Set(['hwp','hwpx','xlsx','xls','png','jpg','batch','ui','other']);
-const allowedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','pdf','download','open','viewer','unknown']);
+const allowedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','svg_build','svg_normalize','image_gif','image_png','image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done','pdf_finalize','pdf_stream','pdf_done','pdf','download','open','viewer','unknown']);
 const allowedStatuses=new Set(['new','in_progress','resolved']);
 const allowedPublicationStates=new Set(['draft','published','archived']);
 const allowedKinds=new Set(['announcement','release']);
@@ -79,6 +79,19 @@ async function submitTelemetry(req,db){
  const count=await db.prepare('SELECT COUNT(*) AS n FROM pro_telemetry WHERE session_id=? AND happened_at>?')
   .bind(b.session_id,now()-3600).first();
  if((count?.n||0)>=300)return deny('EVENT_RATE_LIMIT',429);
+ // R65: progress events need a separate table. The historical telemetry table
+ // has a CHECK that intentionally excludes 'convert_progress'; never mutate
+ // or rebuild it just to change the diagnostic event schema.
+ if(b.kind==='convert_progress'){
+  const recent=await db.prepare(
+   'SELECT COUNT(*) AS n FROM pro_telemetry_progress WHERE session_id=? AND happened_at>?')
+   .bind(b.session_id,now()-3600).first();
+  if((recent?.n||0)>=240)return deny('EVENT_RATE_LIMIT',429);
+  await db.prepare(`INSERT OR IGNORE INTO pro_telemetry_progress
+   (event_id,session_id,happened_at,feature,stage,duration_ms) VALUES(?,?,?,?,?,?)`)
+   .bind(b.event_id,b.session_id,now(),b.feature,b.stage,b.duration_ms).run();
+  return j({ok:true},202);
+ }
  await db.prepare(`INSERT OR IGNORE INTO pro_telemetry
  (event_id,session_id,happened_at,event_kind,feature,stage,error_code,duration_ms) VALUES(?,?,?,?,?,?,?,?)`)
  .bind(b.event_id,b.session_id,now(),b.kind,b.feature,b.stage,b.error_code,b.duration_ms).run();
@@ -253,6 +266,7 @@ async function api(req,env,path,url){
   if(path==='/api/admin/retention/purge'&&method==='POST'){
    const before=now()-30*86400;
    await db.prepare('DELETE FROM pro_telemetry WHERE happened_at<?').bind(before).run();
+   await db.prepare('DELETE FROM pro_telemetry_progress WHERE happened_at<?').bind(before).run();
    await db.prepare('DELETE FROM pro_admin_sessions WHERE expires_at<?').bind(now()).run();
    await db.prepare('DELETE FROM pro_admin_login_limits WHERE window_start<?').bind(now()-86400).run();
    await db.prepare("DELETE FROM pro_inquiries WHERE status='resolved' AND updated_at<?").bind(now()-90*86400).run();
