@@ -85,13 +85,26 @@ $('convert').addEventListener('click',async()=>{
  let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&pending.some(i=>isHwp(i.file)))fontsRequest=requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();let completed=0;
  try{
-  let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');}
+  let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');}
   await runBatch(pending,async(file,item)=>{
    item._proDiagStage='load';
    item._proStartedMs=performance.now();
+   item._lastDiagPhase='parse';item._lastDiagSentMs=item._proStartedMs;
    emitProEvent('convert_start',{feature:proFeature(file)});
+   emitProEvent('convert_progress',{feature:proFeature(file),stage:'parse',duration_ms:0});
    const result=await convertToPdf(file,info=>{
     item._proDiagStage=info.stage==='load'?'load':info.stage==='fonts'?'fonts':'render';
+    // One event on each phase transition, then at most once per 45s.
+    // Only enum phase + duration go to D1; no file name, bytes or page text.
+    const phaseNow=performance.now();
+    if(item._lastDiagPhase!==item._proDiagStage||
+      phaseNow-(item._lastDiagSentMs||0)>=45000){
+      emitProEvent('convert_progress',{feature:proFeature(file),
+       stage:item._proDiagStage,
+       duration_ms:Math.max(0,Math.round(phaseNow-item._proStartedMs))});
+      item._lastDiagPhase=item._proDiagStage;
+      item._lastDiagSentMs=phaseNow;
+    }
     const part=info.stage==='load'?Math.min(.15,.15*info.loaded/Math.max(1,info.total)):info.stage==='fonts'?.15+.15*info.page/Math.max(1,info.total):.30+.69*info.page/Math.max(1,info.total);
     $('progress').value=Math.min(99,Math.round((completed+part)/pending.length*100));
     conversionClock.update(completed,part,info.stage==='fonts'?'글꼴 검사':info.stage==='load'?'문서 읽기':'페이지 출력');
@@ -104,7 +117,11 @@ $('convert').addEventListener('click',async()=>{
    if(item.state==='done')emitProEvent('convert_success',{feature:proFeature(item.file),stage:'pdf',duration_ms:durationMs});
    if(item.state==='done'){item.pdfUrl=URL.createObjectURL(item.result.pdf);completed++;show(item);}
    else if(item.state==='failed'){emitProEvent('convert_failure',{feature:proFeature(item.file),stage:item._proDiagStage||'unknown',error_code:classifyProError(item.error),duration_ms:durationMs});completed++;}
-   else if(item.state==='cancelled')completed++;
+   else if(item.state==='cancelled'){
+    emitProEvent('convert_cancel',{feature:proFeature(item.file),
+     stage:item._proDiagStage||'unknown',duration_ms:durationMs});
+    completed++;
+   }
    if(['done','failed','cancelled'].includes(item.state))conversionClock.itemDone(completed);
    draw();
   });

@@ -13,14 +13,23 @@ function checkAbort(signal) {
 }
 // The browser API cannot necessarily be cancelled after permission is opened,
 // but our conversion must not remain blocked waiting for that Promise.
-function awaitOrCancel(task,signal) {
-  if (!signal) return Promise.resolve(task);
+function awaitOrCancel(task,signal,timeoutMs=30000) {
   checkAbort(signal);
   return new Promise((resolve,reject)=>{
-    const finish=(callback,value)=>{signal.removeEventListener('abort',cancel);callback(value);};
+    let settled=false;
+    let timer=null;
+    const finish=(callback,value)=>{
+      if(settled)return;
+      settled=true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort',cancel);
+      callback(value);
+    };
     const cancel=()=>finish(reject,new DOMException('PDF 변환이 취소되었습니다.','AbortError'));
-    signal.addEventListener('abort',cancel,{once:true});
+    signal?.addEventListener('abort',cancel,{once:true});
+    timer=setTimeout(()=>finish(reject,Object.assign(new Error('LOCAL_FONT_ACCESS_TIMEOUT'),{name:'TimeoutError'})),timeoutMs);
     Promise.resolve(task).then(value=>finish(resolve,value),error=>finish(reject,error));
+    if(signal?.aborted)cancel();
   });
 }
 function outcome(status,notice,permission='unknown',fonts=null) {
@@ -32,12 +41,12 @@ function outcome(status,notice,permission='unknown',fonts=null) {
  * @returns {Promise<{status:string,fonts:Array|null,notice:string,permission:string}>}
  */
 export async function settleInstalledFonts(request, {
-  permissions=globalThis.navigator?.permissions, signal
+  permissions=globalThis.navigator?.permissions, signal, timeoutMs=30000
 }={}) {
   checkAbort(signal);
   if (request == null) return outcome('disabled','');
   try {
-    const result=await awaitOrCancel(request,signal);
+    const result=await awaitOrCancel(request,signal,timeoutMs);
     checkAbort(signal);
     if (!Array.isArray(result)) return outcome('invalid-result',
       'PC 글꼴 API가 비정상 결과를 반환했습니다. 내장 글꼴로 계속하며, 필요한 TTF/OTF는 직접 선택하세요.');
@@ -52,7 +61,7 @@ export async function settleInstalledFonts(request, {
     // [] does NOT mean the OS lacks fonts. Query is advisory and optional.
     let permission='unknown';
     try {
-      const state=(await awaitOrCancel(permissions?.query?.({name:'local-fonts'}),signal))?.state;
+      const state=(await awaitOrCancel(permissions?.query?.({name:'local-fonts'}),signal,Math.min(5000,timeoutMs)))?.state;
       if (['granted','denied','prompt'].includes(state)) permission=state;
     } catch { /* Permissions API may not expose local-fonts. */ }
     checkAbort(signal);
@@ -65,6 +74,8 @@ export async function settleInstalledFonts(request, {
     return outcome('empty-unknown',
       '브라우저가 PC 글꼴 목록을 0개 반환했고 권한 상태도 확인할 수 없습니다. 내장 글꼴로 변환합니다.',permission);
   } catch(error) {
+    if(error?.name==='TimeoutError')return outcome('timeout',
+      'PC 글꼴 접근 권한 응답이 지연되어 내장 글꼴로 변환을 계속합니다. 글꼴 접근을 허용한 후 다시 변환하면 원본 서체를 우선 사용합니다.');
     if (error?.name==='AbortError'||signal?.aborted) {
       checkAbort(signal);
       throw error;
