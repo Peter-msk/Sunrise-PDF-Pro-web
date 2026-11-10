@@ -18,7 +18,9 @@ test('R62 diagnostic progress only sends bounded phase and duration',()=>{
  assert.match(server,/['"]convert_progress['"]/);
  assert.match(client,/['"]convert_progress['"]/);
  assert.match(client,/stage:item\._proDiagStage/);
- assert.match(client,/phaseNow-\(item\._lastDiagSentMs\|\|0\)>=45000/);
+ assert.match(client,/const gap=phaseNow-\(item\._lastDiagSentMs\|\|0\)/);
+ assert.match(client,/gap>=45000/);
+ assert.match(client,/\(item\._proProgressEvents\|\|0\)<100/);
  assert.match(client,/emitProEvent\(['"]convert_cancel['"]/);
  assert.ok(!client.includes('emitProEvent(\'convert_progress\',{fileName'));
 });
