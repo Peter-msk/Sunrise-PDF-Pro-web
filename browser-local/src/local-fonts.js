@@ -1,5 +1,6 @@
 import {familyKey,splitFontFamilies,loadPdfFonts} from './pdf-fonts.js';
 import {flattenLocalSvgStyles} from './svg-style.js';
+import {boundedFontStep} from './font-timeout.mjs';
 
 // Capture permission during the actual button click; keep font bytes in memory only.
 export function requestLocalFontAccess(host=globalThis){
@@ -48,21 +49,33 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   onProgress({stage:'fonts',page:i+1,total:count});
   await new Promise(resolve=>setTimeout(resolve,0));
  }
- const faces=[],seen=new Set();
- let unreadable=0,matched=0;
+ const faces=[],seen=new Set(),attempted=new Set();
+ const started=Date.now(),maxReadMs=22000;
+ let unreadable=0,matched=0,timedOutFonts=0,skippedByBudget=0;
  for(const item of available){
   const keys=[item.family,item.fullName,item.postscriptName].filter(Boolean).map(familyKey);
   const requested=[...new Set(keys.filter(key=>needed.has(key)))];
   if(!requested.length)continue;
+  const sourceKey=familyKey(item.postscriptName||item.fullName||item.family)+'|'+
+   familyKey(item.style||'');
+  if(attempted.has(sourceKey))continue;
+  attempted.add(sourceKey);
   matched++;
   if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
+  const remaining=maxReadMs-(Date.now()-started);
+  if(remaining<=0){skippedByBudget++;continue;}
+  onProgress({stage:'fonts',page:count,total:count,detail:'read',processed:matched});
   let loaded;
   try{
-   const blob=await item.blob();
+   const blob=await boundedFontStep(()=>item.blob(),{signal,
+    timeoutMs:Math.min(4000,remaining),code:'PC_FONT_BLOB_TIMEOUT'});
    const file=new File([blob],'local-font.ttf',{type:'font/ttf'});
-   loaded=await loadPdfFonts([file],parser,signal);
+   loaded=await boundedFontStep(()=>loadPdfFonts([file],parser,signal),{signal,
+    timeoutMs:Math.min(4000,Math.max(1,maxReadMs-(Date.now()-started))),
+    code:'PC_FONT_PARSE_TIMEOUT'});
   }catch(error){
    if(error?.name==='AbortError'||signal?.aborted)throw error;
+   if(error?.name==='TimeoutError')timedOutFonts++;
    unreadable++;continue;
   }
   const face=loaded?.faces?.[0];
@@ -76,5 +89,7 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   face.aliases=[...new Set([...face.aliases,...keys,...requested])];
   faces.push(face);
  }
- return {faces,requestedFamilies:needed.size,matchedFontData:matched,unreadableFonts:unreadable};
+ onProgress({stage:'fonts',page:count,total:count,detail:'loaded'});
+ return {faces,requestedFamilies:needed.size,requestedNames:[...needed.values()],
+  matchedFontData:matched,unreadableFonts:unreadable,timedOutFonts,skippedByBudget};
 }
