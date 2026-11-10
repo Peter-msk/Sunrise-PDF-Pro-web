@@ -191,11 +191,16 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
      (pictures?' (해당 필터의 내장 그림 '+pictures+'개는 객체 단위 픽셀 색상 변환)':'')+'.'];
    }
    if(pcFontStats){
-    const pcNote=pcFontStats.selected>0
-     ?'PC 설치 글꼴 '+pcFontStats.selected+'개를 PDF 글꼴 후보로 준비했습니다. 실제 서체 적용 여부는 출력 PDF에서 확인하세요.'
-     :'PC 글꼴 목록을 확인했지만 이번 문서에 일치하는 서체를 등록하지 못했습니다. 내장 또는 직접 추가한 글꼴로 대체될 수 있습니다.';
-    const readNote=pcFontStats.unreadable>0?' 지원되지 않는 PC 글꼴 '+pcFontStats.unreadable+'개는 건너뛰었습니다.':'';
-    result.warnings=[...(result.warnings||[]),pcNote+readNote];
+    const used=result.fontUsage?.local||0;
+    const bundledUsed=result.fontUsage?.bundled||0;
+    const pcNote=used>0
+     ?'PC 설치 글꼴 '+used+'개를 PDF 출력에서 실제 선택했습니다. 원본 줄바꿈과 서체를 확인하세요.'
+     :pcFontStats.selected>0
+      ?'PC 글꼴 후보 '+pcFontStats.selected+'개를 준비했지만 출력 단계에서 선택한 PC 글꼴은 0개입니다. 원본의 글꼴 이름·굵기·기울임을 확인하세요.'
+      :'이번 문서에서 PC 글꼴 후보를 등록하지 못했습니다. 원본 지정 서체와 PC 설치 서체의 이름을 확인하세요.';
+    const bundledNote=bundledUsed?' 내장 대체 글꼴 '+bundledUsed+'개가 PDF 출력에 사용됐습니다.':'';
+    const readNote=pcFontStats.unreadable>0?' PC 글꼴 '+pcFontStats.unreadable+'개는 읽을 수 없어 건너뛰었습니다.':'';
+    result.warnings=[...(result.warnings||[]),pcNote+bundledNote+readNote];
    }
    return result;
   }
