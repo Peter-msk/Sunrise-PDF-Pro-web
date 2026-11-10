@@ -21,7 +21,9 @@ test('loads only document-matching faces, keeps original aliases, and reports fa
  {family:'unrelated',blob:async()=>{unrelated++;return new Blob(['def']);}}];
  const parser={create:()=>({familyName:'Example Family',fullName:'Example Family',postscriptName:'example',subfamilyName:'Regular',characterSet:[44032]})};
  const names=svgFontFamilies(doc.renderPageSvgWithProfile());assert.deepEqual([...names.values()],['HY신문명조','HY견고딕']);
- const result=await loadDocumentLocalFonts(doc,1,available,parser);
+ const phases=[];
+ const result=await loadDocumentLocalFonts(doc,1,available,parser,undefined,p=>phases.push(p));
+ assert.deepEqual(phases,[{stage:'fonts',page:0,total:1},{stage:'fonts',page:1,total:1}]);
  assert.equal(relevant,1);assert.equal(unrelated,0);assert.equal(result.faces.length,1);
  assert.deepEqual(result.faces[0].cssAliases,['HY신문명조']);assert(result.faces[0].aliases.includes('hy신문명조'));
 });
