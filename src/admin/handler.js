@@ -17,7 +17,7 @@ const cleanText=(value,limit)=>typeof value==='string'&&value.trim().length>0&&v
 const validId=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const eventKinds=new Set(['visit','convert_start','convert_progress','convert_success','convert_failure','convert_cancel','render_error','active_30s']);
 const allowedFeatures=new Set(['hwp','hwpx','xlsx','xls','png','jpg','batch','ui','other']);
-const allowedStages=new Set(['none','load','fonts','parse','render','pdf','download','open','viewer','unknown']);
+const allowedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','pdf','download','open','viewer','unknown']);
 const allowedStatuses=new Set(['new','in_progress','resolved']);
 const allowedPublicationStates=new Set(['draft','published','archived']);
 const allowedKinds=new Set(['announcement','release']);
