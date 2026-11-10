@@ -5,7 +5,7 @@
 const sid=crypto.randomUUID();
 let lastActivity=Date.now();
 const acceptedFeatures=new Set(['hwp','hwpx','xlsx','xls','png','jpg','batch','ui','other']);
-const acceptedStages=new Set(['none','load','fonts','parse','render','pdf','download','open','viewer','unknown']);
+const acceptedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','pdf','download','open','viewer','unknown']);
 /** Classify only the extension. Never return the filename or directory. */
 export function proFeature(file){
  const name=typeof file?.name==='string'?file.name:'';
