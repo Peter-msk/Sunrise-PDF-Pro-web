@@ -4,7 +4,7 @@ import {flattenLocalSvgStyles} from './svg-style.js';
 // Capture permission during the actual button click; keep font bytes in memory only.
 export function requestLocalFontAccess(host=globalThis){
  if(typeof host.queryLocalFonts!=='function')
-  throw Error('이 브라우저는 PC 글꼴 접근을 지원하지 않습니다. Chrome 또는 Edge PC 버전을 사용하거나 옵션을 해제하세요.');
+  throw Error('이 브라우저는 PC 글꼴 접근을 지원하지 않습니다. Chrome 또는 Edge PC 버전을 사용하거나 TTF/OTF 원본 글꼴을 직접 추가하세요.');
  return host.queryLocalFonts();
 }
 
@@ -59,7 +59,8 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
    if(error?.name==='AbortError'||signal?.aborted)throw error;
    unreadable++;continue;
   }
-  const face=loaded.faces[0];
+  const face=loaded?.faces?.[0];
+  if(!face){unreadable++;continue;}
   const identity=familyKey(item.postscriptName||item.fullName||item.family)+'|'+face.bold+'|'+face.italic;
   if(seen.has(identity))continue;
   seen.add(identity);
