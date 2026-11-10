@@ -1,7 +1,7 @@
 // Render the saved PDF bytes, rather than the intermediate rhwp SVG preview.
 // Canvas here is a screen preview only; it never changes the downloadable PDF.
 export function createPdfViewer($){
- let paintRevision=0,revision=0,document=null,loading=null,rendering=null,page=1,total=0,zoom=1;
+ let paintRevision=0,revision=0,document=null,loading=null,rendering=null,priorRendering=null,page=1,total=0,zoom=1;
  const area=$('preview'),canvas=$('pdf-canvas');
  const message=documentElement('span');area.replaceChildren(canvas,message);
  function controls(){
@@ -10,14 +10,18 @@ export function createPdfViewer($){
   $('page-position').textContent=total?page+' / '+total+'쪽':'0 / 0쪽';
  }
  function clear(){
-  ++paintRevision;rendering?.cancel();rendering=null;
+  ++paintRevision;
+  // Old PDF.js task can still be writing to the shared canvas after cancel().
+  if(rendering){rendering.cancel();priorRendering=rendering;}
+  rendering=null;
   const old=loading;loading=null;old?.destroy().catch(()=>{});
   document=null;page=1;total=0;canvas.hidden=true;canvas.width=canvas.height=1;
   area.removeAttribute('aria-busy');controls();
  }
  async function draw(token=revision){
   if(!document)return;
-  const paint=++paintRevision,previous=rendering;
+  const paint=++paintRevision,previous=rendering||priorRendering;
+  priorRendering=null;
   previous?.cancel();
   const target=document,current=page;
   try{
@@ -65,6 +69,6 @@ export function createPdfViewer($){
  $('page-next').addEventListener('click',()=>move(1));
  $('preview-zoom').addEventListener('change',()=>{zoom=Number($('preview-zoom').value)||1;draw();});
  let resizeTimer;const observer=new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>draw(),120);});observer.observe(area);
- return {open,dispose(){++revision;clear();clearTimeout(resizeTimer);observer.disconnect();}};
+ return {open,dispose(){++revision;clear();priorRendering=null;clearTimeout(resizeTimer);observer.disconnect();}};
 }
 function documentElement(tag){return globalThis.document.createElement(tag);}
