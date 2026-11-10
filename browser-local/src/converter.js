@@ -190,7 +190,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    }
    if(pcFontStats){
     const pcNote=pcFontStats.selected>0
-     ?'PC 설치 글꼴 '+pcFontStats.selected+'개를 이 문서의 PDF 글꼴 등록에 사용했습니다. 출력물에서 서체와 줄바꿈을 확인하세요.'
+     ?'PC 설치 글꼴 '+pcFontStats.selected+'개를 PDF 글꼴 후보로 준비했습니다. 실제 서체 적용 여부는 출력 PDF에서 확인하세요.'
      :'PC 글꼴 목록을 확인했지만 이번 문서에 일치하는 서체를 등록하지 못했습니다. 내장 또는 직접 추가한 글꼴로 대체될 수 있습니다.';
     const readNote=pcFontStats.unreadable>0?' 지원되지 않는 PC 글꼴 '+pcFontStats.unreadable+'개는 건너뛰었습니다.':'';
     result.warnings=[...(result.warnings||[]),pcNote+readNote];

@@ -185,13 +185,19 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
           const missing=[...value].find(c=>!/\s/u.test(c)&&
             !fontRegistry.faces.some(font=>font.characterSet?.has(c.codePointAt(0))));
           const glyph=missing?' (미지원 문자 U+'+missing.codePointAt(0).toString(16).toUpperCase()+')':'';
-          return {ok:false,reason:'FONT_FAMILY_OR_VARIANT_UNAVAILABLE'+glyph,
+          const reason=runs?.length>1?'FONT_RUN_SPLIT_UNSUPPORTED':
+            'FONT_FAMILY_OR_VARIANT_UNAVAILABLE'+glyph;
+          return {ok:false,reason,
             fontFamily:String(currentFamily||'기본 글꼴').slice(0,120),
             fontWeight:String(currentWeight||'normal').slice(0,24),
             fontStyle:String(currentStyle||'normal').slice(0,24)};
         }
-        if(face.isFallback){
-          const original=splitFontFamilies(currentFamily)[0]||'기본 글꼴';
+        // A PC font selected from a later declared family also needs normalization
+        // so both the SVG measurement and PDF callback use the same font.
+        const primary=splitFontFamilies(currentFamily)[0]||'기본 글꼴';
+        const alternateFace=!face.aliases?.includes(familyKey(primary));
+        if(face.isFallback||alternateFace){
+          const original=primary;
           if(familyKey(original)!==familyKey(face.family)||
              (currentWeight==='bold')!==face.bold||
              (currentStyle!=='normal')!==face.italic){
@@ -255,7 +261,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
   const pending=toBlob(pdf,signal);
   pending.catch(()=>{});
   let ended=false;
-  let previewSvg=null,previewBlob=null,textCandidatePages=0;
+  let previewBlob=null,textCandidatePages=0;
   let vectorPages=0,rasterPages=0;
   const fallbackPages=[];
   const substituteFamilies=new Set();
@@ -306,7 +312,6 @@ export async function tryProfessionalDocument(hwpDoc,count,{
         });
         if(warnings.length)throw Error('PROFESSIONAL_SVG_WARNING_'+warnings[0].slice(0,200));
         if(preflight.hasText)textCandidatePages++;
-        if(i===0)previewSvg=checked.svg;
         vectorPages++;
       }
       await new Promise(resolve=>setTimeout(resolve,0));
@@ -320,7 +325,9 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     const header=new Uint8Array(await blob.slice(0,5).arrayBuffer());
     if(header[0]!==37||header[1]!==80||header[2]!==68||header[3]!==70||header[4]!==45)
       throw Error('PROFESSIONAL_PDF_INVALID_HEADER');
-    const preview=previewBlob||(await rasterPage(previewSvg,signal)).blob;
+    // PDF.js opens the output PDF itself; a second SVG-to-PNG preview can
+    // fail after pdf.end(), incorrectly turning a valid document into failure.
+    const preview=previewBlob||null;
     const renderMode=rasterPages===0?'professional':vectorPages===0?'raster':'mixed';
     return {pdf:blob,preview,pages:count,bytes:blob.size,renderMode,
       vectorPages,rasterPages,fallbackPages,textCandidatePages,searchablePages:null,substituteFamilies:[...substituteFamilies]};

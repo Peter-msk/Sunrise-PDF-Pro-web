@@ -72,7 +72,7 @@ test('matching Unicode font family and weight are selected exactly',()=>{
  assert.equal(resolveFont(f,'"맑은 고딕"').name,'FakeRegular');
  assert.equal(resolveFont(f,'맑은 고딕','bold').name,'FakeBold');
  assert.equal(resolveFont(f,'맑은 고딕','400','italic'),null);
- assert.equal(resolveFont(f,'휴먼명조, 맑은 고딕'),null); // no silent second-family substitution
+ assert.equal(resolveFont(f,'휴먼명조, 맑은 고딕').name,'FakeRegular'); // explicitly declared PC fallback is supported
  assert.equal(missingCodepoint(f.faces[0],korean),null);
  assert.equal(missingCodepoint({standard:true},korean),'한'.codePointAt(0));
  assert.equal(missingCodepoint(f.faces[0],'漢字'),'漢'.codePointAt(0));
@@ -395,7 +395,7 @@ test('R36 professional renderer keeps eligible pages vector and only rasterizes 
   assert.equal(stats.pages.length,3);
   assert.equal(stats.images.length,1);
   assert.equal(stats.svgCalls,2);
-  assert.equal(stats.rasterCalls,2); // fallback page + first-page preview
+  assert.equal(stats.rasterCalls,1); // only required fallback page; PDF.js opens output
   assert.equal(result.searchablePages,null);
  });
 });

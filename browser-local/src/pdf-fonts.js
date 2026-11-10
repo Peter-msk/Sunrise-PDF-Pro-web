@@ -52,15 +52,19 @@ export function resolveFont(registry,family,weight='normal',style='normal',text=
   const firstConcrete=declared.find(name=>!GENERIC_FAMILIES.has(familyKey(name)));
   const covers=face=>!text||missingCodepoint(face,text)===null;
   const exactStyle=face=>face.bold===variant.bold&&face.italic===variant.italic;
-  // Keep the first concrete document family authoritative; later CSS
-  // alternatives do not override a requested unavailable face silently.
-  if(firstConcrete){
-    const key=familyKey(firstConcrete);
-    const match=faces.find(face=>face.aliases.includes(key)&&exactStyle(face)&&covers(face));
+  // Honor an explicitly supplied CSS family chain before choosing bundled substitutes.
+  // Local PC/user fonts outrank bundled faces for every declared candidate.
+  const specified=declared.map(familyKey).filter(key=>key&&!GENERIC_FAMILIES.has(key));
+  if(familyKey(firstConcrete)==='helvetica'&&!variant.bold&&!variant.italic&&
+    (!text||[...text].every(c=>c.codePointAt(0)<127)))
+    return {name:'Helvetica',characterSet:null,standard:true};
+  for(const key of specified){
+    const match=faces.find(face=>!face.isFallback&&face.aliases.includes(key)&&exactStyle(face)&&covers(face));
     if(match)return match;
-    if(key==='helvetica'&&!variant.bold&&!variant.italic&&
-      (!text||[...text].every(c=>c.codePointAt(0)<127)))
-      return {name:'Helvetica',characterSet:null,standard:true};
+  }
+  for(const key of specified){
+    const match=faces.find(face=>face.isFallback&&face.aliases.includes(key)&&exactStyle(face)&&covers(face));
+    if(match)return match;
   }
   const candidates=faces.filter(face=>face.isFallback&&covers(face));
   if(candidates.length){
@@ -160,7 +164,7 @@ export async function installMeasureFonts(registry,signal,
   if(!faces.length)return ()=>{};
   if(!fontSet?.add||!fontSet?.delete||typeof FontFaceImpl!=='function')
     throw Error('이 브라우저는 사용자 글꼴의 임시 로딩을 지원하지 않습니다.');
-  const installed=[];
+  const installed=[],registeredIds=new Set();
   const cleanup=()=>{for(const font of installed)fontSet.delete(font);};
   try{
     const explicitlyProvided=new Set(faces.filter(face=>!face.isFallback).flatMap(face=>
@@ -170,13 +174,14 @@ export async function installMeasureFonts(registry,signal,
       for(const family of names){
         const id=familyKey(family)+'|'+face.bold+'|'+face.italic;
         if(face.isFallback&&explicitlyProvided.has(id))continue;
+        if(registeredIds.has(id))continue;
         if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
         const cssFace=new FontFaceImpl(family,face.bytes,{
           style:face.italic?'italic':'normal',weight:face.bold?'700':'400'
         });
         const loaded=await cssFace.load();
         if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
-        fontSet.add(loaded);installed.push(loaded);
+        fontSet.add(loaded);installed.push(loaded);registeredIds.add(id);
       }
     }
     return cleanup;
