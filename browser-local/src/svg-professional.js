@@ -185,7 +185,13 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
           const missing=[...value].find(c=>!/\s/u.test(c)&&
             !fontRegistry.faces.some(font=>font.characterSet?.has(c.codePointAt(0))));
           const glyph=missing?' (미지원 문자 U+'+missing.codePointAt(0).toString(16).toUpperCase()+')':'';
+          // With no declared family, Latin uses standard Helvetica; absent
+          // Hangul Unicode glyphs are a missing-glyph error, not a missing
+          // explicitly selected font family. Keep that distinction for Trace v2.
+          const specified=splitFontFamilies(currentFamily).map(familyKey).filter(Boolean);
+          const declaredFacePresent=specified.some(key=>fontRegistry.faces.some(f=>f.aliases?.includes(key)));
           const reason=runs?.length>1?'FONT_RUN_SPLIT_UNSUPPORTED':
+            missing&&(!specified.length||declaredFacePresent)?'FONT_GLYPH_MISSING':
             'FONT_FAMILY_OR_VARIANT_UNAVAILABLE'+glyph;
           return {ok:false,reason,
             fontFamily:String(currentFamily||'기본 글꼴').slice(0,120),
