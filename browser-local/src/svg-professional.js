@@ -280,9 +280,15 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     for(const face of fontRegistry.faces)pdf.registerFont(face.name,face.bytes);
     for(let i=0;i<count;i++){
       cancel();
-      onProgress({stage:'professional',page:i+1,total:count});
-      const checked=await checkedSvg(hwpDoc.renderPageSvgWithProfile(i,'print'));
+      onProgress({stage:'professional',page:i+1,total:count,detail:'svg_build'});
+      // Flush the progress event before synchronous rhwp/WASM rendering.
+      await new Promise(resolve=>setTimeout(resolve,0));cancel();
+      const rawSvg=hwpDoc.renderPageSvgWithProfile(i,'print');
+      onProgress({stage:'professional',page:i+1,total:count,detail:'svg_normalize'});
+      const checked=await checkedSvg(rawSvg,{page:i+1,total:count});
       cancel();
+      onProgress({stage:'professional',page:i+1,total:count,detail:'svg_preflight'});
+      await new Promise(resolve=>setTimeout(resolve,0));cancel();
       const preflight=preflightProfessionalSvg(checked,{fontRegistry});
       const width=checked.width*PX_TO_PT,height=checked.height*PX_TO_PT;
       for(const family of preflight.substituteFamilies||[])substituteFamilies.add(family);
@@ -307,6 +313,8 @@ export async function tryProfessionalDocument(hwpDoc,count,{
       }else{
         pdf.addPage({size:[width,height],margins:{top:0,bottom:0,left:0,right:0}});
         const warnings=[];
+        onProgress({stage:'professional',page:i+1,total:count,detail:'svg_vector'});
+        await new Promise(resolve=>setTimeout(resolve,0));cancel();
         SVGtoPDF(pdf,preflight.svg,0,0,{
           width,height,assumePt:false,
           fontCallback:(family,bold,italic)=>{
@@ -325,16 +333,29 @@ export async function tryProfessionalDocument(hwpDoc,count,{
           warningCallback:message=>warnings.push(String(message))
         });
         if(warnings.length)throw Error('PROFESSIONAL_SVG_WARNING_'+warnings[0].slice(0,200));
+        onProgress({stage:'professional',page:i+1,total:count,detail:'svg_vector_done'});
         if(preflight.hasText)textCandidatePages++;
         vectorPages++;
       }
       await new Promise(resolve=>setTimeout(resolve,0));
     }
     cancel();
+    onProgress({stage:'professional',page:count,total:count,detail:'pdf_finalize'});
+    await new Promise(resolve=>setTimeout(resolve,0));cancel();
     ended=true;
     pdf.end();
-    const blob=await pending;
+    onProgress({stage:'professional',page:count,total:count,detail:'pdf_stream'});
+    // The PDFKit 'end' event may never arrive after a large embedded image.
+    // This bounds asynchronous finalization only, not synchronous SVGtoPDF work.
+    let finalTimer;
+    let blob;
+    try{
+      blob=await Promise.race([pending,new Promise((_,reject)=>{
+        finalTimer=setTimeout(()=>reject(Error('PDF_STREAM_TIMEOUT')),120_000);
+      })]);
+    }finally{clearTimeout(finalTimer);}
     cancel();
+    onProgress({stage:'professional',page:count,total:count,detail:'pdf_done'});
     if(!(blob instanceof Blob)||blob.size<100)throw Error('PROFESSIONAL_PDF_EMPTY');
     const header=new Uint8Array(await blob.slice(0,5).arrayBuffer());
     if(header[0]!==37||header[1]!==80||header[2]!==68||header[3]!==70||header[4]!==45)
