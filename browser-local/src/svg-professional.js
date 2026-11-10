@@ -7,6 +7,7 @@ import {resolveFont,resolveFontRuns,missingCodepoint,splitFontFamilies,familyKey
 import {validateTextGeometry} from './svg-text-geometry.js';
 import {flattenLocalSvgStyles} from './svg-style.js';
 import {loadBrowserPdfBackend} from './pdfkit-backend.js';
+import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 
 const PX_TO_PT=72/96;
 const SUPPORTED=new Set([
@@ -256,7 +257,8 @@ export async function localPngBytes(blob,signal){
  */
 export async function tryProfessionalDocument(hwpDoc,count,{
   checkedSvg,rasterPage,signal,fontRegistry={faces:[]},
-  onProgress=()=>{},loadLibraries,imageBytes=localPngBytes,allowRasterFallback=false
+  onProgress=()=>{},loadLibraries,imageBytes=localPngBytes,allowRasterFallback=false,
+  finalizeTimeoutMs=120_000
 }={}){
   const cancel=()=>{if(signal?.aborted)
     throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');};
@@ -347,13 +349,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     onProgress({stage:'professional',page:count,total:count,detail:'pdf_stream'});
     // The PDFKit 'end' event may never arrive after a large embedded image.
     // This bounds asynchronous finalization only, not synchronous SVGtoPDF work.
-    let finalTimer;
-    let blob;
-    try{
-      blob=await Promise.race([pending,new Promise((_,reject)=>{
-        finalTimer=setTimeout(()=>reject(Error('PDF_STREAM_TIMEOUT')),120_000);
-      })]);
-    }finally{clearTimeout(finalTimer);}
+    const blob=await waitForImageOperation(pending,signal,finalizeTimeoutMs,'PDF_STREAM_TIMEOUT');
     cancel();
     onProgress({stage:'professional',page:count,total:count,detail:'pdf_done'});
     if(!(blob instanceof Blob)||blob.size<100)throw Error('PROFESSIONAL_PDF_EMPTY');
