@@ -151,6 +151,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
     local=await loadDocumentLocalFonts(doc,pages,options.localFonts,fontkit,signal,onProgress);
    }
+   onProgress({stage:'fonts',page:1,total:1,detail:'bundled'});
    const bundled=await loadBundledFonts(fontkit,signal);
    const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
    // Do not register every alias of six bundled fonts as a separate CSS face.
@@ -261,6 +262,7 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
      local=await loadDocumentLocalFonts(probe,pages,localFonts,fontkit,signal,onProgress);
     }finally{probe.free();}
    }
+   onProgress({stage:'fonts',page:1,total:1,detail:'bundled'});
    const bundled=await loadBundledFonts(fontkit,signal);
    const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
    fontRegistry={faces:[...selected.faces,...localOnly,...bundled.faces]};
