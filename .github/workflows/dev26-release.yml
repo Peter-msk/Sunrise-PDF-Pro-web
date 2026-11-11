@@ -18,6 +18,7 @@ jobs:
         with:
           persist-credentials: false
           submodules: false
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
