@@ -1,0 +1,11 @@
+--- a/browser-local/tests/r66-image-operation-budget.mjs
++++ b/browser-local/tests/r66-image-operation-budget.mjs
+@@ -20,7 +20,7 @@
+  try{return await Promise.race([tracked,guard]);}
+  finally{active=false;clearTimeout(timer);signal?.removeEventListener('abort',abort);}
+ }
+-const jpeg=readFileSync(new URL('./fixtures/jpeg-rgb-800x400.jpg',import.meta.url));
++const jpeg=Uint8Array.from(readFileSync(new URL('./fixtures/jpeg-rgb-800x400.jpg',import.meta.url)));
+ const src=readFileSync(new URL('../src/image-pdf.js',import.meta.url),'utf8');
+ const body=src.replace(/^import .+;$/gm,'').replace(/^export /gm,'');
+ function shim({decode,encode,save,bytes=jpeg}={}){
