@@ -1,8 +1,6 @@
 name: DEV26 release build and guarded production deploy
 on:
-  push:
-    branches:
-      - release/dev26-cloud-build-20261112
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
