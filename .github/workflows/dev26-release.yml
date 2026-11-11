@@ -33,6 +33,9 @@ jobs:
           echo '5821e41d655f5d87b11fcf2b4b8b7bfdec8be0f3fd5f33292211dfb7e7592d96  .release/DEV26_R65_INTEGRATED_DIFF.patch' | sha256sum -c -
           git apply --binary --check .release/DEV26_R65_INTEGRATED_DIFF.patch
           git apply --binary .release/DEV26_R65_INTEGRATED_DIFF.patch
+          echo '42b9cf09b541eb0d555e852abbc8db0043cb59145d872b745be62bdd81e37118  .release/DEV26_TEST_JPEG_FIX.patch' | sha256sum -c -
+          git apply --check .release/DEV26_TEST_JPEG_FIX.patch
+          git apply .release/DEV26_TEST_JPEG_FIX.patch
           git diff --check
           test -f browser-local/tests/r66-svg-vector-budget.mjs
           node --version
