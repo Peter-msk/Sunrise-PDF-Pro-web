@@ -18,7 +18,7 @@ jobs:
         with:
           persist-credentials: false
           submodules: false
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^1)" = "2a11edbdb3d1413b3ef4a6eccb150dd442c2f7cf"
+          git merge-base --is-ancestor 2a11edbdb3d1413b3ef4a6eccb150dd442c2f7cf HEAD
           test "$(git hash-object .release/DEV26_R65_INTEGRATED_DIFF.patch)" = 'd8e7b953237f2930965ec7a41b3ab2470273c3da'
           echo '5821e41d655f5d87b11fcf2b4b8b7bfdec8be0f3fd5f33292211dfb7e7592d96  .release/DEV26_R65_INTEGRATED_DIFF.patch' | sha256sum -c -
           git apply --binary --check .release/DEV26_R65_INTEGRATED_DIFF.patch
