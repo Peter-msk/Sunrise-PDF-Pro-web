@@ -23,7 +23,7 @@ echo "f5318ecd4834570c03985770981130fc7cbfbdb4da2f26709724833928c940ce  $RECOVER
 echo "829530e22703943b981cc2066b12b45e30aaa38d2c29a5b79161b1ef41d3ddd5  $HYBRID" | sha256sum -c -
 echo "c8ab608b572a8eb437a4bc01cae0218e76073569470ee24c837099ed8069d9fa  $PCFONT" | sha256sum -c -
 echo "b2544907351a5363d0fc3597d8d3b23966011dd39e6ac403427ea02e55af7eed  $DEADLINE" | sha256sum -c -
-echo "55df3342138f8ffeb2a27d8320e50437c7a69c65646be20381c05ec5540b35f8  $BACKGROUND" | sha256sum -c -
+echo "5157534a5524643f76712b28f130e01c1ab43efae6d10c9ceec9b2fe17921702  $BACKGROUND" | sha256sum -c -
 if git cat-file -e "$BASE^{commit}" 2>/dev/null; then
   git merge-base --is-ancestor "$BASE" HEAD
 else

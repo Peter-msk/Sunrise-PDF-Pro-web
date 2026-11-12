@@ -458,7 +458,7 @@ index 0000000..239943a
 +});
 diff --git a/browser-local/tests/r66-hidden-tab-browser.mjs b/browser-local/tests/r66-hidden-tab-browser.mjs
 new file mode 100644
-index 0000000..228fe06
+index 0000000..f7fce85
 --- /dev/null
 +++ b/browser-local/tests/r66-hidden-tab-browser.mjs
 @@ -0,0 +1,71 @@
@@ -489,7 +489,7 @@ index 0000000..228fe06
 +  await sleep(250);
 + }
 + if(!ready)throw Error('VITE_HIDDEN_TAB_START_TIMEOUT');
-+ browser=await chromium.launch({headless:true,args:['--no-sandbox']});
++ browser=await chromium.launch({headless:process.env.SUNRISE_HEADFUL_TEST!=='1',args:['--no-sandbox']});
 + const context=await browser.newContext({acceptDownloads:true});
 + const page=await context.newPage();
 + const pageErrors=[];page.on('pageerror',error=>pageErrors.push(error.message));

@@ -35,7 +35,7 @@ jobs:
           curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
           curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
       - name: True Chromium hidden tab HWP conversion and cached PC font identity
-        run: node browser-local/tests/r66-hidden-tab-browser.mjs
+        run: SUNRISE_HEADFUL_TEST=1 xvfb-run -a node browser-local/tests/r66-hidden-tab-browser.mjs
       - name: Launch isolated local Worker for HWP/HWPX full conversion
         run: |
           set -euo pipefail
