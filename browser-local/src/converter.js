@@ -242,7 +242,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     const used=result.fontUsage?.local||0;
     const bundledUsed=result.fontUsage?.bundled||0;
     const pcNote=used>0
-     ?'PC 설치 글꼴 '+used+'개를 PDF 출력에서 실제 선택했습니다. 원본 줄바꿈과 서체를 확인하세요.'
+     ?'PC 설치 글꼴 '+used+'개를 PDF 벡터 출력 단계에서 선택했습니다. PDF 내부 글꼴 프로그램의 임베딩은 결과의 PDF 글꼴 확인 기능으로 별도 검사하세요.'
      :pcFontStats.selected>0
       ?'PC 글꼴 후보 '+pcFontStats.selected+'개를 준비했지만 출력 단계에서 선택한 PC 글꼴은 0개입니다. 원본의 글꼴 이름·굵기·기울임을 확인하세요.'
       :'이번 문서에서 PC 글꼴 후보를 등록하지 못했습니다. 원본 지정 서체와 PC 설치 서체의 이름을 확인하세요.';
@@ -258,7 +258,11 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     const measure=releaseMeasureFonts.stats;
     const measureNote=measure?.skipped
      ?' 측정용 글꼴 '+measure.skipped+'건을 제시간에 불러오지 못해 줄바꿈에 차이가 있을 수 있습니다.':'';
-    result.warnings=[...(result.warnings||[]),pcNote+matchNote+bundledNote+missingNote+readNote+fontTimeoutNote+measureNote];
+    // PDFKit resolves the exact named TTC face; FontFace(ArrayBuffer)
+    // cannot select a specific member of a collection for layout measurement.
+    const ttcNote=measure?.ttcMeasurementUnverified
+     ?' TTC 컬렉션 '+measure.ttcMeasurementUnverified+'건은 브라우저 측정에서 정확한 face 지정이 불가능하여 OS 설치 글꼴 해석을 유지했습니다. PDF 임베딩과 줄바꿈을 직접 비교하세요.':'';
+    result.warnings=[...(result.warnings||[]),pcNote+matchNote+bundledNote+missingNote+readNote+fontTimeoutNote+measureNote+ttcNote];
    }
    return result;
   }
