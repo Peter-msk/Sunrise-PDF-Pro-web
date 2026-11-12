@@ -1,5 +1,5 @@
 name: DEV26 SVG complex table and vector PDF QA (NO DEPLOY)
-# final full rerun: explicitly allowlisted legacy worker served through local Cloudflare assets
+# final text-extraction acceptance: PDF.js page content proof in addition to drawing commands
 on:
   push:
     branches:
