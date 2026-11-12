@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 
 const source=readFileSync(new URL('../src/svg-professional.js',import.meta.url),'utf8');
 const ui=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
-const hit=source.match(/pending=toBlob\(pdf,writerAbort\.signal,\(\{bytes\}\)=>\{([\s\S]*?)\n    \}\);/);
+const hit=source.match(/pending=toBlob\(pdf,writerAbort\.signal,\(\{bytes\}\)=>\{([\s\S]*?)\n    \},undefined,streamProbe\);/);
 assert(hit,'R66_DEV9_PDF_BYTE_CALLBACK_MISSING');
 // Evaluate the actual callback body, without loading PDFKit, rhwp or the DOM.
 const callback=(observer,{count=12,page=12,finalizing=false}={})=>
