@@ -101,7 +101,7 @@ test('explicit PC font selected by bilingual HWP name is carried into a real emb
   const document={renderPageSvgWithProfile:()=>
    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><text font-family="나눔고딕">한글</text></svg>'};
   const result=await loadDocumentLocalFonts(document,1,os,fontkit);
-  assert.equal(result.faces.length,1);
+  assert.equal(result.faces.length,1,JSON.stringify({required:result.requestedFamilies,matched:result.matchedFontData,unreadable:result.unreadableFonts,unmatched:result.unmatchedNames,parsedName:postscript}));
   const selected=result.faces[0];
   assert.equal(selected.isLocal,true);
   assert.ok(selected.aliases.includes('나눔고딕'));
