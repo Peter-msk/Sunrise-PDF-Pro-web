@@ -147,9 +147,12 @@ test('real complex 18x10 SVG table and 30-node diagram remain vector, blur page 
  assert.ok(report.pages[1].imagePaints>=1,'the filtered page must contain a real PDF image');
  assert.equal(report.pages[1].textPaintOps,0,'raster page should not pretend to be searchable');
  assert.ok(report.pages[0].vectorPathOps>=100,'complex table retains vector rectangles');
- assert.ok(report.pages[0].textPaintOps>=40,'table cells retain selectable PDF text');
+ assert.ok(report.pages[0].textPaintOps>=40,'table cells retain PDF text-paint commands');
+ assert.ok(report.pages[0].extractableCharacters>=60,'table has actual extractable PDF text');
+ assert.equal(report.pages[1].extractableCharacters,0,'raster page is not falsely searchable');
  assert.ok(report.pages[2].vectorPathOps>=40,'diagram paths remain vector');
- assert.ok(report.pages[2].textPaintOps>=10,'diagram labels remain searchable');
+ assert.ok(report.pages[2].textPaintOps>=10,'diagram labels retain PDF text operators');
+ assert.ok(report.pages[2].extractableCharacters>=30,'diagram labels are PDF-extractable');
  assert.ok(report.pages[3].vectorPathOps>=1,'safe identity SVG filter preserves vectors');
  assert.equal(report.rasterizedPageNumbers.join(','),'2');
 });
@@ -202,4 +205,5 @@ test('vector page with a genuine embedded image is not falsely counted as fully 
  assert.ok(report.pages[0].imagePaints>=1,'normal embedded photo remains a PDF image');
  assert.ok(report.pages[0].vectorPathOps>=1,'other drawing retains vector form');
  assert.ok(report.pages[0].textPaintOps>=1,'text is still PDF text');
+ assert.ok(report.pages[0].extractableCharacters>0,'vector text is extractable even with an embedded photo');
 });
