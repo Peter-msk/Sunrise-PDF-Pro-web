@@ -23,3 +23,6 @@ jobs:
           curl --fail --silent --show-error --location --retry 3 --retry-delay 2 --max-time 20 "$base/local/" -o /tmp/pro-local.html
           grep -q '<html' /tmp/pro-local.html
           echo 'WEB_UI_HTTP_PASS'
+          grep -q 'value="compat-raster"' /tmp/pro-local.html
+          grep -q 'value="professional" selected' /tmp/pro-local.html
+          echo 'LIVE_COMPAT_OPT_IN_UI_PASS'
