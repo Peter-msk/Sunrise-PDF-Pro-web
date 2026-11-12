@@ -1,10 +1,6 @@
 name: DEV26 recurrence recovery production smoke (read-only)
 on:
-  push:
-    branches:
-      - release/dev26-cloud-build-20261112
-    paths:
-      - .github/workflows/dev26-recovery-prod-smoke.yml
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
