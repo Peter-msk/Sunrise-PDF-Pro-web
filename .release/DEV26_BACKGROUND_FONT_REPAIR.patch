@@ -1,0 +1,602 @@
+diff --git a/browser-local/index.html b/browser-local/index.html
+index 7738ad9..778d5ae 100644
+--- a/browser-local/index.html
++++ b/browser-local/index.html
+@@ -58,7 +58,7 @@ button,.download{font-size:14px;min-height:44px}.caption,.counter{font-size:13px
+ <main><div class="heading"><div><div class="eyebrow">DOCUMENT TO PDF</div><h1>문서·이미지 PDF 변환</h1><p>한글·엑셀·이미지를 한 번에 선택하고, 각각의 PDF로 저장하세요.</p></div><div class="guide" aria-label="PDF 변환 사용 방법"><span><b>01</b> 문서 선택</span><span><b>02</b> PDF 변환</span><span><b>03</b> 미리보기·다운로드</span></div></div>
+ <div class="workspace"><section class="panel"><div class="panel-head"><h2>변환할 문서</h2><span class="caption">HWP · Excel · JPG · PNG</span></div><div class="input-body">
+ <label class="upload" id="drop"><input id="source" type="file" accept=".hwp,.hwpx,.xls,.xlsx,.jpg,.jpeg,.png" multiple><span class="upload-icon">↑</span><span><strong>문서를 선택하거나 여기에 놓으세요</strong><small>HWP·HWPX·XLS·XLSX·JPG·PNG 여러 파일을 추가하세요.</small></span><span class="upload-action">파일 선택 +</span></label>
+-<p id="filename" class="muted" hidden>선택된 파일이 없습니다.</p><div class="toolbar"><button id="convert" class="primary" disabled>전체 PDF 변환</button><button id="cancel" class="secondary" disabled>변환 취소</button><button id="reset" class="secondary" disabled>목록 비우기</button><span class="spacer"></span><span class="muted">파일별로 순서대로 처리합니다.</span></div>
++<p id="filename" class="muted" hidden>선택된 파일이 없습니다.</p><p id="background-policy" class="muted">변환 중 다른 탭을 보거나 창을 최소화하면 브라우저가 실행을 제한할 수 있습니다. 이번 버전은 반복 타이머 의존성을 줄였지만 브라우저가 탭을 완전히 정지·폐기하면 작업이 중단될 수 있습니다. 중요한 대용량 변환은 탭을 닫지 마세요.</p><div class="toolbar"><button id="convert" class="primary" disabled>전체 PDF 변환</button><button id="cancel" class="secondary" disabled>변환 취소</button><button id="reset" class="secondary" disabled>목록 비우기</button><span class="spacer"></span><span class="muted">파일별로 순서대로 처리합니다.</span></div>
+ <div class="queue"><div class="queue-head"><b>문서 목록</b><span class="counter" id="queue-count">0개 파일</span></div><ul class="files" id="file-list"><li class="empty">선택한 문서가 여기에 표시됩니다.</li></ul></div>
+ <details class="options advanced"><summary>출력 및 글꼴 옵션</summary><div class="option-grid"><div><label for="pdf-engine">한글 문서 출력 방식</label><select id="pdf-engine" aria-describedby="pdf-engine-help"><option value="professional" selected>기본 · 글자·도형 보존 (고품질)</option><option value="hybrid-filter">혼합 · 미지원 필터가 있는 쪽만 이미지 (부분 검색 가능)</option><option value="compat-raster">호환 · 페이지 이미지 PDF (글자 검색 불가)</option></select><p class="muted" id="pdf-engine-help">기본 방식을 권장합니다. 미지원 SVG 필터 오류에는 혼합 방식을 직접 선택하면 해당 쪽만 이미지로, 나머지는 벡터로 출력합니다. PDF 스트림 정체 오류에는 호환 이미지 PDF를 사용하세요. 이미지로 바뀐 쪽은 글자 검색이 불가능하며 모든 페이지를 원본과 대조해야 합니다.</p></div><div><p class="muted" id="installed-font-policy">PC 설치 글꼴 자동 사용(기본 적용). 최초 변환 시 Chrome·Edge가 글꼴 접근 권한을 요청할 수 있으며, 허용 시 문서에 맞는 PC 서체를 우선 사용합니다. 미지원·권한 거부·원본 서체 미설치 시 내장 글꼴로 대체됩니다. 글꼴은 사용자 PC에서만 처리합니다.</p><label for="pdf-font">한글 원본 글꼴 추가 (선택)</label><input id="pdf-font" type="file" accept=".ttf,.otf" multiple aria-describedby="font-info"><p id="font-info" class="muted">원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.</p><div class="font-diagnostics"><button type="button" id="font-check" class="secondary">PC 글꼴 연결 확인</button><p id="pc-font-status" role="status" aria-live="polite" class="muted">PC 글꼴 접근 상태 확인 전</p></div></div></div><div class="print-actions"><button class="secondary" id="print-prepare" disabled>선택 문서 인쇄 준비</button><button class="secondary" id="print-save" disabled>PDF로 인쇄/저장</button></div><p class="muted">인쇄 보조 기능은 선택한 HWP/HWPX 한 개에 적용됩니다. 혼합 용지는 현재 인쇄 준비가 제한됩니다.</p></details>
+ </div></section><aside class="panel side"><div class="summary"><h2>변환 현황</h2><span class="pill" id="summary-state">대기 중</span></div><div class="metrics"><div class="metric"><span>전체</span><strong id="total-count">0</strong></div><div class="metric"><span>완료</span><strong id="done-count">0</strong></div><div class="metric"><span>확인 필요</span><strong id="failed-count">0</strong></div></div><div class="track"><progress id="progress" max="100" value="0" aria-label="전체 변환 진행률"></progress></div><p id="status" role="status" aria-live="polite">PDF 변환 기능 준비 중</p><a id="download-all" class="download primary archive" download="Sunrise_PDF_변환결과.zip" hidden>완료 파일 ZIP 다운로드</a><a id="download" download hidden></a><div class="preview-title"><span>생성된 PDF 검토</span><span id="pages" class="caption"></span></div><div class="viewer-file" id="viewer-file">문서를 선택하세요</div><div class="viewer-tools"><button id="page-prev" class="secondary" disabled aria-label="이전 페이지">이전</button><span id="page-position">0 / 0쪽</span><button id="page-next" class="secondary" disabled aria-label="다음 페이지">다음</button><label>확대 <select id="preview-zoom" aria-label="PDF 확대 비율"><option value="1">맞춤</option><option value="1.5">150%</option><option value="2">200%</option></select></label><a id="active-download" class="download" hidden>PDF 저장</a></div><div id="preview" class="preview" role="region" aria-label="실제 PDF 페이지"><canvas id="pdf-canvas" hidden></canvas><span class="muted">변환을 완료한 문서를 선택하면<br>실제 PDF의 모든 페이지를 검토할 수 있습니다.</span></div><div id="quality-detail" class="quality-detail" role="status"></div><div class="notice"><b>출력 안내</b><br>한글은 글자·도형을, 엑셀은 셀 내용과 표를 보존합니다. 이미지는 비율을 유지합니다. 엑셀 차트·그림·원본 서식은 재현하지 않으며 수식은 저장된 계산값을 사용합니다. 원본 글꼴이 없으면 제공되는 대체 글꼴이 사용될 수 있으며, 표·도면과 줄바꿈은 저장한 PDF에서 확인해 주세요.</div></aside></div><div class="foot">Sunrise PDF PRO · 문서는 내 브라우저에서 처리됩니다. <a href="https://github.com/edwardkim/rhwp" rel="noopener noreferrer">오픈소스 안내</a> · 지원 기능: HWP/HWPX·XLS/XLSX·JPG/PNG 변환, 문서별 다운로드, 일괄 ZIP, 취소 및 다시 시작</div></main><span hidden>출력 안내 · 지원 기능</span><script type="module" src="./src/main.js"></script><nav aria-label="서비스 운영 안내"><a href="/news/">공지사항·업데이트</a> · <a href="/contact/">고객 문의</a></nav>
+diff --git a/browser-local/package.json b/browser-local/package.json
+index a9792bf..fc037fd 100644
+--- a/browser-local/package.json
++++ b/browser-local/package.json
+@@ -8,7 +8,7 @@
+     "build": "node scripts/copy-wasm.mjs && vite build",
+     "dev": "node scripts/copy-wasm.mjs && vite --host 127.0.0.1",
+     "preview": "vite preview --host 127.0.0.1 --port 4173",
+-    "test": "node --test tests/svg-gif.mjs tests/local-fonts.mjs tests/svg-embedded.mjs tests/multi-format.mjs tests/multi-format-pdf.mjs tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs tests/conversion-clock.mjs tests/r62-hwp-progress.mjs tests/r64-font-watchdog.mjs tests/r65-last-page-stall.mjs tests/r66-page-deadline.mjs tests/r66-file-reader-watchdog.mjs tests/r66-pdf-stream-progress.mjs tests/r66-sync-render-guard.mjs tests/r66-pdf-writer-disposal.mjs tests/r66-engine-contract.mjs tests/r66-pdf-early-stream.mjs tests/r66-font-run-fidelity.mjs tests/r66-font-layout-guard.mjs tests/r66-jpeg-predecode.mjs tests/r66-image-operation-budget.mjs tests/r66-xlsx-package-guard.mjs tests/r66-spreadsheet-wrap.mjs tests/r66-xlsx-structure-extra.mjs tests/r66-spreadsheet-layout.mjs tests/r66-pdf-output-integrity.mjs tests/r66-pdf-xref-target.mjs tests/r66-raster-watchdog.mjs tests/r66-hwp-svg-preprocess.mjs tests/r66-hwp-svg-cooperative.mjs tests/r66-svg-vector-budget.mjs tests/r66-real-failure-compat.mjs tests/r66-real-failure-retry.mjs tests/r66-hybrid-svg-filter.mjs tests/r66-hybrid-vector-integration.mjs tests/r66-local-font-fidelity.mjs",
++    "test": "node --test tests/svg-gif.mjs tests/local-fonts.mjs tests/svg-embedded.mjs tests/multi-format.mjs tests/multi-format-pdf.mjs tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs tests/conversion-clock.mjs tests/r62-hwp-progress.mjs tests/r64-font-watchdog.mjs tests/r65-last-page-stall.mjs tests/r66-page-deadline.mjs tests/r66-file-reader-watchdog.mjs tests/r66-pdf-stream-progress.mjs tests/r66-sync-render-guard.mjs tests/r66-pdf-writer-disposal.mjs tests/r66-engine-contract.mjs tests/r66-pdf-early-stream.mjs tests/r66-font-run-fidelity.mjs tests/r66-font-layout-guard.mjs tests/r66-jpeg-predecode.mjs tests/r66-image-operation-budget.mjs tests/r66-xlsx-package-guard.mjs tests/r66-spreadsheet-wrap.mjs tests/r66-xlsx-structure-extra.mjs tests/r66-spreadsheet-layout.mjs tests/r66-pdf-output-integrity.mjs tests/r66-pdf-xref-target.mjs tests/r66-raster-watchdog.mjs tests/r66-hwp-svg-preprocess.mjs tests/r66-hwp-svg-cooperative.mjs tests/r66-svg-vector-budget.mjs tests/r66-real-failure-compat.mjs tests/r66-real-failure-retry.mjs tests/r66-hybrid-svg-filter.mjs tests/r66-hybrid-vector-integration.mjs tests/r66-local-font-fidelity.mjs tests/r66-background-font.mjs",
+     "check:engine": "node scripts/verify-engine-contract.mjs",
+     "check:source": "node scripts/check-source.mjs",
+     "test:local": "npm run check:source && npm test",
+diff --git a/browser-local/src/batch.js b/browser-local/src/batch.js
+index cb20936..fa8f968 100644
+--- a/browser-local/src/batch.js
++++ b/browser-local/src/batch.js
+@@ -1,3 +1,4 @@
++import {cooperativeYield} from './cooperative-yield.mjs';
+ import {Zip,ZipPassThrough} from 'fflate';
+ 
+ export function uniquePdfNames(files){
+@@ -37,7 +38,7 @@ export async function runBatch(items,convert,signal,onChange=()=>{}){
+   notify(item);
+   // Allow the UI thread to release completed document resources before
+   // starting the next large HWP; it is not a timeout or an artificial delay.
+-  await new Promise(resolve=>setTimeout(resolve,0));
++  await cooperativeYield({signal});
+  }
+  return items;
+ }
+@@ -63,7 +64,7 @@ export async function makePdfArchive(items,signal,onProgress=()=>{}){
+    file.push(new Uint8Array(await ready[index].result.pdf.arrayBuffer()),true);
+    if(zipError)throw zipError;
+    onProgress(index+1,ready.length);
+-   await new Promise(resolve=>setTimeout(resolve,0));
++   await cooperativeYield({signal});
+   }
+   if(signal?.aborted)throw new DOMException('ZIP 생성이 취소되었습니다.','AbortError');
+   zip.end();if(zipError)throw zipError;
+diff --git a/browser-local/src/converter.js b/browser-local/src/converter.js
+index 68db547..2f87c9b 100644
+--- a/browser-local/src/converter.js
++++ b/browser-local/src/converter.js
+@@ -1,3 +1,4 @@
++import {cooperativeYield} from './cooperative-yield.mjs';
+ import init, { HwpDocument } from '@rhwp/core';
+ import { tryProfessionalDocument } from './svg-professional.js';
+ import { loadPdfFonts, installMeasureFonts, familyKey } from './pdf-fonts.js';
+@@ -318,7 +319,7 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
+    throwIfCancelled(signal);
+    pages.push(checkedSvg(await normalizeGifSvg(doc.renderPageSvgWithProfile(i,'print'),signal)));
+    onProgress({stage:'print',page:i+1,total:count});
+-   await new Promise(resolve=>setTimeout(resolve,0));
++   await cooperativeYield({signal});
+   }
+   throwIfCancelled(signal);
+   return {pages,fontRegistry};
+diff --git a/browser-local/src/cooperative-yield.mjs b/browser-local/src/cooperative-yield.mjs
+new file mode 100644
+index 0000000..3f9ed5b
+--- /dev/null
++++ b/browser-local/src/cooperative-yield.mjs
+@@ -0,0 +1,32 @@
++/**
++ * Yield conversion work without relying on a chain of zero-delay timers.
++ * Chrome clamps repeated setTimeout callbacks in hidden/minimized tabs.
++ * scheduler.yield() is preferred; MessageChannel is a non-timer fallback.
++ * A fully frozen/discarded page cannot execute JS; this is not a promise of
++ * background execution when the browser suspends the entire document.
++ */
++export async function cooperativeYield({host=globalThis,signal}={}) {
++ if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
++ if(typeof host.scheduler?.yield==='function'){
++  await host.scheduler.yield();
++ }else if(typeof host.MessageChannel==='function'){
++  await new Promise((resolve,reject)=>{
++   const channel=new host.MessageChannel();let finished=false;
++   const finish=(error)=>{
++    if(finished)return;finished=true;
++    signal?.removeEventListener('abort',onAbort);
++    channel.port1.onmessage=null;
++    channel.port1.close();channel.port2.close();
++    if(error)reject(error);else resolve();
++   };
++   const onAbort=()=>finish(new DOMException('PDF 변환이 취소되었습니다.','AbortError'));
++   channel.port1.onmessage=()=>finish(null);
++   signal?.addEventListener('abort',onAbort,{once:true});
++   if(signal?.aborted){onAbort();return;}
++   try{channel.port2.postMessage(0);}catch(error){finish(error);}
++  });
++ }else{
++  await new Promise(resolve=>host.setTimeout(resolve,0));
++ }
++ if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
++}
+diff --git a/browser-local/src/local-fonts.js b/browser-local/src/local-fonts.js
+index e32a705..3eddbbe 100644
+--- a/browser-local/src/local-fonts.js
++++ b/browser-local/src/local-fonts.js
+@@ -1,3 +1,4 @@
++import {cooperativeYield} from './cooperative-yield.mjs';
+ import {familyKey,splitFontFamilies,loadPdfFonts} from './pdf-fonts.js';
+ import {flattenLocalSvgStyles} from './svg-style.js';
+ import {boundedFontStep} from './font-timeout.mjs';
+@@ -71,7 +72,7 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
+    neededPages.set(key,(neededPages.get(key)||0)+1);
+   }
+   onProgress({stage:'fonts',page:i+1,total:count,detail:'scan'});
+-  await new Promise(resolve=>setTimeout(resolve,0));
++  await cooperativeYield({signal});
+  }
+  // The OS normally enumerates its fonts in an arbitrary order. For a large
+  // document, the previous 22-second budget could expire BEFORE the most-used
+@@ -112,7 +113,8 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
+    // The blob is an SFNT container, not necessarily a .ttf outline. Fontkit
+    // inspects the bytes, not the extension, and rejects unsupported formats.
+    const file=new File([blob],'local-font.ttf',{type:'font/ttf'});
+-   loaded=await boundedFontStep(()=>loadPdfFonts([file],parser,signal),{signal,
++   loaded=await boundedFontStep(()=>loadPdfFonts([file],parser,signal,
++    {postscriptName:item.postscriptName||null}),{signal,
+     timeoutMs:Math.min(4000,Math.max(1,maxReadMs-(Date.now()-started))),
+     code:'PC_FONT_PARSE_TIMEOUT'});
+   }catch(error){
+diff --git a/browser-local/src/main.js b/browser-local/src/main.js
+index 1ab57f6..be4f2ca 100644
+--- a/browser-local/src/main.js
++++ b/browser-local/src/main.js
+@@ -11,6 +11,9 @@ import {canRecoverFile,planConversion} from './conversion-recovery.mjs';
+ import {requestLocalFontAccess} from './local-fonts.js';
+ import {settleInstalledFonts,localFontCapability} from './local-font-policy.mjs';
+ const USE_PC_FONTS_BY_DEFAULT=true;
++// Permission-granted FontData stays in this tab's memory only. A 'font-check'
++// success must not be thrown away and queried again after the tab is hidden.
++let verifiedPcFontData=null;
+ const $=id=>document.getElementById(id);
+ const conversionClock=createConversionClock();
+ const viewer=createPdfViewer($);
+@@ -25,6 +28,18 @@ const fontCapability=localFontCapability();
+ fontStatus(!fontCapability.secure?'PC 글꼴 접근은 HTTPS 연결에서만 지원됩니다.':
+  !fontCapability.supported?'이 브라우저는 PC 글꼴 파일 접근을 지원하지 않습니다. Chrome/Edge 데스크톱에서 확인하거나 글꼴 파일을 직접 추가하세요.':
+  'PC 글꼴 조회 가능 여부: 아직 확인하지 않음 · 글꼴 연결 확인을 누르면 사이트 권한을 요청할 수 있습니다.');
++// Browser background timer policies can stall a conversion. Never claim that
++// a frozen/discarded page is running; refresh the visible progress on return.
++let backgroundSince=null;
++document.addEventListener('visibilitychange',()=>{
++ if(!busy)return;
++ if(document.hidden){backgroundSince=performance.now();return;}
++ if(backgroundSince!==null){
++  conversionClock.render();
++  status('변환 탭 복귀 · 실제 작업 상태를 확인 중입니다. 브라우저가 페이지를 정지했다면 진행이 지연될 수 있습니다.');
++  backgroundSince=null;
++ }
++});
+ $('font-check')?.addEventListener('click',async()=>{
+  if(busy)return;
+  const button=$('font-check');button.disabled=true;
+@@ -33,6 +48,7 @@ $('font-check')?.addEventListener('click',async()=>{
+   request=requestLocalFontAccess();
+   fontStatus('PC 글꼴 권한을 확인하는 중입니다. 브라우저 요청이 나타나면 허용 여부를 선택하세요.');
+   const result=await settleInstalledFonts(request,{timeoutMs:30000});
++  if(result.status==='ready')verifiedPcFontData=result.fonts;
+   fontStatus(result.status==='ready'
+    ?'PC 설치 글꼴 '+result.fonts.length+'개에 접근 가능합니다. 문서 지정 서체와 일치·글꼴 파일 읽기·PDF 실제 임베딩은 변환 결과에서 별도로 확인하세요.'
+    :result.notice||'PC 글꼴에 접근할 수 없습니다. TTF/OTF를 직접 추가할 수 있습니다.');
+@@ -129,10 +145,11 @@ $('convert').addEventListener('click',async()=>{
+  const fontFiles=Array.from($('pdf-font').files||[]);
+  if(plan.recovery)status('선택한 문서 1개만 호환 이미지 PDF로 다시 변환합니다. 글자 검색은 불가능합니다.');
+  if(engine==='compat-raster')fontStatus('호환 이미지 PDF는 페이지를 그림으로 출력하므로 PC 글꼴의 PDF 임베딩 절차를 사용하지 않습니다.');
+- let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&engine!=='compat-raster'&&pending.some(i=>isHwp(i.file)))fontsRequest=requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
++ let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&engine!=='compat-raster'&&pending.some(i=>isHwp(i.file)))fontsRequest=verifiedPcFontData?.length?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
+  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();let completed=0;
+  try{
+-  let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');fontStatus(access.status==='ready'?'PC 글꼴 '+localFonts.length+'개에 접근 확인 · 실제 PDF 사용 여부는 변환 결과를 확인하세요.':fontAccessNotice);}
++  let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');if(access.status==='ready')verifiedPcFontData=localFonts;
++   fontStatus(access.status==='ready'?'PC 글꼴 '+localFonts.length+'개에 접근 확인 · 실제 PDF 사용 여부는 변환 결과를 확인하세요.':fontAccessNotice);}
+   await runBatch(pending,async(file,item)=>{
+    item._proDiagStage='load';
+    item.lastEngine=engine;
+@@ -231,9 +248,9 @@ $('convert').addEventListener('click',async()=>{
+ });
+ $('print-prepare').addEventListener('click',async()=>{
+  if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;
+- let fontsRequest=null,printFontNotice='';try{if(USE_PC_FONTS_BY_DEFAULT)fontsRequest=requestLocalFontAccess();}catch(error){printFontNotice='PC 글꼴 API를 사용할 수 없어 내장 글꼴로 인쇄합니다.';}
++ let fontsRequest=null,printFontNotice='';try{if(USE_PC_FONTS_BY_DEFAULT)fontsRequest=verifiedPcFontData?.length?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){printFontNotice='PC 글꼴 API를 사용할 수 없어 내장 글꼴로 인쇄합니다.';}
+  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();
+- try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.'+(printFontNotice?' · '+printFontNotice:''));}
++ try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;if(access.status==='ready')verifiedPcFontData=localFonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.'+(printFontNotice?' · '+printFontNotice:''));}
+  catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+String(error?.message||error));}
+  finally{busy=false;controller=null;draw();}
+ });
+diff --git a/browser-local/src/pdf-fonts.js b/browser-local/src/pdf-fonts.js
+index b909c77..c6a28cf 100644
+--- a/browser-local/src/pdf-fonts.js
++++ b/browser-local/src/pdf-fonts.js
+@@ -125,7 +125,7 @@ export function missingCodepoint(face,text){
+  * @param {AbortSignal} [signal]
+  * @returns {Promise<{faces:Array<object>}>} metadata and bytes for PDFKit
+  */
+-export async function loadPdfFonts(fontFiles,parser,signal){
++export async function loadPdfFonts(fontFiles,parser,signal,{postscriptName=null}={}){
+   const files=Array.from(fontFiles||[]);
+   const faces=[];
+   for(const file of files){
+@@ -135,8 +135,14 @@ export async function loadPdfFonts(fontFiles,parser,signal){
+     const bytes=new Uint8Array(await file.arrayBuffer());
+     if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
+     let parsed;
+-    try{parsed=parser.create(bytes);}
++    try{parsed=parser.create(bytes,postscriptName||null);}
+     catch(e){throw Error('글꼴 파일을 분석할 수 없습니다: '+file.name+' ('+String(e?.message||e)+')');}
++    // A TrueType Collection contains several faces in one SFNT file. The
++    // OS FontData postscriptName identifies the exact requested face; never
++    // silently pick the first face of a collection as a substitute.
++    const collection=bytes.length>=4 && bytes[0]===116 && bytes[1]===116 && bytes[2]===99 && bytes[3]===102;
++    if(collection && (!postscriptName || familyKey(parsed?.postscriptName)!==familyKey(postscriptName)))
++      throw Error('PC_FONT_COLLECTION_FACE_UNAVAILABLE');
+     if(!Array.isArray(parsed?.characterSet) || !parsed.familyName)
+       throw Error('글꼴의 유니코드 문자표 또는 패밀리 정보를 찾을 수 없습니다: '+file.name);
+     const subfamily=String(parsed.subfamilyName||'');
+@@ -147,7 +153,8 @@ export async function loadPdfFonts(fontFiles,parser,signal){
+     if(faces.some(f=>f.bold===bold&&f.italic===italic&&aliases.some(a=>f.aliases.includes(a))))
+       throw Error('같은 글꼴 패밀리와 스타일을 중복 선택했습니다: '+file.name);
+     faces.push({name:'SunriseFont'+(faces.length+1),family:parsed.familyName,
+-      aliases,bold,italic,characterSet:new Set(parsed.characterSet),bytes});
++      aliases,bold,italic,characterSet:new Set(parsed.characterSet),bytes,
++      ...(collection?{collectionFontName:parsed.postscriptName}: {})});
+   }
+   return {faces};
+ }
+diff --git a/browser-local/src/spreadsheet-pdf.js b/browser-local/src/spreadsheet-pdf.js
+index fd6e451..5ba7473 100644
+--- a/browser-local/src/spreadsheet-pdf.js
++++ b/browser-local/src/spreadsheet-pdf.js
+@@ -1,3 +1,4 @@
++import {cooperativeYield} from './cooperative-yield.mjs';
+ import {PDFDocument,rgb} from 'pdf-lib';
+ import {verifyOtherHeader,cancelled} from './input-types.js';
+ import {readDocumentBuffer} from './file-reader.js';
+@@ -111,7 +112,7 @@ export async function drawSheetPages(pdf,plan,font,signal,onProgress=()=>{},fami
+     }
+    }
+    if(i===0&&makePreviewSvg){const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${p.paper[0]}pt" height="${p.paper[1]}pt" viewBox="0 0 ${p.paper[0]} ${p.paper[1]}" font-family="${escape(family)}"><rect width="100%" height="100%" fill="white"/><text x="32" y="44" font-size="11">${escape(title)}</text>${shapes.join('')}</svg>`;firstSvg=svg;}
+-   onProgress({stage:'pdf',page:i+1,total:plan.length});await new Promise(resolve=>setTimeout(resolve,0));
++   onProgress({stage:'pdf',page:i+1,total:plan.length});await cooperativeYield({signal});
+   }
+  return firstSvg;
+ }
+@@ -139,7 +140,7 @@ export async function convertSpreadsheet(file,onProgress,signal,kind){
+    cancelled(signal);if(book.Workbook?.Sheets?.[index]?.Hidden){hidden++;continue;}
+    const name=book.SheetNames[index];plan.push(...planSheet(book.Sheets[name],name,XLSX,font));
+    if(plan.length>MAX_PAGES)throw Error('엑셀 출력이 120쪽을 초과합니다. 시트를 나누어 변환해 주세요.');
+-   await new Promise(resolve=>setTimeout(resolve,0));
++   await cooperativeYield({signal});
+   }
+   if(!plan.length)throw Error('출력할 셀 내용이 없습니다. 숨김 시트와 빈 시트는 제외합니다.');
+   await drawSheetPages(pdf,plan,font,signal,onProgress,face.family,{makePreviewSvg:false});
+diff --git a/browser-local/src/svg-gif.js b/browser-local/src/svg-gif.js
+index 2bb73b4..de4253e 100644
+--- a/browser-local/src/svg-gif.js
++++ b/browser-local/src/svg-gif.js
+@@ -1,3 +1,4 @@
++import {cooperativeYield} from './cooperative-yield.mjs';
+ // GIFs generated by the document renderer may be embedded, but PDFKit needs
+ // PNG/JPEG. Convert only a validated single-frame GIF; never fetch URLs.
+ import {waitForImageOperation} from './svg-safe-grayscale.mjs';
+@@ -40,7 +41,7 @@ export async function encodeGifPixels(pixels,width,height,signal){
+   // A single 9MP image otherwise blocks the UI through this entire scan.
+   if((i&0xfffff)===0){
+    if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
+-   await new Promise(resolve=>setTimeout(resolve,0));
++   await cooperativeYield({signal});
+   }
+   const alpha=pixels[i+3];if(alpha===0){transparent=true;continue;}
+   if(alpha!==255)throw Error('GIF 그림 투명도를 보존할 수 없습니다.');
+@@ -51,7 +52,7 @@ export async function encodeGifPixels(pixels,width,height,signal){
+  const stride=width*3+1,rows=new Uint8Array(stride*height);
+  const rowsPerYield=Math.max(1,Math.floor(262144/width));
+  for(let y=0;y<height;y++){
+-  if(y%rowsPerYield===0)await new Promise(resolve=>setTimeout(resolve,0));
++  if(y%rowsPerYield===0)await cooperativeYield({signal});
+   if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
+   let dest=y*stride+1;
+   for(let x=0;x<width;x++){
+diff --git a/browser-local/src/svg-professional.js b/browser-local/src/svg-professional.js
+index 52f5475..361c832 100644
+--- a/browser-local/src/svg-professional.js
++++ b/browser-local/src/svg-professional.js
+@@ -1,3 +1,4 @@
++import {cooperativeYield} from './cooperative-yield.mjs';
+ /**
+  * Sunrise PDF PRO - R37 DEV5, opt-in high-fidelity vector candidate.
+  * SVG-to-PDFKit and PDFKit are MIT dependencies, loaded only when selected.
+@@ -350,13 +351,13 @@ export async function tryProfessionalDocument(hwpDoc,count,{
+   const substituteFamilies=new Set();
+   const usedLocal=new Set(),usedBundled=new Set(),usedManual=new Set();
+   try{
+-    for(const face of fontRegistry.faces)pdf.registerFont(face.name,face.bytes);
++    for(const face of fontRegistry.faces)pdf.registerFont(face.name,face.bytes,face.collectionFontName||undefined);
+     for(let i=0;i<count;i++){
+       currentPdfPage=i+1;
+       cancel();
+       onProgress({stage:'professional',page:i+1,total:count,detail:'svg_build'});
+       // Flush the progress event before synchronous rhwp/WASM rendering.
+-      await new Promise(resolve=>setTimeout(resolve,0));cancel();
++      await cooperativeYield({signal});cancel();
+       const svgBuildStarted=Date.now();
+       const rawSvg=hwpDoc.renderPageSvgWithProfile(i,'print');
+       // A synchronous WASM call cannot be interrupted by a JS timer.
+@@ -367,7 +368,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
+       const checked=await checkedSvg(rawSvg,{page:i+1,total:count});
+       cancel();
+       onProgress({stage:'professional',page:i+1,total:count,detail:'svg_preflight'});
+-      await new Promise(resolve=>setTimeout(resolve,0));cancel();
++      await cooperativeYield({signal});cancel();
+       const forceFilterRaster=allowRasterFallback&&
+         checked.forceRasterReason==='SVG_FILTER_EFFECT_UNSUPPORTED';
+       const preflight=forceFilterRaster
+@@ -397,7 +398,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
+         pdf.addPage({size:[width,height],margins:{top:0,bottom:0,left:0,right:0}});
+         const warnings=[];
+         onProgress({stage:'professional',page:i+1,total:count,detail:'svg_vector'});
+-        await new Promise(resolve=>setTimeout(resolve,0));cancel();
++        await cooperativeYield({signal});cancel();
+         assertSvgSourceWithinBudget(preflight.svg);
+         const vectorStarted=Date.now();
+         SVGtoPDF(pdf,preflight.svg,0,0,{
+@@ -423,11 +424,11 @@ export async function tryProfessionalDocument(hwpDoc,count,{
+         if(preflight.hasText)textCandidatePages++;
+         vectorPages++;
+       }
+-      await new Promise(resolve=>setTimeout(resolve,0));
++      await cooperativeYield({signal});
+     }
+     cancel();
+     onProgress({stage:'professional',page:count,total:count,detail:'pdf_finalize'});
+-    await new Promise(resolve=>setTimeout(resolve,0));cancel();
++    await cooperativeYield({signal});cancel();
+     ended=true;
+     reportingFinalStream=true;
+     const pdfEndStarted=Date.now();
+diff --git a/browser-local/src/svg-safe-grayscale.mjs b/browser-local/src/svg-safe-grayscale.mjs
+index b6989b4..da643e0 100644
+--- a/browser-local/src/svg-safe-grayscale.mjs
++++ b/browser-local/src/svg-safe-grayscale.mjs
+@@ -1,3 +1,4 @@
++import {cooperativeYield} from './cooperative-yield.mjs';
+ /**
+  * Sunrise PDF PRO — R48 DEV2, local-only SVG filter normalization.
+  *
+@@ -210,7 +211,7 @@ export async function waitForImageOperation(promise,signal,timeoutMs,code,onLate
+  finally{active=false;clearTimeout(timer);signal?.removeEventListener('abort',abort);}
+ }
+ 
+-const defaultYield=()=>new Promise(resolve=>setTimeout(resolve,0));
++const defaultYield=()=>cooperativeYield();
+ /** Chunked pixel transform. Alpha is never modified. Yield between chunks so
+  * cancellation and the browser UI are not blocked by a multi-million pixel loop. */
+ export function accumulateGrayImageBytes(total,added,max=PAGE_IMAGE_COMPRESSED_BYTE_CAP){
+diff --git a/browser-local/tests/r66-background-font.mjs b/browser-local/tests/r66-background-font.mjs
+new file mode 100644
+index 0000000..239943a
+--- /dev/null
++++ b/browser-local/tests/r66-background-font.mjs
+@@ -0,0 +1,80 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {readFileSync} from 'node:fs';
++import {File} from 'node:buffer';
++import {cooperativeYield} from '../src/cooperative-yield.mjs';
++import {loadPdfFonts} from '../src/pdf-fonts.js';
++import {loadDocumentLocalFonts} from '../src/local-fonts.js';
++
++globalThis.File ||= File;
++
++test('scheduler.yield wins over clamped zero-delay timers in background',async()=>{
++ let calls=0;
++ const host={scheduler:{async yield(){calls++;}},setTimeout(){throw Error('timer must not run');}};
++ for(let n=0;n<80;n++)await cooperativeYield({host});
++ assert.equal(calls,80);
++});
++
++test('MessageChannel fallback completes, even when setTimeout is prohibited',async()=>{
++ const host={MessageChannel, setTimeout(){throw Error('timer must not run');}};
++ for(let n=0;n<30;n++)await cooperativeYield({host});
++});
++
++test('cancelled conversion stops a queued MessageChannel yield',async()=>{
++ const controller=new AbortController();controller.abort();
++ await assert.rejects(cooperativeYield({host:{MessageChannel},signal:controller.signal}),{name:'AbortError'});
++});
++
++test('exact named TTC face is passed to fontkit and PDFKit and not guessed',async()=>{
++ const data=Uint8Array.of(116,116,99,102,0,1,2,3);
++ const file=new File([data],'local-font.ttf');
++ const seen=[];
++ const parser={create(bytes,postscriptName){
++  seen.push(postscriptName);
++  return postscriptName==='KnownPS'?{
++   familyName:'확인된 글꼴',fullName:'확인된 글꼴',postscriptName:'KnownPS',
++   subfamilyName:'Regular',characterSet:[44032,65]
++  }:{fonts:[]};
++ }};
++ const result=await loadPdfFonts([file],parser,undefined,{postscriptName:'KnownPS'});
++ assert.deepEqual(seen,['KnownPS']);
++ assert.equal(result.faces[0].collectionFontName,'KnownPS');
++ assert.deepEqual([...result.faces[0].characterSet],[44032,65]);
++ await assert.rejects(loadPdfFonts([file],parser,undefined,{postscriptName:'OtherPS'}),/PC_FONT_COLLECTION_FACE_UNAVAILABLE/);
++ await assert.rejects(loadPdfFonts([file],parser),/PC_FONT_COLLECTION_FACE_UNAVAILABLE/);
++});
++
++test('document-local TTC conversion passes FontData PostScript name and retains HWP alias',async()=>{
++ const oldDOM=globalThis.DOMParser;
++ globalThis.DOMParser=class{parseFromString(){return {
++  documentElement:{localName:'svg',getAttribute:k=>k==='font-family'?'굴림체':null},
++  querySelector:()=>null,querySelectorAll:()=>[]
++ };}};
++ try{
++  let parsedName=null;
++  const parser={create(_bytes,name){parsedName=name;return {
++   familyName:'GulimChe',fullName:'GulimChe',postscriptName:name,
++   subfamilyName:'Regular',characterSet:[44032]
++  };}};
++  const font={family:'GulimChe',fullName:'GulimChe',postscriptName:'GulimChePS',
++   style:'Regular',blob:async()=>new Blob([Uint8Array.of(116,116,99,102,1,2,3,4)])};
++  const doc={renderPageSvgWithProfile:()=>'<svg font-family="굴림체"/>'};
++  const result=await loadDocumentLocalFonts(doc,1,[font],parser);
++  assert.equal(parsedName,'GulimChePS');
++  assert.equal(result.faces.length,1);
++  assert.equal(result.faces[0].collectionFontName,'GulimChePS');
++  assert(result.faces[0].aliases.includes('굴림체'));
++ }finally{globalThis.DOMParser=oldDOM;}
++});
++
++test('font access verification is retained for actual conversion, with honest background limitation',()=>{
++ const src=new URL('../src/',import.meta.url);
++ const main=readFileSync(new URL('main.js',src),'utf8');
++ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
++ const pdf=readFileSync(new URL('svg-professional.js',src),'utf8');
++ assert.match(main,/verifiedPcFontData=result\.fonts/);
++ assert.match(main,/verifiedPcFontData\?\.length\?Promise\.resolve\(verifiedPcFontData\):requestLocalFontAccess\(\)/);
++ assert.match(main,/document\.addEventListener\('visibilitychange'/);
++ assert.match(html,/id="background-policy"/);
++ assert.match(pdf,/registerFont\(face\.name,face\.bytes,face\.collectionFontName\|\|undefined\)/);
++});
+diff --git a/browser-local/tests/r66-hidden-tab-browser.mjs b/browser-local/tests/r66-hidden-tab-browser.mjs
+new file mode 100644
+index 0000000..228fe06
+--- /dev/null
++++ b/browser-local/tests/r66-hidden-tab-browser.mjs
+@@ -0,0 +1,71 @@
++/**
++ * Real Chromium acceptance for an HWP conversion after its original tab is
++ * put in the background. This verifies page visibility and completion; it
++ * cannot simulate OS process suspension or tab discard.
++ */
++import {chromium} from 'playwright';
++import {existsSync} from 'node:fs';
++import {resolve} from 'node:path';
++import {PDFDocument} from 'pdf-lib';
++import {spawn} from 'node:child_process';
++import {get} from 'node:http';
++import {setTimeout as sleep} from 'node:timers/promises';
++
++const root=resolve(import.meta.dirname,'..');
++const source=resolve(root,'../r29-browser-fixtures/genuine.hwp');
++if(!existsSync(source))throw Error('REAL_HWP_FIXTURE_MISSING');
++const base='http://127.0.0.1:4194/';
++const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','4194','--strictPort'],{cwd:root,stdio:'ignore'});
++let browser;
++try{
++ let ready=false;
++ for(let i=0;i<90;i++){
++  if(server.exitCode!==null)throw Error('Vite startup failed: '+server.exitCode);
++  try{const response=await new Promise((ok,bad)=>get(base,r=>{r.resume();ok(r.statusCode);}).on('error',bad));if(response===200){ready=true;break;}}catch{}
++  await sleep(250);
++ }
++ if(!ready)throw Error('VITE_HIDDEN_TAB_START_TIMEOUT');
++ browser=await chromium.launch({headless:true,args:['--no-sandbox']});
++ const context=await browser.newContext({acceptDownloads:true});
++ const page=await context.newPage();
++ const pageErrors=[];page.on('pageerror',error=>pageErrors.push(error.message));
++ await page.goto(base,{waitUntil:'networkidle'});
++ await page.waitForFunction(()=>document.querySelector('#status')?.textContent.includes('변환 준비 완료'),null,{timeout:90000});
++ await page.locator('details.options.advanced summary').click();
++ await page.evaluate(async()=>{
++  const response=await fetch('/fonts/NanumGothic-Regular.ttf');
++  if(!response.ok)throw Error('Font test fixture missing');
++  const font=await response.blob();
++  window.__localQueries=0;
++  window.queryLocalFonts=async()=>{
++   window.__localQueries++;
++   if(window.__localQueries>1)throw Error('FONT_CACHE_MUST_PREVENT_SECOND_ENUMERATION');
++   return [{family:'Nanum Gothic',fullName:'Nanum Gothic',postscriptName:'NanumGothic',style:'Regular',blob:async()=>font}];
++  };
++ });
++ await page.locator('#font-check').click();
++ await page.waitForFunction(()=>document.querySelector('#pc-font-status')?.textContent.includes('1개에 접근 가능합니다'),null,{timeout:15000});
++ await page.locator('#source').setInputFiles(source);
++ await page.locator('#convert').click();
++ const other=await context.newPage();await other.goto('about:blank');await other.bringToFront();
++ const isHidden=await page.evaluate(()=>document.visibilityState==='hidden');
++ if(!isHidden)throw Error('Chrome did not hide source tab; browser acceptance not valid');
++ let state='ready';
++ for(let i=0;i<180;i++){
++  state=await page.locator('.file-row').first().getAttribute('data-state');
++  if(state==='done'||state==='failed')break;
++  await sleep(1000);
++ }
++ if(state!=='done')throw Error('HWP_BACKGROUND_CONVERSION_'+state+' '+await page.locator('#status').innerText());
++ const queries=await page.evaluate(()=>window.__localQueries);
++ if(queries!==1)throw Error('FONT_DATA_REQUERIED_AFTER_CHECK: '+queries);
++ await page.bringToFront();
++ const link=page.locator('#file-list a.download');
++ const dlWait=page.waitForEvent('download',{timeout:20000});await link.click();
++ const download=await dlWait;const p=await download.path();
++ const pdf=await PDFDocument.load(await (await import('node:fs/promises')).readFile(p));
++ if(pdf.getPageCount()<1)throw Error('HWP_BACKGROUND_EMPTY_PDF');
++ if(pageErrors.length)throw Error('HWP_BACKGROUND_JS_ERRORS '+JSON.stringify(pageErrors));
++ console.log('HIDDEN_TAB_REAL_HWP_AND_FONT_CACHE_PASS '+JSON.stringify({hidden:isHidden,pages:pdf.getPageCount(),queryLocalFontsCalls:queries}));
++ await context.close();
++}finally{await browser?.close();server.kill('SIGTERM');}
+diff --git a/browser-local/tests/r66-ttc-real.mjs b/browser-local/tests/r66-ttc-real.mjs
+new file mode 100644
+index 0000000..0531ac3
+--- /dev/null
++++ b/browser-local/tests/r66-ttc-real.mjs
+@@ -0,0 +1,61 @@
++/** Genuine OFL fonts packed as an in-memory TTC; no fixture font is uploaded.
++ * Tests the fontkit face selector AND PDFKit collection face argument.
++ */
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {readFileSync} from 'node:fs';
++import {File} from 'node:buffer';
++import {resolve} from 'node:path';
++import fontkit from '@pdf-lib/fontkit';
++import PDFDocument from 'pdfkit';
++import {loadPdfFonts} from '../src/pdf-fonts.js';
++
++globalThis.File ||= File;
++const source=resolve(import.meta.dirname,'../public/fonts');
++const aligned=value=>(value+3)&~3;
++function makeCollection(buffers){
++ const entries=buffers.map(buf=>Buffer.from(buf));
++ const offsets=[];let size=aligned(12+entries.length*4);
++ for(const f of entries){offsets.push(size);size=aligned(size+f.length);}
++ const out=Buffer.alloc(size);
++ out.write('ttcf',0,4,'ascii');out.writeUInt32BE(0x00010000,4);out.writeUInt32BE(entries.length,8);
++ for(let i=0;i<entries.length;i++){
++  const entry=entries[i],where=offsets[i];out.writeUInt32BE(where,12+i*4);entry.copy(out,where);
++  const tables=entry.readUInt16BE(4);
++  if(tables<1||tables>100)throw Error('Invalid SFNT table directory');
++  for(let k=0;k<tables;k++){
++   const rec=12+k*16,local=entry.readUInt32BE(rec+8);
++   if(local>=entry.length)throw Error('Invalid source font offset');
++   out.writeUInt32BE(where+local,where+rec+8);
++  }
++ }
++ return out;
++}
++
++test('a genuine two-face TTC selects the exact face and PDFKit embeds it',async()=>{
++ const plain=[readFileSync(resolve(source,'NanumGothic-Regular.ttf')),
++  readFileSync(resolve(source,'NanumGothic-Bold.ttf'))];
++ const regular=fontkit.create(plain[0]);
++ const bold=fontkit.create(plain[1]);
++ assert.notEqual(regular.postscriptName,bold.postscriptName);
++ const ttc=makeCollection(plain);
++ const collection=fontkit.create(ttc);
++ assert(Array.isArray(collection.fonts)&&collection.fonts.length===2);
++ const input=new File([ttc],'local-font.ttf');
++ const loaded=await loadPdfFonts([input],fontkit,undefined,{postscriptName:bold.postscriptName});
++ const face=loaded.faces[0];
++ assert.equal(face.collectionFontName,bold.postscriptName);
++ assert.equal(face.bold,true);
++ const pdf=new PDFDocument({autoFirstPage:false,compress:false});
++ const chunks=[];
++ const finished=new Promise((res,rej)=>{
++  pdf.on('data',buf=>chunks.push(buf));pdf.on('end',res);pdf.on('error',rej);
++ });
++ pdf.registerFont('SelectedTtc',face.bytes,face.collectionFontName);
++ pdf.addPage().font('SelectedTtc').fontSize(12).text('한글123');pdf.end();
++ await finished;
++ const bytes=Buffer.concat(chunks);
++ assert.equal(bytes.subarray(0,5).toString('ascii'),'%PDF-');
++ assert(bytes.length>1000);
++ console.log('REAL_TTC_PDFKIT_EMBED_PASS '+JSON.stringify({faces:collection.fonts.length,selected:bold.postscriptName,pdfBytes:bytes.length}));
++});
