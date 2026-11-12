@@ -472,6 +472,13 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     return {pdf:blob,preview,pages:count,bytes:blob.size,renderMode,
       vectorPages,rasterPages,fallbackPages,textCandidatePages,searchablePages:null,
       fontUsage:{local:usedLocal.size,bundled:usedBundled.size,selected:usedManual.size},
+      // SVG-to-PDFKit selected these faces. PDF resource/FontDescriptor
+      // confirmation is an independent, opt-in post-generation audit.
+      fontSelections:{local:[...usedLocal].map(id=>{
+        const face=fontRegistry.faces.find(f=>f.name===id);
+        return {family:face?.family||id,postscriptName:face?.postscriptName||'',
+         bold:!!face?.bold,italic:!!face?.italic};
+      }),manual:usedManual.size,bundled:usedBundled.size},
       substituteFamilies:[...substituteFamilies]};
   }catch(error){
     // Reject toBlob's pending collector and release all queued PDF chunks
