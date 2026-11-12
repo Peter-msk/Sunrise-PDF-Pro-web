@@ -77,7 +77,7 @@ export function compareSelectedAndEmbedded(selected=[],fontAudit){
   const candidates=[face.postscriptName,face.family].filter(Boolean).map(normalize);
   const entries=(fontAudit?.fonts||[]).filter(f=>{
    const base=normalize(f.baseName);
-   return !!base&&candidates.some(x=>x&&(x===base||base.endsWith(x)));
+   return !!base&&candidates.some(x=>x&&x===base);
   });
   return {family:face.family||'',postscriptName:face.postscriptName||'',
    pdfResourcePresent:entries.length>0,
