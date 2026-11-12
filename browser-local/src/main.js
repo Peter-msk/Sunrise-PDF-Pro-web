@@ -7,7 +7,7 @@ import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
-import {canRecoverFile,planConversion} from './conversion-recovery.mjs';
+import {canRecoverFile,planConversion,recoveryEngine} from './conversion-recovery.mjs';
 import {requestLocalFontAccess} from './local-fonts.js';
 import {settleInstalledFonts,localFontCapability} from './local-font-policy.mjs';
 const USE_PC_FONTS_BY_DEFAULT=true;
@@ -104,14 +104,19 @@ function draw(){
   }else if(item.state!=='invalid'){
    const select=document.createElement('button');select.className='secondary';select.type='button';select.textContent='선택';select.disabled=busy;select.addEventListener('click',()=>{show(item);status(item.file.name+' 문서를 선택했습니다.');});actions.append(select);
   }
-  // A user-visible, per-file action is consent to a non-searchable image PDF.
-  // Never reprocess other successful/queued documents or change the default.
+  // The per-file click is explicit consent for the narrowest usable recovery.
+  // Never reprocess other files, change the global default, or downgrade silently.
   if(canRecoverFile(item)){
    const recover=document.createElement('button');
    recover.className='secondary compat-retry';recover.type='button';
-   recover.textContent='이 파일만 이미지 PDF로 복구';
-   recover.title='글자 검색·선택 및 벡터 편집 불가. 기존 고품질 결과와 다를 수 있습니다.';
-   recover.setAttribute('aria-label',item.file.name+' 호환 이미지 PDF로 이 파일만 다시 변환 (글자 검색 불가)');
+   const hybrid=recoveryEngine(item)==='hybrid-filter';
+   recover.textContent=hybrid?'이 파일만 혼합 PDF로 복구':'이 파일만 이미지 PDF로 복구';
+   recover.title=hybrid
+    ?'미지원 SVG 필터가 있는 쪽만 이미지로 출력하고 다른 쪽은 벡터로 유지합니다. 이미지 쪽은 검색 불가.'
+    :'전체 페이지가 이미지로 변환되어 글자 검색·선택과 벡터 편집이 불가능합니다.';
+   recover.setAttribute('aria-label',item.file.name+(hybrid
+    ?' 혼합 PDF로 이 파일만 다시 변환 (필터가 있는 쪽만 이미지)'
+    :' 호환 이미지 PDF로 이 파일만 다시 변환 (글자 검색 불가)'));
    recover.disabled=busy;
    recover.addEventListener('click',()=>{
     if(busy||!ready||!canRecoverFile(item))return;
@@ -143,9 +148,11 @@ $('convert').addEventListener('click',async()=>{
  if(!pending.length)return;
  conversionClock.start(pending.length);
  const fontFiles=Array.from($('pdf-font').files||[]);
- if(plan.recovery)status('선택한 문서 1개만 호환 이미지 PDF로 다시 변환합니다. 글자 검색은 불가능합니다.');
+ if(plan.recovery)status(engine==='hybrid-filter'
+  ?'선택한 문서 1개만 혼합 PDF로 다시 변환합니다. 미지원 필터 쪽만 이미지로 처리하며 나머지 쪽은 벡터로 유지합니다.'
+  :'선택한 문서 1개만 호환 이미지 PDF로 다시 변환합니다. 모든 쪽의 글자 검색은 불가능합니다.');
  if(engine==='compat-raster')fontStatus('호환 이미지 PDF는 페이지를 그림으로 출력하므로 PC 글꼴의 PDF 임베딩 절차를 사용하지 않습니다.');
- let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&engine!=='compat-raster'&&pending.some(i=>isHwp(i.file)))fontsRequest=verifiedPcFontData?.length?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
+ let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&engine!=='compat-raster'&&pending.some(i=>isHwp(i.file)))fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();let completed=0;
  try{
   let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');if(access.status==='ready')verifiedPcFontData=localFonts;
@@ -209,7 +216,9 @@ $('convert').addEventListener('click',async()=>{
    },signal,{fontFiles,engine,localFonts});
    if(fontAccessNotice&&isHwp(file))result.warnings=[...(result.warnings||[]),fontAccessNotice];
    if(plan.recovery&&item===requested)result.warnings=[...(result.warnings||[]),
-    '기본 벡터 변환 오류('+plan.cause+') 후 이 문서만 명시적으로 이미지 PDF로 재시도했습니다. 모든 페이지를 원본과 비교하세요.'];
+    plan.engine==='hybrid-filter'
+     ?'기본 벡터 변환 오류('+plan.cause+') 후 이 문서만 혼합 PDF로 복구했습니다. 이미지 출력 쪽을 원본과 비교하세요.'
+     :'벡터·혼합 변환 오류('+plan.cause+') 후 이 문서만 전체 이미지 PDF로 복구했습니다. 모든 페이지를 원본과 비교하세요.'];
    return result;
   },signal,item=>{
    if(item.state==='working'){conversionClock.itemStart();draw();return;}
@@ -248,7 +257,7 @@ $('convert').addEventListener('click',async()=>{
 });
 $('print-prepare').addEventListener('click',async()=>{
  if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;
- let fontsRequest=null,printFontNotice='';try{if(USE_PC_FONTS_BY_DEFAULT)fontsRequest=verifiedPcFontData?.length?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){printFontNotice='PC 글꼴 API를 사용할 수 없어 내장 글꼴로 인쇄합니다.';}
+ let fontsRequest=null,printFontNotice='';try{if(USE_PC_FONTS_BY_DEFAULT)fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){printFontNotice='PC 글꼴 API를 사용할 수 없어 내장 글꼴로 인쇄합니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();
  try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;if(access.status==='ready')verifiedPcFontData=localFonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.'+(printFontNotice?' · '+printFontNotice:''));}
  catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+String(error?.message||error));}
