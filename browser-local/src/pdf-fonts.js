@@ -134,15 +134,20 @@ export async function loadPdfFonts(fontFiles,parser,signal,{postscriptName=null}
       throw Error('글꼴 파일은 TTF/OTF만 지원합니다.');
     const bytes=new Uint8Array(await file.arrayBuffer());
     if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
-    let parsed;
-    try{parsed=parser.create(bytes,postscriptName||null);}
-    catch(e){throw Error('글꼴 파일을 분석할 수 없습니다: '+file.name+' ('+String(e?.message||e)+')');}
-    // A TrueType Collection contains several faces in one SFNT file. The
-    // OS FontData postscriptName identifies the exact requested face; never
-    // silently pick the first face of a collection as a substitute.
+    // Fontkit's second create() argument is a TTC collection selector.
+    // Passing an OS PostScript name to a *single* TTF/OTF can fail parsing,
+    // even though that face is installed and matches the HWP font family.
     const collection=bytes.length>=4 && bytes[0]===116 && bytes[1]===116 && bytes[2]===99 && bytes[3]===102;
-    if(collection && (!postscriptName || familyKey(parsed?.postscriptName)!==familyKey(postscriptName)))
+    let parsed;
+    try{parsed=collection?parser.create(bytes,postscriptName||null):parser.create(bytes);}
+    catch(e){throw Error('글꼴 파일을 분석할 수 없습니다: '+file.name+' ('+String(e?.message||e)+')');}
+    // Never guess a TTC member; a single-face OS postscriptName must also
+    // agree with the actual embedded SFNT, not just the filename.
+    if(collection&&(!postscriptName||familyKey(parsed?.postscriptName)!==familyKey(postscriptName)))
       throw Error('PC_FONT_COLLECTION_FACE_UNAVAILABLE');
+    if(!collection&&postscriptName&&
+       familyKey(parsed?.postscriptName)!==familyKey(postscriptName))
+      throw Error('PC_FONT_SINGLE_FACE_MISMATCH');
     if(!Array.isArray(parsed?.characterSet) || !parsed.familyName)
       throw Error('글꼴의 유니코드 문자표 또는 패밀리 정보를 찾을 수 없습니다: '+file.name);
     const subfamily=String(parsed.subfamilyName||'');
