@@ -124,6 +124,22 @@ test('explicit PC font selected by bilingual HWP name is carried into a real emb
   assert.ok(compareSelectedAndEmbedded([selected],report)[0].embedded);
  }finally{globalThis.DOMParser=prior;win.close();}
 });
+test('a suffix lookalike font name never passes as the requested PC font',()=>{
+ const audit={fonts:[{baseName:'ABCDEF+OtherNanumGothic',embedded:true,pages:[1]}]};
+ const wrong=compareSelectedAndEmbedded([{family:'Nanum Gothic',postscriptName:'NanumGothic'}],audit);
+ assert.equal(wrong[0].embedded,false);
+ assert.equal(wrong[0].pdfResourcePresent,false);
+});
+
+test('source HWP names remain client-local comparison metadata, never telemetry',()=>{
+ const converter=readFileSync(new URL('../src/converter.js',import.meta.url),'utf8');
+ const ui=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const telemetry=readFileSync(new URL('../src/pro-telemetry.js',import.meta.url),'utf8');
+ assert.match(converter,/result\.sourceFontInventory=/);
+ assert.match(ui,/sourceFontInventory\?\.requested/);
+ assert.doesNotMatch(telemetry,/sourceFontInventory|requestedNames|matchedFaces/);
+});
+
 test('font inspection is local-only, never a network or telemetry operation',()=>{
  const src=readFileSync(new URL('../src/pdf-font-audit.mjs',import.meta.url),'utf8');
  const ui=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
