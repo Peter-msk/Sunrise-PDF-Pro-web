@@ -37,7 +37,7 @@
 - `browser-local/package.json`: 정규 `npm test` 실행에 신규 회귀 파일 등록.
 - GitHub Actions 원샷 QA:
   <https://github.com/Peter-msk/Sunrise-PDF-Pro-web/actions/runs/43209997465>.
-  1차 결과 **52/52 PASS, FAIL 0, SKIP 0**. 최종 정밀감사에서 근사 항등/16진수 SVG 수치 방지 회귀 1개를 추가해 별도 검증한다; Vite/WASM, 소스 검사 및 Worker 정적 파일 검사 PASS.
+  최종 집중 QA: <https://github.com/Peter-msk/Sunrise-PDF-Pro-web/actions/runs/43210760901> — **53/53 PASS, FAIL 0, SKIP 0**, Vite/WASM/Worker 자산 검사 PASS. 근사 항등·16진수 SVG 수치 방지까지 검증됨; Vite/WASM, 소스 검사 및 Worker 정적 파일 검사 PASS.
 - 신규 검증 중 PDFKit으로 작성한 PDF가 PDF 파서에 열리고, 벡터 콘텐츠에서 불필요한 이미지 XObject가 발생하지 않는지 점검.
 - 기존 명시적 `hybrid-filter`와 `compat-raster`를 자동 수행하지 않으며, 그 UI/엔진·텔레메트리 설정과 Worker/관리자 소스는 건드리지 않았다.
 
