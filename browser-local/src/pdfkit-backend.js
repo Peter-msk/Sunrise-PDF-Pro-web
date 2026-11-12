@@ -1,4 +1,5 @@
 /** PDFKit 0.20 browser ESM: explicit standard font registration, no Node streams. */
+import {createPdfOutputGuard} from './pdf-output-integrity.mjs';
 export async function loadBrowserPdfBackend(importModule) {
   const modules = importModule
     ? await Promise.all([
@@ -19,8 +20,10 @@ export async function loadBrowserPdfBackend(importModule) {
     throw new Error('전문 PDF 엔진 모듈 인터페이스가 일치하지 않습니다.');
   return {
     PDFDocument, SVGtoPDF, registerStdFonts, Helvetica,
-    toBlob(pdf, signal) {
+    toBlob(pdf, signal, onByteProgress=()=>{}, maxOutputBytes=512*1024*1024) {
       const abortError = () => new DOMException('PDF 변환이 취소되었습니다.', 'AbortError');
+      if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1)
+        return Promise.reject(new Error('PDF_STREAM_BUDGET_INVALID'));
       return new Promise((resolve, reject) => {
         if (!pdf || typeof pdf.on !== 'function' || typeof pdf.off !== 'function') {
           reject(new Error('PDFKit 브라우저 출력 인터페이스가 유효하지 않습니다.'));
@@ -28,6 +31,18 @@ export async function loadBrowserPdfBackend(importModule) {
         }
         let settled = false;
         const chunks = [];
+        let emittedBytes = 0;
+        const pdfGuard = createPdfOutputGuard(maxOutputBytes);
+        let lastReportedBytes = 0;
+        let lastReportedAt = 0;
+        const reportBytes = force => {
+          const now = Date.now();
+          if (!force && emittedBytes-lastReportedBytes<1024*1024 && now-lastReportedAt<1500) return;
+          lastReportedAt = now;
+          lastReportedBytes = emittedBytes;
+          try { onByteProgress({bytes:emittedBytes}); }
+          catch { /* Progress observers must not corrupt a PDF output stream. */ }
+        };
         const cleanup = error => {
           signal?.removeEventListener('abort', onAbort);
           pdf.off('data', onData);
@@ -49,11 +64,22 @@ export async function loadBrowserPdfBackend(importModule) {
             settle(new Error('PDF 출력 바이트 형식이 올바르지 않습니다.'));
             return;
           }
+          // Reject before retaining an unbounded series of output chunks.
+          // A 512 MiB per-PDF ceiling prevents browser OOM on pathological streams.
+          if (chunk.byteLength > maxOutputBytes-emittedBytes) {
+            settle(new Error('PDF_STREAM_OUTPUT_BYTES_LIMIT'));
+            try { pdf.destroy?.(); } catch { /* The error is already reported. */ }
+            return;
+          }
+          try { pdfGuard.append(chunk); }
+          catch(error) { settle(error); try { pdf.destroy?.(); } catch {} return; }
           chunks.push(chunk);
+          emittedBytes += chunk.byteLength;
+          reportBytes(false);
         };
         const onEnd = () => {
           if (signal?.aborted) { onAbort(); return; }
-          try { settle(null, new Blob(chunks, {type:'application/pdf'})); }
+          try { pdfGuard.finish(chunks); reportBytes(true); settle(null, new Blob(chunks, {type:'application/pdf'})); }
           catch (error) { settle(error); }
         };
         const onAbort = () => settle(abortError());

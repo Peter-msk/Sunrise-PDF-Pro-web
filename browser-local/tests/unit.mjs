@@ -51,11 +51,11 @@ test('HWP conversion rejects image export and releases HWP instance',()=>{
  assert.match(source,/doc\.free\(\)/);
  assert.doesNotMatch(source,/legacy-vector'/);
  assert.doesNotMatch(source,/pdf\.embedPng|renderMode:'raster'/);
- assert.match(source,/options\.engine!=='professional'/);
+ assert.match(source,/if\(options\.engine==='compat-raster'\)/); // explicit user-only compatibility path
 });
 
 test('only object-preserving HWP export loads local font registry',()=>{
- assert.match(source,/if\(options\.engine==='professional'\)/);
+ assert.match(source,/if\(options\.engine==='professional'\|\|options\.engine==='hybrid-filter'\)/);
  assert.doesNotMatch(source,/pdf\.embedFont/);
  assert.doesNotMatch(source,/appendVectorPage/);
 });
@@ -564,7 +564,11 @@ test('professional document cancellation while PDF bytes are pending destroys th
    })
   });
   await assert.rejects(action, error=>error?.name==='AbortError');
-  assert.equal(observedSignal,controller.signal);
+  // DEV4+ writers use an independent linked AbortSignal. The writer must be
+  // cancelled when the user cancels, without sharing the same signal object.
+  assert.notEqual(observedSignal,controller.signal);
+  assert.equal(observedSignal?.aborted,true);
+  assert.equal(controller.signal.aborted,true);
   assert.equal(destroyed,1);
  });
 });

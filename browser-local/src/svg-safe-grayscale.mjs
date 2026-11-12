@@ -1,3 +1,4 @@
+import {cooperativeYield} from './cooperative-yield.mjs';
 /**
  * Sunrise PDF PRO — R48 DEV2, local-only SVG filter normalization.
  *
@@ -210,7 +211,7 @@ export async function waitForImageOperation(promise,signal,timeoutMs,code,onLate
  finally{active=false;clearTimeout(timer);signal?.removeEventListener('abort',abort);}
 }
 
-const defaultYield=()=>new Promise(resolve=>setTimeout(resolve,0));
+const defaultYield=()=>cooperativeYield();
 /** Chunked pixel transform. Alpha is never modified. Yield between chunks so
  * cancellation and the browser UI are not blocked by a multi-million pixel loop. */
 export function accumulateGrayImageBytes(total,added,max=PAGE_IMAGE_COMPRESSED_BYTE_CAP){

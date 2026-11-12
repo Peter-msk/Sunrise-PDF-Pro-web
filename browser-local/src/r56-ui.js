@@ -7,11 +7,7 @@
   if(!Number.isFinite(size)||size<0)return '—';
   return size>=1048576?(size/1048576).toFixed(2)+' MB':size>=1024?(size/1024).toFixed(1)+' KB':Math.round(size)+' B';
  };
- // The legacy compiled bundle reads this checkbox, so enforce the new invariant before each click.
- document.addEventListener('click',event=>{
-  if(!event.target?.closest?.('#convert, #print-prepare'))return;
-  const control=byId('use-local-fonts');if(control)control.checked=true;
- },true);
+ // Font access is managed by the explicit, user-activated request in main.js.
  function rowCell(cls,text){
   const el=document.createElement('span');el.className=cls;el.textContent=text;return el;
  }

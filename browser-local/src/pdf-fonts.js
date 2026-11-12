@@ -125,7 +125,7 @@ export function missingCodepoint(face,text){
  * @param {AbortSignal} [signal]
  * @returns {Promise<{faces:Array<object>}>} metadata and bytes for PDFKit
  */
-export async function loadPdfFonts(fontFiles,parser,signal){
+export async function loadPdfFonts(fontFiles,parser,signal,{postscriptName=null}={}){
   const files=Array.from(fontFiles||[]);
   const faces=[];
   for(const file of files){
@@ -135,8 +135,14 @@ export async function loadPdfFonts(fontFiles,parser,signal){
     const bytes=new Uint8Array(await file.arrayBuffer());
     if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
     let parsed;
-    try{parsed=parser.create(bytes);}
+    try{parsed=parser.create(bytes,postscriptName||null);}
     catch(e){throw Error('글꼴 파일을 분석할 수 없습니다: '+file.name+' ('+String(e?.message||e)+')');}
+    // A TrueType Collection contains several faces in one SFNT file. The
+    // OS FontData postscriptName identifies the exact requested face; never
+    // silently pick the first face of a collection as a substitute.
+    const collection=bytes.length>=4 && bytes[0]===116 && bytes[1]===116 && bytes[2]===99 && bytes[3]===102;
+    if(collection && (!postscriptName || familyKey(parsed?.postscriptName)!==familyKey(postscriptName)))
+      throw Error('PC_FONT_COLLECTION_FACE_UNAVAILABLE');
     if(!Array.isArray(parsed?.characterSet) || !parsed.familyName)
       throw Error('글꼴의 유니코드 문자표 또는 패밀리 정보를 찾을 수 없습니다: '+file.name);
     const subfamily=String(parsed.subfamilyName||'');
@@ -147,7 +153,8 @@ export async function loadPdfFonts(fontFiles,parser,signal){
     if(faces.some(f=>f.bold===bold&&f.italic===italic&&aliases.some(a=>f.aliases.includes(a))))
       throw Error('같은 글꼴 패밀리와 스타일을 중복 선택했습니다: '+file.name);
     faces.push({name:'SunriseFont'+(faces.length+1),family:parsed.familyName,
-      aliases,bold,italic,characterSet:new Set(parsed.characterSet),bytes});
+      aliases,bold,italic,characterSet:new Set(parsed.characterSet),bytes,
+      ...(collection?{collectionFontName:parsed.postscriptName}: {})});
   }
   return {faces};
 }

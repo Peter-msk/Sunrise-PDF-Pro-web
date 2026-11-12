@@ -1,0 +1,57 @@
+/**
+ * Sunrise PDF PRO(web) R66-DEV8: enforce the existing browser-local engine.
+ * No document bytes are read, no network is contacted, and no files are written.
+ * This guard is an architecture regression check, NOT a PDF quality test.
+ */
+import {readFileSync,existsSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {resolve,dirname} from 'node:path';
+
+function contains(body,pattern){return pattern.test(body);}
+export function inspectEngineContract(root){
+  const issues=[];
+  const requireFile=rel=>{
+    const path=resolve(root,rel);
+    if(!existsSync(path)){issues.push('MISSING_SOURCE:'+rel);return '';}
+    return readFileSync(path,'utf8');
+  };
+  let pkg=null;
+  try{pkg=JSON.parse(requireFile('browser-local/package.json'));}
+  catch{issues.push('PACKAGE_JSON_INVALID');}
+  if(pkg){
+    for(const [name,version] of Object.entries({
+      '@rhwp/core':'0.8.7','pdfkit':'0.20.2','svg-to-pdfkit':'0.1.8'
+    })) if(pkg.dependencies?.[name]!==version)
+      issues.push('BROWSER_ENGINE_DEPENDENCY_DRIFT:'+name);
+  }
+  const converter=requireFile('browser-local/src/converter.js');
+  const writer=requireFile('browser-local/src/svg-professional.js');
+  const backend=requireFile('browser-local/src/pdfkit-backend.js');
+  if(!contains(converter,/from\s*['"]@rhwp\/core['"]/)) issues.push('WASM_PARSER_NOT_USED');
+  if(!contains(converter,/tryProfessionalDocument\s*\(/)) issues.push('PROFESSIONAL_ENGINE_NOT_CALLED');
+  if(!contains(converter,/allowRasterFallback\s*:\s*false/)) issues.push('OBJECT_PRESERVING_POLICY_MISSING');
+  if(!contains(writer,/renderPageSvgWithProfile\s*\(\s*i\s*,\s*['"]print['"]\s*\)/))
+    issues.push('PRINT_SVG_PIPELINE_MISSING');
+  if(!contains(writer,/SVGtoPDF\s*\(/)) issues.push('VECTOR_PDF_OUTPUT_MISSING');
+  if(!contains(backend,/import\s*\(\s*['"]pdfkit['"]\s*\)/) ||
+     !contains(backend,/toBlob\s*\(/)) issues.push('PDFKIT_BACKEND_MISSING');
+  for(const rel of ['native_hancom','browser-local/native_hancom'])
+    if(existsSync(resolve(root,rel))) issues.push('UNAPPROVED_HANCOM_RUNTIME:'+rel);
+  for(const [rel,body] of [
+    ['browser-local/src/converter.js',converter],
+    ['browser-local/src/svg-professional.js',writer],
+    ['browser-local/src/pdfkit-backend.js',backend]
+  ]){
+    if(/\b(?:win32com|ActiveXObject|HWPFrame\.HwpObject)\b/.test(body))
+      issues.push('NATIVE_COM_DEPENDENCY:'+rel);
+  }
+  return {ok:issues.length===0,issues,engine:'browser-wasm-svg-pdfkit',filesInspected:4};
+}
+
+const invoked=process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url);
+if(invoked){
+  const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
+  const result=inspectEngineContract(root);
+  if(result.ok)console.log('R66_ENGINE_CONTRACT_PASS: browser-only WASM + SVG + PDFKit');
+  else{console.error('R66_ENGINE_CONTRACT_FAIL: '+result.issues.join(', '));process.exitCode=1;}
+}

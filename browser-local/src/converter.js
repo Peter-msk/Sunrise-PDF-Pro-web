@@ -1,14 +1,18 @@
+import {cooperativeYield} from './cooperative-yield.mjs';
 import init, { HwpDocument } from '@rhwp/core';
 import { tryProfessionalDocument } from './svg-professional.js';
 import { loadPdfFonts, installMeasureFonts, familyKey } from './pdf-fonts.js';
 import { readDocumentBuffer } from './file-reader.js';
 import { svgPageSize } from './page-geometry.js';
+import {loadSvgRasterImage,encodeSvgRasterPng} from './raster-async-guard.mjs';
 import { parseDocumentSvg } from './svg-embedded.js';
 import { loadBundledFonts } from './bundled-fonts.js';
 import { loadDocumentLocalFonts } from './local-fonts.js';
 import { normalizeGifSvg } from './svg-gif.js';
 import { normalizeEmbeddedPngSvg } from './svg-embedded-raster-budget.mjs';
 import { normalizeSvgGrayscale } from './svg-safe-grayscale.mjs';
+import { buildRasterCompatibilityPdf } from './raster-compat-pdf.mjs';
+import {normalizeSvgForPdf} from './svg-filter-hybrid.mjs';
 
 // File-size limits are intentionally absent. Runtime memory and page pixels
 // remain bounded by the browser/device; those are not upload-size limits.
@@ -77,28 +81,13 @@ export async function rasterPage(svg,signal){
  let cvs=null;
  try{
   const img=new Image();
-  await new Promise((ok,bad)=>{
-   const done=(error)=>{
-    img.onload=null;img.onerror=null;
-    signal?.removeEventListener('abort',onAbort);
-    if(error)bad(error);else ok();
-   };
-   const onAbort=()=>{
-    img.removeAttribute('src');
-    done(new DOMException('PDF 변환이 취소되었습니다.','AbortError'));
-   };
-   img.onload=()=>done();
-   img.onerror=()=>done(Error('SVG 이미지를 렌더링할 수 없습니다.'));
-   signal?.addEventListener('abort',onAbort,{once:true});
-   if(signal?.aborted){onAbort();return;}
-   img.src=svgUrl;
-  });
+  await loadSvgRasterImage(img,svgUrl,signal);
   throwIfCancelled(signal);
   cvs=document.createElement('canvas');cvs.width=w;cvs.height=h;
   const ctx=cvs.getContext('2d',{alpha:false});
   if(!ctx)throw Error('Canvas 2D를 사용할 수 없습니다.');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
-  const blob=await new Promise((ok,bad)=>cvs.toBlob(x=>x?ok(x):bad(Error('PNG 생성 실패')),'image/png'));
+  const blob=await encodeSvgRasterPng(cvs,signal);
   throwIfCancelled(signal);
   return {blob,widthPt:Math.max(1,checked.width*72/96),heightPt:Math.max(1,checked.height*72/96)};
  }finally{
@@ -115,7 +104,7 @@ export async function rasterPage(svg,signal){
  */
 export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
  options={engine:'professional',...options};
- if(options.engine!=='professional')throw Error('HWP/HWPX는 글자·도형 보존 출력만 지원합니다. 이미지 PDF 변환은 허용하지 않습니다.');
+ if(!['professional','compat-raster','hybrid-filter'].includes(options.engine))throw Error('HWP/HWPX 출력 방식을 확인하세요.');
  throwIfCancelled(signal);
  // Check the first bytes before allocating a whole large file in browser RAM.
  // This removes the former 20MiB rejection without eliminating magic checks.
@@ -138,7 +127,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
   const selectedFonts=options.fontFiles!==undefined
     ?Array.from(options.fontFiles):options.fontFile?[options.fontFile]:[];
   let fontRegistry={faces:[]};
-  if(options.engine==='professional'){
+  if(options.engine==='professional'||options.engine==='hybrid-filter'){
    const {default:fontkit}=await import('@pdf-lib/fontkit');
    throwIfCancelled(signal);
    const selected=selectedFonts.length?await loadPdfFonts(selectedFonts,fontkit,signal):{faces:[]};
@@ -163,7 +152,8 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     :bundled.faces;
    pcFontStats=options.localFonts?{
      listed:options.localFonts.length,selected:localOnly.length,
-     required:local.requestedFamilies||0,unreadable:local.unreadableFonts||0,
+     required:local.requestedFamilies||0,matched:local.matchedFontData||0,
+     unmatchedNames:local.unmatchedNames||[],unreadable:local.unreadableFonts||0,
      timedOut:local.timedOutFonts||0,budgetSkipped:local.skippedByBudget||0
    }:null;
    fontRegistry={faces:[...selected.faces,...localOnly,...tailoredBundled]};
@@ -175,26 +165,65 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
   if(!doc)doc=new HwpDocument(new Uint8Array(buf));
   const count=doc.pageCount();
   if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
-  if(options.engine==='professional'){
-   // A failed object-preserving export must stay failed, never become an image PDF.
+  if(options.engine==='compat-raster'){
+   // This option must be explicitly selected in the UI. It is never an
+   // automatic downgrade of the original object-preserving PDF route.
+   // Keep the WASM document alive until every asynchronous raster page is finished.
+   // Returning an unawaited Promise would run the enclosing finally immediately,
+   // freeing the document and causing "null pointer passed to rust".
+   return await buildRasterCompatibilityPdf(doc,count,{signal,onProgress,rasterPage,
+    preprocessSvg:async(rawSvg)=>{
+     const hasImage=typeof rawSvg==='string'&&/image/i.test(rawSvg);
+     const gifSvg=hasImage?await normalizeGifSvg(rawSvg,signal):rawSvg;
+     const png=hasImage?await normalizeEmbeddedPngSvg(gifSvg,signal):{svg:gifSvg};
+     return checkedSvg(png.svg).svg;
+    }});
+  }
+  if(options.engine==='professional'||options.engine==='hybrid-filter'){
+   // Explicit hybrid renders only SVG-filter-incompatible pages as images.
+   // The normal high-fidelity mode still rejects any such filter.
    const resizedPngs=[],svgFilterStats=[];
    const result=await tryProfessionalDocument(doc,count,{
     checkedSvg:async(svg,meta={})=>{
      const progress=detail=>onProgress({
       stage:'professional',page:meta.page||1,total:meta.total||count,detail
      });
+     // No embedded <image> can exist without the literal "image" in SVG.
+     // A false positive only costs time. Parsing/security validation still run
+     // in grayscale normalization and checkedSvg, even on this fast path.
+     const hasImage=typeof svg==='string' && /image/i.test(svg);
      progress('image_gif');
-     const gifSvg=await normalizeGifSvg(svg,signal);
+     const gifSvg=hasImage?await normalizeGifSvg(svg,signal):svg;
      progress('image_png');
-     const pngResult=await normalizeEmbeddedPngSvg(gifSvg,signal);
+     const pngResult=hasImage?await normalizeEmbeddedPngSvg(gifSvg,signal):{svg:gifSvg,resized:[]};
      resizedPngs.push(...pngResult.resized);
      progress('image_filter');
-     const grayResult=await normalizeSvgGrayscale(pngResult.svg,signal);
-     if(grayResult.filtersApplied)svgFilterStats.push(grayResult);
+     // No grayscale filter can act when the source contains neither a filter
+     // declaration nor a stylesheet. Keep the normalizer for ambiguous CSS.
+     // checkedSvg() still performs the full SVG security and geometry checks.
+     const reviewFilters=/filter|<\s*style\b|\bstyle\s*=/i.test(pngResult.svg);
+     let normalized;
+     try{normalized=await normalizeSvgForPdf(pngResult.svg,
+       reviewFilters?s=>normalizeSvgGrayscale(s,signal)
+         :async s=>({svg:s,filtersApplied:0,imagesChanged:0}),
+       checkedSvg,{hybrid:options.engine==='hybrid-filter'});}
+     catch(error){
+      if(String(error?.message||error)==='SVG_FILTER_EFFECT_UNSUPPORTED')
+       throw Error((meta.page||1)+'쪽에서 미지원 SVG 필터가 발견됐습니다 (SVG_FILTER_EFFECT_UNSUPPORTED). 혼합 출력 또는 이미지 PDF를 명시적으로 선택하세요.');
+      throw error;
+     }
+     if(normalized.stats.filtersApplied)svgFilterStats.push(normalized.stats);
      progress('svg_sanitize');
-     return checkedSvg(grayResult.svg);
-    },rasterPage,signal,fontRegistry,onProgress,allowRasterFallback:false
+     return normalized.checked;
+    },rasterPage,signal,fontRegistry,onProgress,
+    ...(options.engine==='hybrid-filter'
+      ?{allowRasterFallback:true,filterOnlyRasterFallback:true}
+      :{allowRasterFallback:false})
    });
+   if(options.engine==='hybrid-filter'&&result.rasterPages){
+    result.warnings=[...(result.warnings||[]),
+      '선택한 혼합 출력에서 미지원 SVG 필터가 있는 '+result.rasterPages+'쪽을 이미지로 변환했습니다. 나머지 쪽은 벡터입니다. 이미지 쪽의 글자 선택·검색은 불가능하며 원본과 대조해야 합니다.'];
+   }
    if(resizedPngs.length){
     const unique=[...new Map(resizedPngs.map(img=>[
      img.sourceWidth+'x'+img.sourceHeight+'>'+img.width+'x'+img.height,img])).values()];
@@ -218,13 +247,18 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
       ?'PC 글꼴 후보 '+pcFontStats.selected+'개를 준비했지만 출력 단계에서 선택한 PC 글꼴은 0개입니다. 원본의 글꼴 이름·굵기·기울임을 확인하세요.'
       :'이번 문서에서 PC 글꼴 후보를 등록하지 못했습니다. 원본 지정 서체와 PC 설치 서체의 이름을 확인하세요.';
     const bundledNote=bundledUsed?' 내장 대체 글꼴 '+bundledUsed+'개가 PDF 출력에 사용됐습니다.':'';
-    const readNote=pcFontStats.unreadable>0?' PC 글꼴 '+pcFontStats.unreadable+'개는 읽을 수 없어 건너뛰었습니다.':'';
+    const missing=pcFontStats.unmatchedNames||[];
+    const matchNote=' 문서 지정 글꼴 '+pcFontStats.required+'종 중 PC 글꼴 후보 '+
+     pcFontStats.matched+'개를 찾았으며 '+pcFontStats.selected+'개를 등록했습니다.';
+    const missingNote=missing.length?' PC 글꼴에서 일치하는 서체를 등록하지 못한 이름: '+
+     missing.slice(0,5).join(', ')+(missing.length>5?' 외 '+(missing.length-5)+'종':'')+'.':'';
+    const readNote=pcFontStats.unreadable>0?' PC 글꼴 '+pcFontStats.unreadable+'개는 읽거나 분석할 수 없어 건너뛰었습니다.':'';
     const fontTimeoutNote=pcFontStats.timedOut||pcFontStats.budgetSkipped
      ?' 글꼴 읽기 지연 '+(pcFontStats.timedOut+pcFontStats.budgetSkipped)+'건으로 일부 PC 서체를 사용하지 못했습니다.':'';
     const measure=releaseMeasureFonts.stats;
     const measureNote=measure?.skipped
      ?' 측정용 글꼴 '+measure.skipped+'건을 제시간에 불러오지 못해 줄바꿈에 차이가 있을 수 있습니다.':'';
-    result.warnings=[...(result.warnings||[]),pcNote+bundledNote+readNote+fontTimeoutNote+measureNote];
+    result.warnings=[...(result.warnings||[]),pcNote+matchNote+bundledNote+missingNote+readNote+fontTimeoutNote+measureNote];
    }
    return result;
   }
@@ -285,7 +319,7 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
    throwIfCancelled(signal);
    pages.push(checkedSvg(await normalizeGifSvg(doc.renderPageSvgWithProfile(i,'print'),signal)));
    onProgress({stage:'print',page:i+1,total:count});
-   await new Promise(resolve=>setTimeout(resolve,0));
+   await cooperativeYield({signal});
   }
   throwIfCancelled(signal);
   return {pages,fontRegistry};
