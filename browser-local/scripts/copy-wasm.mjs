@@ -16,4 +16,10 @@ copyFileSync(source,dest);
 console.log('Verified and bundled official rhwp WASM:',EXPECTED_BYTES,'bytes, SHA-256',sha);
 
 // Self-host PDF renderer: no document or font is sent to a third party.
-await import('node:fs/promises').then(fs=>fs.copyFile(new URL('../node_modules/pdfjs-dist/build/pdf.worker.mjs',import.meta.url),new URL('../public/pdf-worker.mjs',import.meta.url)));
+const fs=await import('node:fs/promises');
+await fs.copyFile(new URL('../node_modules/pdfjs-dist/build/pdf.worker.mjs',import.meta.url),
+ new URL('../public/pdf-worker.mjs',import.meta.url));
+// Local quality audit uses the matching legacy parser/worker pair. Do not
+// mix the modern worker with the legacy display layer on older Chromium.
+await fs.copyFile(new URL('../node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',import.meta.url),
+ new URL('../public/pdf-worker-legacy.mjs',import.meta.url));
