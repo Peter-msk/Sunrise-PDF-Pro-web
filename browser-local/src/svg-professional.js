@@ -456,8 +456,13 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     // Reject toBlob's pending collector and release all queued PDF chunks
     // before disposing the writer, even if this failure was not user-driven.
     writerAbort.abort();
-    if(typeof pdf.destroy==='function')pdf.destroy();
-    else if(!ended){ended=true;pdf.end();}
+    // PDFKit disposal can itself throw (or emit a late failure). Never replace
+    // the original PDF_STREAM_TIMEOUT / SVG / font error with a cleanup error.
+    // The collector was already aborted and must not publish a partial PDF.
+    try{
+      if(typeof pdf.destroy==='function')pdf.destroy();
+      else if(!ended){ended=true;pdf.end();}
+    }catch{/* Keep the primary failure reason and fail closed. */}
     throw error;
   }finally{
     writerAbort.close();
