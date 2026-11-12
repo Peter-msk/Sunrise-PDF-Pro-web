@@ -26,7 +26,25 @@ export async function cooperativeYield({host=globalThis,signal}={}) {
    try{channel.port2.postMessage(0);}catch(error){finish(error);}
   });
  }else{
-  await new Promise(resolve=>host.setTimeout(resolve,0));
+  // Rare browsers without scheduler/MessageChannel may clamp this timer.
+  // Cancellation must still settle promptly instead of waiting for its tick.
+  await new Promise((resolve,reject)=>{
+   let timer,finished=false;
+   const finish=error=>{
+    if(finished)return;finished=true;
+    signal?.removeEventListener('abort',onAbort);
+    if(error){if(timer!==undefined)host.clearTimeout?.(timer);reject(error);}
+    else resolve();
+   };
+   const onAbort=()=>finish(new DOMException('PDF 변환이 취소되었습니다.','AbortError'));
+   signal?.addEventListener('abort',onAbort,{once:true});
+   if(signal?.aborted){onAbort();return;}
+   try{
+    timer=host.setTimeout(()=>finish(null),0);
+    // Handle an abort that fires synchronously while scheduling.
+    if(finished&&timer!==undefined)host.clearTimeout?.(timer);
+   }catch(error){finish(error);}
+  });
  }
  if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
 }
