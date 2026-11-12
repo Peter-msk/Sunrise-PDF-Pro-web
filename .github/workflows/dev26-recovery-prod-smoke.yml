@@ -22,7 +22,7 @@ jobs:
           curl --fail --silent --show-error --location --retry 2 --max-time 20 "$BASE/local/" -o /tmp/index.html
           grep -Fq 'compat-raster' /tmp/index.html
           echo 'RELEASE_HTML_PASS'
-          curl --fail --silent --show-error --location --retry 2 --max-time 20 "$BASE/assets/local-bundle.js" -o /tmp/local-bundle.js
+          curl --fail --silent --show-error --location --retry 2 --max-time 20 "$BASE/local/assets/local-bundle.js" -o /tmp/local-bundle.js
           grep -Fq 'compat-retry' /tmp/local-bundle.js
           grep -Fq '이 파일만 이미지 PDF로 복구' /tmp/local-bundle.js
           grep -Fq 'SVG_FILTER_EFFECT_UNSUPPORTED' /tmp/local-bundle.js
