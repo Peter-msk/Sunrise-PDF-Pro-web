@@ -7,6 +7,7 @@
  * the professional path as an automatic fallback or claim fidelity equivalence.
  * No file bytes are uploaded to the server.
  */
+import {cooperativeYield} from './cooperative-yield.mjs';
 import {assertCompletePdfBytes} from './pdf-output-integrity.mjs';
 import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 
@@ -37,7 +38,7 @@ export async function buildRasterCompatibilityPdf(hwpDoc,count,{
   onProgress({stage:'professional',detail:'svg_build',page,total:count});
   // rhwp is synchronous. Yield before the WASM call, without claiming that
   // cancellation can interrupt a synchronous SVG render already in progress.
-  await new Promise(resolve=>setTimeout(resolve,0));cancelled(signal);
+  await cooperativeYield({signal});cancelled(signal);
   const svg=hwpDoc.renderPageSvgWithProfile(i,'print');
   onProgress({stage:'professional',detail:'image_filter',page,total:count});
   const checked=await preprocessSvg(svg,page,count);
@@ -58,7 +59,7 @@ export async function buildRasterCompatibilityPdf(hwpDoc,count,{
   const sheet=pdf.addPage([image.widthPt,image.heightPt]);
   sheet.drawImage(png,{x:0,y:0,width:image.widthPt,height:image.heightPt});
   onProgress({stage:'professional',detail:'compat_page_done',page,total:count});
-  await new Promise(resolve=>setTimeout(resolve,0));
+  await cooperativeYield({signal});
  }
  cancelled(signal);
  onProgress({stage:'professional',detail:'compat_save',page:count,total:count});
