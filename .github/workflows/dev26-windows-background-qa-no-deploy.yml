@@ -1,4 +1,5 @@
 name: DEV26 Windows Chrome Edge background/minimize QA (NO DEPLOY)
+# second run: correct deterministic elapsed/ETA test fixture, no production deploy
 on:
   push:
     branches:
