@@ -13,6 +13,8 @@ import {normalizeSvgGrayscale} from '../src/svg-safe-grayscale.mjs';
 import {parseSafeSvg} from '../src/svg-security.js';
 import {inspectPdfVectorQuality,summarizeVectorPreservation} from '../src/pdf-vector-quality.mjs';
 
+const auditPdf=(blob,result,opts={})=>inspectPdfVectorQuality(blob,result,{...opts,
+ loadPdfJs:()=>import('pdfjs-dist/legacy/build/pdf.mjs')});
 const ns='http://www.w3.org/2000/svg';
 const page=body=>'<svg xmlns="'+ns+'" width="816" height="1056" viewBox="0 0 816 1056" font-family="Helvetica">'+body+'</svg>';
 const table=()=>{
@@ -137,7 +139,7 @@ test('real complex 18x10 SVG table and 30-node diagram remain vector, blur page 
  assert.equal(result.renderMode,'mixed');
  assert.deepEqual([result.vectorPages,result.rasterPages],[3,1]);
  assert.deepEqual(result.fallbackPages,[{page:2,reason:'SVG_FILTER_EFFECT_UNSUPPORTED'}]);
- const report=await inspectPdfVectorQuality(result.pdf,result);
+ const report=await auditPdf(result.pdf,result);
  assert.equal(report.structuralPass,true,JSON.stringify(report.findings));
  assert.equal(report.vectorPagePercent,75);
  assert.equal(report.pages.length,4);
@@ -158,7 +160,7 @@ test('content audit detects false claimed raster page with no actual embedded im
  const result=await generated();
  const incorrect={...result,pages:4,vectorPages:3,rasterPages:1,
   fallbackPages:[{page:3,reason:'SVG_FILTER_EFFECT_UNSUPPORTED'}]};
- const report=await inspectPdfVectorQuality(result.pdf,incorrect);
+ const report=await auditPdf(result.pdf,incorrect);
  assert.equal(report.structuralPass,false);
  assert.ok(report.findings.some(x=>x.page===3&&x.code==='RASTER_FALLBACK_IMAGE_MISSING'));
 });
@@ -192,7 +194,7 @@ test('vector page with a genuine embedded image is not falsely counted as fully 
  pdf.image(png,150,80,{width:40,height:40});
  pdf.end();await ended;
  const blob=new Blob(chunks,{type:'application/pdf'});
- const report=await inspectPdfVectorQuality(blob,{
+ const report=await auditPdf(blob,{
   pages:1,vectorPages:1,rasterPages:0,fallbackPages:[],renderMode:'professional'
  });
  assert.equal(report.structuralPass,true);
