@@ -22,10 +22,10 @@ try{
    export async function convertAnyToPdf(file,onProgress=()=>{},signal,options={}) {
     if(signal?.aborted)throw new DOMException('cancelled','AbortError');
     const mode=options.engine||'professional';
+    (window.__attempts||=[]).push({name:file.name,mode});
     onProgress({stage:'professional',detail:mode==='professional'?'svg_vector':'compat_raster',page:1,total:1});
     if(mode==='professional'&&file.name==='filter.hwp')throw Error('SVG_FILTER_EFFECT_UNSUPPORTED');
     if(mode==='professional'&&file.name==='stream.hwpx')throw Error('PDF_STREAM_TIMEOUT');
-    (window.__attempts||=[]).push({name:file.name,mode});
     const raw=new Uint8Array(window.__recoveryTestPdf);
     return {pdf:new Blob([raw],{type:'application/pdf'}),pages:1,bytes:raw.byteLength,
       renderMode:mode==='professional'?'professional':mode==='hybrid-filter'?'mixed':'raster-compat',warnings:[]};
