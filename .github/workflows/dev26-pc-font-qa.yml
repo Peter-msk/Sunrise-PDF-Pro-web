@@ -1,0 +1,73 @@
+name: DEV26 PC font fidelity deep regression (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/dev26-pc-font-fidelity-20261112
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      CF_PAGES_BRANCH: release/dev26-cloud-build-20261112
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Verify cumulative patches, full tests, and Vite/WASM build
+        run: bash .release/build-dev26-cloudflare.sh
+      - name: Verify local font bilingual matching, budget order, and fallback policy
+        run: |
+          set -euo pipefail
+          node --test browser-local/tests/local-fonts.mjs browser-local/tests/r66-local-font-fidelity.mjs browser-local/tests/r64-font-watchdog.mjs
+          npm --prefix browser-local run check:source
+          test -s browser-local/dist/rhwp_bg.wasm
+          grep -q 'id="font-check"' browser-local/dist/index.html
+      - name: Install Chromium
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Real Chromium local font bytes, bilingual family, PDF embed, UI permission diagnostics
+        run: node browser-local/tests/r66-local-font-browser.mjs
+      - name: Download versioned HWP/HWPX source fixtures
+        run: |
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Launch isolated Worker (no production changes)
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 >/tmp/font-fidelity-worker.log 2>&1 &
+          for n in $(seq 1 90); do
+            if curl -fsS 'http://127.0.0.1:8787/local/health' >/tmp/font-fidelity-health.json; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/font-fidelity-worker.log
+          exit 1
+      - name: Actual Chromium HWP HWPX default vector conversion
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/e2e.mjs
+      - name: Actual Chromium HWP HWPX explicit filter hybrid conversion
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/hybrid-real-browser.mjs
+      - name: Keep QA evidence (no user document collected)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev26-font-fidelity-deep-qa
+          path: |
+            r29-browser-real-evidence/DEV26_HYBRID_BROWSER_E2E.json
+            r29-browser-real-evidence/R40_BROWSER_LOCAL_E2E.json
+            /tmp/font-fidelity-health.json
+            /tmp/font-fidelity-worker.log
+          if-no-files-found: warn
+          retention-days: 7
