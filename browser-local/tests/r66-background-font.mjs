@@ -73,7 +73,7 @@ test('font access verification is retained for actual conversion, with honest ba
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const pdf=readFileSync(new URL('svg-professional.js',src),'utf8');
  assert.match(main,/verifiedPcFontData=result\.fonts/);
- assert.match(main,/verifiedPcFontData\?\.length\?Promise\.resolve\(verifiedPcFontData\):requestLocalFontAccess\(\)/);
+ assert.match(main,/verifiedPcFontData!==null\?Promise\.resolve\(verifiedPcFontData\):requestLocalFontAccess\(\)/);
  assert.match(main,/document\.addEventListener\('visibilitychange'/);
  assert.match(html,/id="background-policy"/);
  assert.match(pdf,/registerFont\(face\.name,face\.bytes,face\.collectionFontName\|\|undefined\)/);
@@ -101,4 +101,10 @@ test('synchronous abort during fallback timer registration clears late timer',as
  const host={setTimeout(){controller.abort();return 4;},clearTimeout:id=>cleared.push(id)};
  await assert.rejects(cooperativeYield({host,signal:controller.signal}),{name:'AbortError'});
  assert.deepEqual(cleared,[4]);
+});
+test('compatibility writer yields cooperatively instead of clamped zero-delay timers',()=>{
+ const src=readFileSync(new URL('../src/raster-compat-pdf.mjs',import.meta.url),'utf8');
+ assert.match(src,/import \{cooperativeYield\} from '\.\/cooperative-yield\.mjs'/);
+ assert.equal((src.match(/await cooperativeYield\(\{signal\}\)/g)||[]).length,2);
+ assert.doesNotMatch(src,/new Promise\(resolve=>setTimeout\(resolve,0\)\)/);
 });
