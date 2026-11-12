@@ -1,5 +1,5 @@
 name: DEV26 PC font PDF embedding audit QA (NO DEPLOY)
-# rerun: pinpoint bilingual local-font selection regression
+# rerun: corrected legacy fake PostScript metadata after real SFNT fix
 on:
   push:
     branches:
