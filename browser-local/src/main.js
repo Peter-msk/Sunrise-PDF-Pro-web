@@ -31,15 +31,32 @@ fontStatus(!fontCapability.secure?'PC 글꼴 접근은 HTTPS 연결에서만 지
  'PC 글꼴 조회 가능 여부: 아직 확인하지 않음 · 글꼴 연결 확인을 누르면 사이트 권한을 요청할 수 있습니다.');
 // Browser background timer policies can stall a conversion. Never claim that
 // a frozen/discarded page is running; refresh the visible progress on return.
-let backgroundSince=null;
-document.addEventListener('visibilitychange',()=>{
- if(!busy)return;
- if(document.hidden){backgroundSince=performance.now();return;}
- if(backgroundSince!==null){
-  conversionClock.render();
-  status('변환 탭 복귀 · 실제 작업 상태를 확인 중입니다. 브라우저가 페이지를 정지했다면 진행이 지연될 수 있습니다.');
-  backgroundSince=null;
+let backgroundSince=null,browserFrozen=false;
+function refreshBrowserLifecycle(returned=false){
+ conversionClock.setLifecycle({isHidden:document.hidden,isFrozen:browserFrozen});
+ if(!busy||controller?.signal.aborted)return;
+ if(document.hidden||browserFrozen){
+  backgroundSince??=performance.now();
+  return;
  }
+ if(returned&&backgroundSince!==null){
+  // Never auto-restart a previously active converter. A thawed Promise
+  // continues itself; a discarded tab has no in-memory work to restore.
+  backgroundSince=null;
+  status('변환 탭 복귀 · 실제 진행 상태를 다시 확인 중입니다. 중단된 작업을 중복 실행하지 않습니다.');
+ }
+}
+document.addEventListener('visibilitychange',()=>{
+ refreshBrowserLifecycle(!document.hidden);
+});
+document.addEventListener('freeze',()=>{
+ browserFrozen=true;refreshBrowserLifecycle();
+});
+document.addEventListener('resume',()=>{
+ browserFrozen=false;refreshBrowserLifecycle(true);
+});
+window.addEventListener('pageshow',event=>{
+ if(event.persisted){browserFrozen=false;refreshBrowserLifecycle(true);}
 });
 $('font-check')?.addEventListener('click',async()=>{
  if(busy)return;
@@ -204,7 +221,7 @@ $('convert').addEventListener('click',async()=>{
   :'선택한 문서 1개만 호환 이미지 PDF로 다시 변환합니다. 모든 쪽의 글자 검색은 불가능합니다.');
  if(engine==='compat-raster')fontStatus('호환 이미지 PDF는 페이지를 그림으로 출력하므로 PC 글꼴의 PDF 임베딩 절차를 사용하지 않습니다.');
  let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&engine!=='compat-raster'&&pending.some(i=>isHwp(i.file)))fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
- controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();let completed=0;
+ controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();refreshBrowserLifecycle();let completed=0;
  try{
   let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');if(access.status==='ready')verifiedPcFontData=localFonts;
    fontStatus(access.status==='ready'?'PC 글꼴 '+localFonts.length+'개에 접근 확인 · 실제 PDF 사용 여부는 변환 결과를 확인하세요.':fontAccessNotice);}
@@ -309,16 +326,34 @@ $('convert').addEventListener('click',async()=>{
 $('print-prepare').addEventListener('click',async()=>{
  if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;
  let fontsRequest=null,printFontNotice='';try{if(USE_PC_FONTS_BY_DEFAULT)fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){printFontNotice='PC 글꼴 API를 사용할 수 없어 내장 글꼴로 인쇄합니다.';}
- controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();
+ controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();refreshBrowserLifecycle();
  try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;if(access.status==='ready')verifiedPcFontData=localFonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.'+(printFontNotice?' · '+printFontNotice:''));}
  catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+String(error?.message||error));}
  finally{busy=false;controller=null;draw();}
 });
 $('print-save').addEventListener('click',()=>{if(printJob&&!busy){try{printJob.print();status('인쇄 창에서 PDF로 저장을 선택하세요.');}catch(error){status('인쇄 실패: '+String(error?.message||error));}}});
-$('cancel').addEventListener('click',()=>controller?.abort());
+$('cancel').addEventListener('click',()=>{
+ if(!controller||controller.signal.aborted)return;
+ controller.abort();
+ // Immediate user feedback does not claim synchronous WASM work is stopped.
+ status('취소 요청됨 · 현재 작업이 제어를 반환하면 중단합니다. 이미 완료된 PDF는 유지됩니다.');
+ $('cancel').disabled=true;
+});
 $('reset').addEventListener('click',()=>{requestedFileRecovery=null;conversionClock.reset();for(const item of items)release(item);items=[];clearPrint();clearArchive();$('progress').value=0;show(null);draw();status('새 문서를 선택해 주세요.');});
-viewer.open(null);status('변환 준비 완료. 한글·엑셀·이미지를 여러 개 선택할 수 있습니다.');sync();
-window.addEventListener('pagehide',()=>{conversionClock.reset();controller?.abort();viewer.dispose();clearPrint();clearArchive();for(const item of items)release(item);});
+viewer.open(null);
+status(document.wasDiscarded
+ ?'브라우저가 이전 탭을 메모리에서 폐기했습니다. 미완료 변환은 복원할 수 없습니다. 원본 파일을 다시 선택해 변환하세요.'
+ :'변환 준비 완료. 한글·엑셀·이미지를 여러 개 선택할 수 있습니다.');
+sync();
+window.addEventListener('pagehide',event=>{
+ if(event.persisted){
+  // BFCache is a frozen in-memory page, not a terminated document. Cleaning
+  // object URLs here destroys finished downloads when the user returns.
+  browserFrozen=true;refreshBrowserLifecycle();return;
+ }
+ conversionClock.reset();controller?.abort();viewer.dispose();
+ clearPrint();clearArchive();for(const item of items)release(item);
+});
 
 
 startProTelemetry();
