@@ -458,10 +458,10 @@ index 0000000..239943a
 +});
 diff --git a/browser-local/tests/r66-hidden-tab-browser.mjs b/browser-local/tests/r66-hidden-tab-browser.mjs
 new file mode 100644
-index 0000000..f7fce85
+index 0000000..0625bfc
 --- /dev/null
 +++ b/browser-local/tests/r66-hidden-tab-browser.mjs
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,79 @@
 +/**
 + * Real Chromium acceptance for an HWP conversion after its original tab is
 + * put in the background. This verifies page visibility and completion; it
@@ -511,9 +511,17 @@ index 0000000..f7fce85
 + await page.waitForFunction(()=>document.querySelector('#pc-font-status')?.textContent.includes('1개에 접근 가능합니다'),null,{timeout:15000});
 + await page.locator('#source').setInputFiles(source);
 + await page.locator('#convert').click();
-+ const other=await context.newPage();await other.goto('about:blank');await other.bringToFront();
++ // Playwright's ordinary newPage()/bringToFront() leaves the source page
++ // visible in automated Chrome. CDP's Page Lifecycle transition forces the
++ // actual hidden and frozen states; a real frozen page CANNOT run JavaScript.
++ // Resume in the hidden state, then verify conversion completes there.
++ const cdp=await context.newCDPSession(page);
++ await cdp.send('Page.enable');
++ await cdp.send('Page.setWebLifecycleState',{state:'frozen'});
++ await sleep(400);
++ await cdp.send('Page.setWebLifecycleState',{state:'active'});
 + const isHidden=await page.evaluate(()=>document.visibilityState==='hidden');
-+ if(!isHidden)throw Error('Chrome did not hide source tab; browser acceptance not valid');
++ if(!isHidden)throw Error('Chrome lifecycle did not enter hidden; browser acceptance not valid');
 + let state='ready';
 + for(let i=0;i<180;i++){
 +  state=await page.locator('.file-row').first().getAttribute('data-state');
