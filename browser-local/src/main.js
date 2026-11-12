@@ -125,7 +125,13 @@ function draw(){
       const confirmed=verified.filter(x=>x.embedded);
       const unconfirmed=verified.filter(x=>!x.embedded);
       const actualNames=embedded.slice(0,8).map(x=>x.baseName).join(', ');
-      item.fontAuditMessage='PDF 글꼴 리소스 '+audit.fonts.length+'종 중 글꼴 프로그램 내장 '+
+      const requested=item.result.sourceFontInventory?.requested||[];
+      const unavailable=item.result.sourceFontInventory?.missing||[];
+      const originNote=requested.length?'HWP 원문 지정 서체 '+requested.length+'종: '+
+       requested.slice(0,8).join(', ')+(requested.length>8?' 외 '+(requested.length-8)+'종':'')+
+       (unavailable.length?' · PC 등록 불가: '+
+        unavailable.slice(0,5).join(', '):'')+' · ':'';
+      item.fontAuditMessage=originNote+'PDF 글꼴 리소스 '+audit.fonts.length+'종 중 글꼴 프로그램 내장 '+
        embedded.length+'종 · PC 글꼴 선택 '+verified.length+'종 중 PDF 임베딩 이름 확인 '+
        confirmed.length+'종'+(unconfirmed.length?' · 확인 불가: '+
        unconfirmed.slice(0,5).map(x=>x.family).join(', '):'')+
