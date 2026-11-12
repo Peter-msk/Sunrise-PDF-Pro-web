@@ -327,6 +327,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
   // Aborting only pdf.destroy() leaves toBlob listeners and queued chunks alive.
   const writerAbort=linkPdfWriterAbort(signal);
   let pending;
+  const streamProbe={};
   try{
     pending=toBlob(pdf,writerAbort.signal,({bytes})=>{
       // PDFKit can emit bytes while drawing a page, before pdf.end().
@@ -336,7 +337,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
         page:reportingFinalStream?count:(currentPdfPage||1),total:count,
         detail:reportingFinalStream?'pdf_stream':'pdf_write',bytes});}
       catch{/* A UI observer must not corrupt the PDF stream. */}
-    });
+    },undefined,streamProbe);
   }catch(error){
     writerAbort.abort();
     writerAbort.close();
@@ -432,12 +433,32 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     ended=true;
     reportingFinalStream=true;
     const pdfEndStarted=Date.now();
+    const bytesBeforeEnd=streamProbe.bytes||0;
+    const chunksBeforeEnd=streamProbe.chunks||0;
     pdf.end();
     onProgress({stage:'professional',page:count,total:count,detail:'pdf_stream',
       elapsedMs:Date.now()-pdfEndStarted});
-    // The PDFKit 'end' event may never arrive after a large embedded image.
-    // This bounds asynchronous finalization only, not synchronous SVGtoPDF work.
-    const blob=await waitForImageOperation(pending,signal,finalizeTimeoutMs,'PDF_STREAM_TIMEOUT');
+    // A timeout can mean no bytes, bytes before end but none afterwards,
+    // or finalization bytes without PDFKit's end event. Report only aggregate
+    // counters in the local error; never include original document content.
+    let blob;
+    try{
+      blob=await waitForImageOperation(pending,signal,finalizeTimeoutMs,'PDF_STREAM_TIMEOUT');
+    }catch(error){
+      if(error?.message==='PDF_STREAM_TIMEOUT'){
+        const bytes=streamProbe.bytes||0;
+        const finalBytes=Math.max(0,bytes-bytesBeforeEnd);
+        const finalChunks=Math.max(0,(streamProbe.chunks||0)-chunksBeforeEnd);
+        const reason=streamProbe.endSeen?'END_SEEN_NO_COMPLETION':
+          !bytes?'NO_BYTES':!finalBytes?'NO_FINAL_BYTES':'FINAL_BYTES_NO_END';
+        const sinceLast=streamProbe.lastChunkAt
+          ?Math.max(0,Date.now()-streamProbe.lastChunkAt):null;
+        error.message='PDF_STREAM_TIMEOUT ('+reason+', emitted='+bytes+
+          'B, final='+finalBytes+'B/'+finalChunks+'chunks'+
+          (sinceLast===null?'':', idle='+sinceLast+'ms')+')';
+      }
+      throw error;
+    }
     cancel();
     if(!(blob instanceof Blob)||blob.size<100)throw Error('PROFESSIONAL_PDF_EMPTY');
     const header=new Uint8Array(await blob.slice(0,5).arrayBuffer());
