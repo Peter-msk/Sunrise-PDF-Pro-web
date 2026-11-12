@@ -153,7 +153,8 @@ export async function loadPdfFonts(fontFiles,parser,signal,{postscriptName=null}
     if(faces.some(f=>f.bold===bold&&f.italic===italic&&aliases.some(a=>f.aliases.includes(a))))
       throw Error('같은 글꼴 패밀리와 스타일을 중복 선택했습니다: '+file.name);
     faces.push({name:'SunriseFont'+(faces.length+1),family:parsed.familyName,
-      aliases,bold,italic,characterSet:new Set(parsed.characterSet),bytes,
+      postscriptName:parsed.postscriptName||'',aliases,bold,italic,
+      characterSet:new Set(parsed.characterSet),bytes,
       ...(collection?{collectionFontName:parsed.postscriptName}: {})});
   }
   return {faces};
@@ -174,13 +175,21 @@ export async function installMeasureFonts(registry,signal,
   if(!fontSet?.add||!fontSet?.delete||typeof FontFaceImpl!=='function')
     throw Error('이 브라우저는 사용자 글꼴의 임시 로딩을 지원하지 않습니다.');
   const installed=[],registeredIds=new Set(),start=Date.now();
-  const stats={loaded:0,skipped:0,timedOut:0,budgetExceeded:false};
+  const stats={loaded:0,skipped:0,timedOut:0,budgetExceeded:false,ttcMeasurementUnverified:0};
   const cleanup=()=>{for(const font of installed)fontSet.delete(font);};
   cleanup.stats=stats;
   try{
     const explicitlyProvided=new Set(faces.filter(face=>!face.isFallback).flatMap(face=>
       [face.family,...(face.cssAliases||[])].map(name=>familyKey(name)+'|'+face.bold+'|'+face.italic)));
     for(const face of faces){
+      // PDFKit selects a TTC face by PostScript name. FontFace(ArrayBuffer)
+      // has NO matching face-index argument; loading the entire TTC as a CSS
+      // face can silently measure its first face instead of the selected one.
+      // Leave Windows' installed face resolution intact and warn locally.
+      if(face.collectionFontName){
+        stats.ttcMeasurementUnverified++;
+        continue;
+      }
       const names=[...new Set([face.family,...(face.cssAliases||[])])];
       for(const family of names){
         const id=familyKey(family)+'|'+face.bold+'|'+face.italic;
