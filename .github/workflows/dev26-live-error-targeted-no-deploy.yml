@@ -1,4 +1,5 @@
 name: DEV26 today's live-error targeted QA (NO DEPLOY)
+# rerun: fixture recording correction, production remains untouched
 on:
   push:
     branches:
