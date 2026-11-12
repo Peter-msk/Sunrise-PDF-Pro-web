@@ -185,3 +185,14 @@ test('identity matrices do not normalize already-raster embedded images',()=>dom
   '<image x="0" y="0" width="1" height="1" href="data:image/png;base64,'+base64+'" filter="url(#effect)"/>');
  await assert.rejects(normalize(input),/SVG_FILTER_EFFECT_UNSUPPORTED/);
 }));
+
+test('near-identity and hexadecimal SVG matrix entries never drop a real effect',()=>dom(async()=>{
+ const altered=[
+  '1.0000000000001'+matrix.slice(1),
+  '0x1'+matrix.slice(1)
+ ];
+ for(const values of altered){
+  const input=svg(def(color('matrix','values="'+values+'"'))+rect('filter="url(#effect)"'));
+  await assert.rejects(normalize(input),/SVG_FILTER_EFFECT_UNSUPPORTED/,values);
+ }
+}));
