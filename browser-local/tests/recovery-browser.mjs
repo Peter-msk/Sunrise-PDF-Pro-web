@@ -25,9 +25,10 @@ try{
     onProgress({stage:'professional',detail:mode==='professional'?'svg_vector':'compat_raster',page:1,total:1});
     if(mode==='professional'&&file.name==='filter.hwp')throw Error('SVG_FILTER_EFFECT_UNSUPPORTED');
     if(mode==='professional'&&file.name==='stream.hwpx')throw Error('PDF_STREAM_TIMEOUT');
+    (window.__attempts||=[]).push({name:file.name,mode});
     const raw=new Uint8Array(window.__recoveryTestPdf);
     return {pdf:new Blob([raw],{type:'application/pdf'}),pages:1,bytes:raw.byteLength,
-      renderMode:mode==='professional'?'professional':'raster-compat',warnings:[]};
+      renderMode:mode==='professional'?'professional':mode==='hybrid-filter'?'mixed':'raster-compat',warnings:[]};
    }
   `});
  });
@@ -52,11 +53,15 @@ try{
  assert.match(await page.locator('.file-row').filter({hasText:'completed.xlsx'}).innerText(),/변환 완료/);
  assert.match(await page.locator('.file-row').filter({hasText:'stream.hwpx'}).innerText(),/PDF_STREAM_TIMEOUT/);
  assert.match(await filterRow.innerText(),/변환 완료/);
+ assert.match(await filterRow.innerText(),/혼합 PDF/);
  assert.equal(await page.locator('.compat-retry').count(),1);
  await page.locator('.file-row').filter({hasText:'stream.hwpx'}).locator('.compat-retry').click();
  await page.waitForFunction(()=>document.getElementById('done-count')?.textContent==='3'&&document.getElementById('failed-count')?.textContent==='0'&&document.getElementById('cancel')?.disabled,null,{timeout:35000});
  assert.equal(await page.locator('.compat-retry').count(),0);
  assert.equal(await page.locator('#pdf-engine').inputValue(),'professional');
+ const attempts=await page.evaluate(()=>window.__attempts);
+ assert.deepEqual(attempts.filter(x=>x.name==='filter.hwp').map(x=>x.mode),['professional','hybrid-filter']);
+ assert.deepEqual(attempts.filter(x=>x.name==='stream.hwpx').map(x=>x.mode),['professional','compat-raster']);
  assert.deepEqual(pageErrors,[],'no uncaught UI errors');
  console.log('RECOVERY_BROWSER_REAL_UI_PASS: both real error classes recovered individually; successful queue items untouched; vector remains default');
 }finally{await browser.close();}
