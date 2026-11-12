@@ -106,17 +106,33 @@ export async function inspectPdfVectorQuality(pdfBlob,converted,{
    const expectedRaster=rasterSet.has(index);
    const images=sum(IMAGE_OPS),paths=sum(PATH_OPS),
     paints=sum(PAINT_OPS),textPaints=sum(TEXT_OPS);
+   // Confirm actual PDF.js text extraction separately from mere painting
+   // operators. Never retain extracted text; report character counts only.
+   let extractableCharacters=null;
+   try{
+    const content=await page.getTextContent();check();
+    ensure(content.items.length<=maxPageOperators,'PDF_VECTOR_TEXT_ITEMS_LIMIT');
+    extractableCharacters=content.items.reduce((n,item)=>n+
+     (typeof item.str==='string'?item.str.length:0),0);
+   }catch(error){
+    check();
+    if(error?.message==='PDF_VECTOR_TEXT_ITEMS_LIMIT')throw error;
+    findings.push({page:index,code:'PDF_TEXT_EXTRACTION_UNAVAILABLE',severity:'review'});
+   }
    if(expectedRaster&&images===0)
     findings.push({page:index,code:'RASTER_FALLBACK_IMAGE_MISSING',severity:'error'});
    if(!expectedRaster&&paths===0&&textPaints===0)
     findings.push({page:index,code:'VECTOR_DRAWING_EVIDENCE_ABSENT',severity:'review'});
    if(expectedRaster&&(paths>0||textPaints>0))
     findings.push({page:index,code:'RASTER_PAGE_HAS_OTHER_DRAWING',severity:'review'});
+   if(!expectedRaster&&textPaints>0&&extractableCharacters===0)
+    findings.push({page:index,code:'TEXT_PAINT_NOT_EXTRACTABLE',severity:'review'});
    pages.push({page:index,mode:expectedRaster?'raster-fallback':'vector',
     widthPt:Math.round(vp.width*100)/100,
     heightPt:Math.round(vp.height*100)/100,
     imagePaints:images,vectorPathOps:paths,vectorPaintOps:paints,
-    textPaintOps:textPaints,operatorCount:list.fnArray.length,
+    textPaintOps:textPaints,extractableCharacters,
+    operatorCount:list.fnArray.length,
     fallbackReason:expectedRaster?
       summary.rasterizedPages.find(x=>x.page===index)?.reason:null});
    page.cleanup();
