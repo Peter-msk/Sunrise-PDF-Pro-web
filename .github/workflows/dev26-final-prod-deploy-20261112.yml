@@ -1,0 +1,131 @@
+name: DEV26 FINAL integrated source production release (approved 2026-11-12)
+on:
+  push:
+    branches: [dev/dev26-final-integrated-source-20261112]
+    paths:
+      - .github/workflows/dev26-final-prod-deploy-20261112.yml
+permissions:
+  contents: read
+concurrency:
+  group: sunrise-pdf-pro-web-final-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      CI: 'true'
+      CLOUDFLARE_ACCOUNT_ID: '569c0b66d1f480e577ca67cd68592203'
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+    steps:
+      - name: Checkout exact integrated source (never reapply old patches)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify R65 ancestry and exact DEV26 repo identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 2a11edbdb3d1413b3ef4a6eccb150dd442c2f7cf HEAD
+          test -f browser-local/src/pdf-vector-quality.mjs
+          test -f browser-local/src/pdf-font-audit.mjs
+          test -f browser-local/tests/r66-windows-lifecycle.mjs
+          test -f docs/DEV26_COMPLEX_SVG_VECTOR_QUALITY_AUDIT_20261112.md
+          test "$(node -p "require('./browser-local/package.json').dependencies['@rhwp/core']")" = 0.8.7
+          git diff --check
+          echo "RELEASING_INTEGRATED_SOURCE_SHA=$(git rev-parse HEAD)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Full integrated source tests and production static asset build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          npm --prefix browser-local run check:source
+      - name: Wrangler production package dry-run (no mutation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 deploy --config wrangler.jsonc --dry-run --outdir /tmp/dev26-final-dry-run
+      - name: Install Chromium for isolated public document acceptance
+        shell: bash
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Download published pinned HWP HWPX samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Launch isolated local Worker with release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 >/tmp/dev26-final-local.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8787/local/health >/tmp/dev26-final-local-health.json; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dev26-final-local.log
+          exit 1
+      - name: Real Chromium HWP HWPX vector PDF, ZIP and per-file quality acceptance
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        shell: bash
+        run: |
+          set -euo pipefail
+          node browser-local/tests/e2e.mjs
+          node browser-local/tests/r66-pc-font-audit-browser.mjs
+          node browser-local/tests/r66-vector-quality-browser.mjs
+      - name: Assert deployment authorization and available Cloudflare secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'NO_CLOUDFLARE_API_TOKEN_NO_DEPLOY'; exit 3; }
+          test "${CLOUDFLARE_ACCOUNT_ID}" = '569c0b66d1f480e577ca67cd68592203'
+          echo 'DEV26_FINAL_EXPLICIT_USER_APPROVAL_CONFIRMED'
+      - name: Deploy validated integrated code and assets to existing Worker
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 deploy --config wrangler.jsonc
+          echo 'DEV26_PRODUCTION_DEPLOY_COMMAND_SUCCEEDED'
+      - name: Production HTTP smoke — UI, WASM, exact legacy worker, vector features
+        id: smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://sunrise-pdf-pro-web.ko-pg.workers.dev'
+          curl -fLSs --retry 5 --retry-delay 3 "$BASE/local/health" -o /tmp/dev26-final-prod-health.json
+          node -e "const x=require('/tmp/dev26-final-prod-health.json');if(x.rhwp_version!=='0.8.7'||x.wasm_sha256!=='54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989'||x.wasm_bytes!==11821756||x.document_upload!==false)process.exit(2);console.log('PRODUCTION_HEALTH_AND_PRIVACY_PASS');"
+          curl -fLSs --retry 5 --retry-delay 3 "$BASE/local/" -o /tmp/dev26-final-prod-index.html
+          grep -Fq 'value="professional" selected' /tmp/dev26-final-prod-index.html
+          grep -Fq 'value="hybrid-filter"' /tmp/dev26-final-prod-index.html
+          grep -Fq 'value="compat-raster"' /tmp/dev26-final-prod-index.html
+          curl -fLSs --retry 5 --retry-delay 3 "$BASE/local/assets/local-bundle.js" -o /tmp/dev26-final-prod-bundle.js
+          grep -Fq 'PDF 벡터 품질 확인' /tmp/dev26-final-prod-bundle.js
+          grep -Fq 'PDF 글꼴 확인' /tmp/dev26-final-prod-bundle.js
+          grep -Fq 'SVG_FILTER_EFFECT_UNSUPPORTED' /tmp/dev26-final-prod-bundle.js
+          curl -fLIs --retry 5 --retry-delay 3 "$BASE/local/rhwp_bg.wasm" -o /tmp/dev26-final-wasm-head
+          grep -qi '^content-type: application/wasm' /tmp/dev26-final-wasm-head
+          curl -fLIs --retry 5 --retry-delay 3 "$BASE/local/pdf-worker-legacy.mjs" -o /tmp/dev26-final-pdf-worker-head
+          grep -qi '^content-type: application/javascript' /tmp/dev26-final-pdf-worker-head
+          TEST_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/local/pdf-worker-legacy.mjs")
+          test "$TEST_CODE" = '405'
+          echo 'DEV26_FINAL_PRODUCTION_HTTP_SMOKE_PASS'
+      - name: Automatic rollback to exact previous production version if postdeploy smoke fails
+        if: failure() && steps.deploy.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 versions deploy '40308b40-262f-4a68-9023-41f002f2621b@100' --yes --name sunrise-pdf-pro-web --message "Automatic rollback after DEV26 final release smoke failure"
+          echo 'DEV26_FINAL_RELEASE_ROLLED_BACK'
+      - name: Report release command and smoke status
+        if: always()
+        shell: bash
+        run: echo "DEV26_RELEASE_DEPLOY_OUTCOME=${{ steps.deploy.outcome }} SMOKE_OUTCOME=${{ steps.smoke.outcome }}"
