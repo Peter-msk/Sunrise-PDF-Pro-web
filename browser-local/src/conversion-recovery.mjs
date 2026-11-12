@@ -17,13 +17,24 @@ export function canRecoverFile(item) {
   ['professional','hybrid-filter'].includes(item.lastEngine)&&!!recoveryCode(item.error);
 }
 
+/** Choose the least destructive explicit retry for the observed failure.
+ * A first unsupported SVG filter only needs a per-page hybrid raster.
+ * A PDF writer timeout needs the independent pdf-lib image writer.
+ * If hybrid itself failed, do not offer the same hybrid loop again.
+ */
+export function recoveryEngine(item) {
+ if(!canRecoverFile(item))return null;
+ return recoveryCode(item.error)==='SVG_FILTER_EFFECT_UNSUPPORTED'&&
+  item.lastEngine==='professional'?'hybrid-filter':'compat-raster';
+}
+
 /** Plan a single, user-confirmed recovery or an ordinary batch. */
 export function planConversion(items,selectedEngine,requestedRecovery=null) {
  if(!Array.isArray(items))throw Error('CONVERSION_QUEUE_INVALID');
  if(requestedRecovery){
   if(!items.includes(requestedRecovery)||!canRecoverFile(requestedRecovery))
    return {pending:[],engine:selectedEngine,recovery:false,cause:null};
-  return {pending:[requestedRecovery],engine:'compat-raster',recovery:true,
+  return {pending:[requestedRecovery],engine:recoveryEngine(requestedRecovery),recovery:true,
    cause:recoveryCode(requestedRecovery.error)};
  }
  return {pending:items.filter(item=>['ready','failed','cancelled'].includes(item.state)),
