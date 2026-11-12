@@ -85,7 +85,7 @@ function show(item){
  const link=$('active-download');link.hidden=!item?.result;
  if(!item?.result){link.removeAttribute('href');$('pages').textContent='';$('quality-detail').replaceChildren();viewer.open(null);sync();return;}
  link.href=item.pdfUrl;link.download=uniquePdfNames(items.map(i=>i.file))[items.indexOf(item)];
- const r=item.result;const mode=r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='mixed'?'혼합 PDF · 일부 쪽 이미지, 해당 쪽 검색 불가':r.renderMode==='raster-compat'?'호환 이미지 PDF · 글자 검색 불가':r.renderMode==='spreadsheet-text'?'셀·글자 보존 · 원본 서식 제한':r.renderMode==='source-image'?'원본 이미지':'PDF';
+ const r=item.result;const mode=r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='mixed'?'혼합 PDF · 일부 쪽 이미지, 해당 쪽 검색 불가':r.renderMode==='raster-compat'?'호환 이미지 PDF · 글자 검색 불가':r.renderMode==='raster'?'혼합 출력 결과 · 전체 쪽 이미지, 글자 검색 불가':r.renderMode==='spreadsheet-text'?'셀·글자 보존 · 원본 서식 제한':r.renderMode==='source-image'?'원본 이미지':'PDF';
  $('pages').textContent=r.pages+'쪽 · '+mode;
  const title=document.createElement('strong');title.textContent='출력 확인 · '+mode;
  const detail=document.createElement('div');
@@ -151,7 +151,8 @@ function draw(){
       if(signal.aborted||!items.includes(item)||item.result.pdf!==pdf)return;
       const pages=report.pages.map(p=>p.page+'쪽 '+
        (p.mode==='raster-fallback'?'이미지':'벡터')+
-       '(경로 '+p.vectorPathOps+', 글자 '+p.textPaintOps+
+       '(경로 '+p.vectorPathOps+', 텍스트 명령 '+p.textPaintOps+
+       ', 추출 글자 '+(p.extractableCharacters??'미확인')+
        ', 이미지 '+p.imagePaints+')').join(' · ');
       const errors=report.findings.filter(x=>x.severity==='error');
       const review=report.findings.filter(x=>x.severity==='review');
