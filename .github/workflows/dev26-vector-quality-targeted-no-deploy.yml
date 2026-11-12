@@ -1,4 +1,5 @@
 name: DEV26 SVG complex table and vector PDF QA (NO DEPLOY)
+# rerun: Node-only official PDF.js legacy parser for non-Chromium tests
 on:
   push:
     branches:
