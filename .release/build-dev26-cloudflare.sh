@@ -16,7 +16,7 @@ HOTFIX='.release/DEV26_REAL_FAILURES_HOTFIX.patch'
 test "$(git hash-object "$PATCH")" = 'd8e7b953237f2930965ec7a41b3ab2470273c3da'
 echo "5821e41d655f5d87b11fcf2b4b8b7bfdec8be0f3fd5f33292211dfb7e7592d96  $PATCH" | sha256sum -c -
 echo "42b9cf09b541eb0d555e852abbc8db0043cb59145d872b745be62bdd81e37118  $FIX" | sha256sum -c -
-echo "239dbc145262b48761db9a76000a5bc82bcd31806479b072c213211874a28dd3  $HOTFIX" | sha256sum -c -
+echo "e1d085013ab1bb78baf0a6bda5e1cffa0f38571b3a3a32e26b4de9edc2de82b3  $HOTFIX" | sha256sum -c -
 
 # Must be an R65 descendant. If checkout history is shallow, verify via the
 # original exact main anchor rather than allowing a different baseline.

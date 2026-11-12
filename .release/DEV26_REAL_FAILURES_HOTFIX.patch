@@ -25,7 +25,7 @@ index 2af775e..ac7eb2a 100644
      "check:source": "node scripts/check-source.mjs",
      "test:local": "npm run check:source && npm test",
 diff --git a/browser-local/src/converter.js b/browser-local/src/converter.js
-index a0d04fe..489ed06 100644
+index a0d04fe..be5cfa3 100644
 --- a/browser-local/src/converter.js
 +++ b/browser-local/src/converter.js
 @@ -10,6 +10,7 @@ import { loadDocumentLocalFonts } from './local-fonts.js';
@@ -45,14 +45,17 @@ index a0d04fe..489ed06 100644
   throwIfCancelled(signal);
   // Check the first bytes before allocating a whole large file in browser RAM.
   // This removes the former 20MiB rejection without eliminating magic checks.
-@@ -161,6 +162,17 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
+@@ -161,6 +162,20 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    if(!doc)doc=new HwpDocument(new Uint8Array(buf));
    const count=doc.pageCount();
    if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
 +  if(options.engine==='compat-raster'){
 +   // This option must be explicitly selected in the UI. It is never an
 +   // automatic downgrade of the original object-preserving PDF route.
-+   return buildRasterCompatibilityPdf(doc,count,{signal,onProgress,rasterPage,
++   // Keep the WASM document alive until every asynchronous raster page is finished.
++   // Returning an unawaited Promise would run the enclosing finally immediately,
++   // freeing the document and causing "null pointer passed to rust".
++   return await buildRasterCompatibilityPdf(doc,count,{signal,onProgress,rasterPage,
 +    preprocessSvg:async(rawSvg)=>{
 +     const hasImage=typeof rawSvg==='string'&&/image/i.test(rawSvg);
 +     const gifSvg=hasImage?await normalizeGifSvg(rawSvg,signal):rawSvg;
@@ -279,10 +282,10 @@ index 0000000..9d2542c
 +console.log(JSON.stringify(reports));
 diff --git a/browser-local/tests/r66-real-failure-compat.mjs b/browser-local/tests/r66-real-failure-compat.mjs
 new file mode 100644
-index 0000000..dc9131b
+index 0000000..8b00bb5
 --- /dev/null
 +++ b/browser-local/tests/r66-real-failure-compat.mjs
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,87 @@
 +import test from 'node:test';
 +import assert from 'node:assert/strict';
 +import {readFileSync} from 'node:fs';
@@ -342,6 +345,9 @@ index 0000000..dc9131b
 + const src=readFileSync(new URL('../src/converter.js',import.meta.url),'utf8');
 + const ui=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 + assert.match(src,/if\(options\.engine==='compat-raster'\)/);
++ // The surrounding try/finally frees the WASM document. Await the async
++ // compatibility build before finally, else Chromium sees a freed Rust ptr.
++ assert.match(src,/return await buildRasterCompatibilityPdf\(doc,count,/);
 + assert.match(src,/allowRasterFallback:false/);
 + assert.match(src,/options=\{engine:'professional',\.\.\.options\}/);
 + assert.match(ui,/<option value="professional" selected>/);
