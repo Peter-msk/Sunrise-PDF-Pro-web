@@ -20,7 +20,22 @@ const IMAGE_ENCODE_TIMEOUT_MS=25_000;
 const PIXELS_PER_TICK=131_072;
 
 const LOCAL_FILTER=/^url\(\s*['"]?#([A-Za-z_][\w.-]*)['"]?\s*\)$/;
-const CSS_GRAY=/^grayscale\(\s*(?:1(?:\.0+)?|100%)\s*\)$/i;
+// CSS grayscale() defaults to 100%; saturate(0) is the same fully desaturated
+// sRGB matrix. Do not broaden this to partial saturation or hue rotation.
+const CSS_GRAY=/^(?:grayscale\(\s*(?:1(?:\.0+)?|100%)?\s*\)|saturate\(\s*(?:0(?:\.0+)?|0%)\s*\))$/i;
+// Only a strict list of provably no-op CSS filter functions can be removed.
+// Each function is checked independently; no urls, variables or mixed effects.
+const CSS_IDENTITY_TOKEN=/\s*(?:grayscale\(\s*(?:0(?:\.0+)?|0%)\s*\)|saturate\(\s*(?:1(?:\.0+)?|100%)?\s*\)|brightness\(\s*(?:1(?:\.0+)?|100%)?\s*\)|contrast\(\s*(?:1(?:\.0+)?|100%)?\s*\)|opacity\(\s*(?:1(?:\.0+)?|100%)?\s*\)|invert\(\s*(?:0(?:\.0+)?|0%)\s*\)|sepia\(\s*(?:0(?:\.0+)?|0%)\s*\)|hue-rotate\(\s*(?:0(?:\.0+)?(?:deg|rad|turn)?)?\s*\))\s*/giy;
+function isCssIdentityFilter(value){
+ let at=0,n=0;
+ while(at<value.length){
+  CSS_IDENTITY_TOKEN.lastIndex=at;
+  const m=CSS_IDENTITY_TOKEN.exec(value);
+  if(!m||m.index!==at||++n>8)return false;
+  at=CSS_IDENTITY_TOKEN.lastIndex;
+ }
+ return n>0;
+}
 const EMBEDDED_IMAGE=/^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/i;
 const NAMED=Object.freeze({black:'#000000',white:'#ffffff',red:'#ff0000',blue:'#0000ff',green:'#008000',lime:'#00ff00',yellow:'#ffff00',navy:'#000080',gray:'#808080',grey:'#808080',silver:'#c0c0c0',maroon:'#800000',purple:'#800080',orange:'#ffa500',teal:'#008080',cyan:'#00ffff',aqua:'#00ffff',magenta:'#ff00ff',fuchsia:'#ff00ff',transparent:'#00000000'});
 const DRAWABLE=new Set(['g','svg','rect','path','line','polyline','polygon','circle','ellipse','text','tspan','image','linearGradient','radialGradient','stop','defs','title','desc','clipPath','mask']);
@@ -100,6 +115,78 @@ export function identifyGrayFilter(element){
   return {mode,kind:'gray-matrix'};
  }
  return null;
+}
+/** SVG feColorMatrix identity, or a channel-wise identity transfer.
+ * No explicitly sized filter region, inherited filter, animation or side inputs.
+ * Avoid treating SVG Gaussian blur(0) or a custom clipping region as no-ops.
+ */
+export function identifyIdentitySvgFilter(element){
+ if(element?.localName!=='filter'||Array.from(element.attributes||[]).some(a=>
+  !['id','color-interpolation-filters'].includes(a.name)))return false;
+ const kids=Array.from(element.children||[]);
+ if(kids.length!==1)return false;
+ const primitive=kids[0];
+ if(primitive.hasAttribute('in')&&primitive.getAttribute('in')!=='SourceGraphic')return false;
+ if(primitive.localName==='feColorMatrix'){
+  if(primitive.children.length||
+   Array.from(primitive.attributes).some(a=>
+    !['type','values','in','result','color-interpolation-filters'].includes(a.name)))return false;
+  const type=primitive.getAttribute('type')||'matrix';
+  const raw=primitive.getAttribute('values');
+  if(type==='saturate')return raw===null||/^(?:1(?:\.0+)?|1\.0+)$/u.test(raw.trim());
+  if(type==='hueRotate')return raw===null||/^0(?:\.0+)?$/u.test(raw.trim());
+  if(type!=='matrix')return false;
+  if(raw===null)return true; // SVG default matrix is identity.
+  const vals=raw.trim().split(/[\s,]+/);
+  const identity=[1,0,0,0,0, 0,1,0,0,0, 0,0,1,0,0, 0,0,0,1,0];
+  return vals.length===20&&vals.every((v,i)=>v!==''&&
+   Number.isFinite(Number(v))&&Math.abs(Number(v)-identity[i])<1e-12);
+ }
+ if(primitive.localName==='feComponentTransfer'){
+  if(Array.from(primitive.attributes).some(a=>!['in','result'].includes(a.name)))return false;
+  const fs=Array.from(primitive.children);
+  if(fs.length!==4)return false;
+  return new Set(fs.map(x=>x.localName)).size===4&&
+   ['feFuncR','feFuncG','feFuncB','feFuncA'].every(name=>
+    fs.some(x=>x.localName===name&&x.children.length===0&&
+     x.getAttribute('type')==='identity'&&x.attributes.length===1));
+ }
+ return false;
+}
+const IDENTITY_LEAVES=new Set(['rect','circle','ellipse','path','polygon','image','text']);
+function isSafeIdentityTarget(el){
+ // A filter acts on a composited layer. Even an identity matrix can change
+ // opacity/overlay behavior or filter-region clipping on groups/thick strokes.
+ // Restrict this optimization to one unblended, opaque, non-stroked leaf.
+ if(!IDENTITY_LEAVES.has(el.localName)||el.children.length||
+  el.closest('defs,mask,clipPath,pattern,marker'))return false;
+ for(let node=el;node;node=node.parentElement){
+  if(node.hasAttribute('class'))return false;
+  for(const name of ['mask','clip-path','mix-blend-mode','isolation','filter']){
+   if(name==='filter'&&node===el)continue;
+   if(node.hasAttribute(name))return false;
+  }
+  if(node.hasAttribute('stroke')&&node.getAttribute('stroke')!=='none')return false;
+  for(const name of ['opacity','fill-opacity','stroke-opacity']){
+   if(node.hasAttribute(name)&&!/^(?:1(?:\.0+)?|100%)$/.test(node.getAttribute(name).trim()))
+    return false;
+  }
+  for(const name of ['fill','color']){
+   const value=node.getAttribute(name)||'';
+   if(/^(?:rgba\(|#[a-f0-9]{4}$|#[a-f0-9]{8}$)/i.test(value.trim()))return false;
+  }
+  const style=cssProps(node);
+  for(const [name,value] of style){
+   if(name==='filter'&&node===el)continue;
+   if(name==='stroke'&&value.trim()==='none')continue;
+   if(name==='opacity'||name==='stroke'||name==='fill-opacity'||
+      name==='stroke-opacity'||name==='mix-blend-mode'||name==='isolation'||
+      name==='mask'||name==='clip-path'||name==='filter')return false;
+   if(['fill','color'].includes(name)&&
+      /^(?:rgba\(|#[a-f0-9]{4}$|#[a-f0-9]{8}$)/i.test(value.trim()))return false;
+  }
+ }
+ return true;
 }
 function cssProps(el){
  const src=el.getAttribute('style');if(src===null)return [];
@@ -317,6 +404,16 @@ export async function normalizeSvgGrayscale(svg,signal,{
   // has no consumer and isn't externally referenced, discard it explicitly.
   const unused=all.filter(el=>el.localName==='filter');
   if(!unused.length)return {svg,filtersApplied:0,imagesChanged:0};
+  // Stylesheets may reference a filter without an inline filter attribute.
+  // Removing that definition would silently change the rendered document.
+  if(root.querySelector('style'))fail('SVG_FILTER_STYLESHEET_UNSUPPORTED');
+  const filterIds=new Set(unused.map(el=>el.getAttribute('id')));
+  for(const n of all)for(const attr of Array.from(n.attributes||[])){
+   if(!n.closest('filter')&&/url\(\s*['"]?#([\w.-]+)['"]?\s*\)/i.test(attr.value)){
+    const id=/url\(\s*['"]?#([\w.-]+)['"]?\s*\)/i.exec(attr.value)?.[1];
+    if(filterIds.has(id))fail('SVG_FILTER_UNRESOLVED_REFERENCE');
+   }
+  }
   for(const el of unused)el.remove();
   return {svg:serialize(root),filtersApplied:0,imagesChanged:0};
  }
@@ -329,6 +426,13 @@ export async function normalizeSvgGrayscale(svg,signal,{
  for(const {el,descriptor} of targets){
   checkAbort(signal);
   if(descriptor.value==='none'){setNoFilter(el,descriptor);continue;}
+  const reference=LOCAL_FILTER.exec(descriptor.value);
+  const noop= isCssIdentityFilter(descriptor.value)||
+   (reference&&identifyIdentitySvgFilter(definitions.get(reference[1])));
+  if(noop){
+   if(!isSafeIdentityTarget(el))fail('SVG_FILTER_IDENTITY_TARGET_UNSAFE');
+   setNoFilter(el,descriptor);filtersApplied++;continue;
+  }
   let mode;
   if(CSS_GRAY.test(descriptor.value))mode='sRGB';
   else{
