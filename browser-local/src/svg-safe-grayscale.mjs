@@ -157,7 +157,7 @@ export function identifyIdentitySvgFilter(element){
  }
  return false;
 }
-const IDENTITY_LEAVES=new Set(['rect','circle','ellipse','path','polygon','image','text']);
+const IDENTITY_LEAVES=new Set(['rect','circle','ellipse','path','polygon','text']);
 function isSafeIdentityTarget(el){
  // A filter acts on a composited layer. Even an identity matrix can change
  // opacity/overlay behavior or filter-region clipping on groups/thick strokes.
@@ -413,10 +413,13 @@ export async function normalizeSvgGrayscale(svg,signal,{
   if(root.querySelector('style'))fail('SVG_FILTER_STYLESHEET_UNSUPPORTED');
   const filterIds=new Set(unused.map(el=>el.getAttribute('id')));
   for(const n of all)for(const attr of Array.from(n.attributes||[])){
-   if(!n.closest('filter')&&/url\(\s*['"]?#([\w.-]+)['"]?\s*\)/i.test(attr.value)){
-    const id=/url\(\s*['"]?#([\w.-]+)['"]?\s*\)/i.exec(attr.value)?.[1];
-    if(filterIds.has(id))fail('SVG_FILTER_UNRESOLVED_REFERENCE');
-   }
+   if(n.closest('filter'))continue;
+   // Every local URL must be inspected, not just the first one; SVG paint
+   // fallback lists can contain more than one resource reference.
+   for(const match of attr.value.matchAll(/url\(\s*['"]?#([\w.-]+)['"]?\s*\)/gi))
+    if(filterIds.has(match[1]))fail('SVG_FILTER_UNRESOLVED_REFERENCE');
+   if(/(?:^|:)href$/.test(attr.name)&&attr.value.startsWith('#')&&
+    filterIds.has(attr.value.slice(1)))fail('SVG_FILTER_UNRESOLVED_REFERENCE');
   }
   for(const el of unused)el.remove();
   return {svg:serialize(root),filtersApplied:0,imagesChanged:0};
