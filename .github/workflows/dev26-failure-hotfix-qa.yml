@@ -1,0 +1,75 @@
+name: DEV26 real failure recovery QA (no deployment)
+on:
+  push:
+    branches:
+      - release/dev26-cloud-build-20261112
+permissions:
+  contents: read
+jobs:
+  verify-hotfix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      CF_PAGES_BRANCH: release/dev26-cloud-build-20261112
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Build exact DEV26 plus real-failure hotfix (including full suite)
+        shell: bash
+        run: bash .release/build-dev26-cloudflare.sh
+      - name: Verify new recovery UI and optional mode are compiled
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s browser-local/dist/rhwp_bg.wasm
+          grep -q 'compat-raster' browser-local/dist/index.html
+          npm --prefix browser-local run check:source
+      - name: Install Chromium
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Download canonical HWP/HWPX acceptance fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Launch isolated Worker (no production changes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 >/tmp/dev26-compat-worker.log 2>&1 &
+          for n in $(seq 1 90); do
+            if curl -fsS 'http://127.0.0.1:8787/local/health' >/tmp/dev26-compat-health.json; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dev26-compat-worker.log
+          exit 1
+      - name: Actual browser professional baseline regression
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/e2e.mjs
+      - name: Actual browser explicit compatibility HWP/HWPX PDF creation
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/compat-real-browser.mjs
+      - name: Retain QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev26-real-failures-hotfix-qa
+          path: |
+            r29-browser-real-evidence/DEV26_COMPAT_BROWSER_E2E.json
+            r29-browser-real-evidence/R40_BROWSER_LOCAL_E2E.json
+            /tmp/dev26-compat-health.json
+            /tmp/dev26-compat-worker.log
+          if-no-files-found: warn
+          retention-days: 7
