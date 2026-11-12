@@ -153,6 +153,13 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    pcFontStats=options.localFonts?{
      listed:options.localFonts.length,selected:localOnly.length,
      required:local.requestedFamilies||0,matched:local.matchedFontData||0,
+     // Local browser-only comparison evidence. Never include source family
+     // names in anonymous Cloudflare telemetry or application logs.
+     requestedNames:(local.requestedNames||[]).slice(0,120),
+     matchedFaces:localOnly.slice(0,120).map(face=>({
+       family:face.family,postscriptName:face.postscriptName||'',
+       bold:face.bold,italic:face.italic
+     })),
      unmatchedNames:local.unmatchedNames||[],unreadable:local.unreadableFonts||0,
      timedOut:local.timedOutFonts||0,budgetSkipped:local.skippedByBudget||0
    }:null;
@@ -239,6 +246,10 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
      (pictures?' (해당 필터의 내장 그림 '+pictures+'개는 객체 단위 픽셀 색상 변환)':'')+'.'];
    }
    if(pcFontStats){
+    result.sourceFontInventory={
+      requested:pcFontStats.requestedNames,registered:pcFontStats.matchedFaces,
+      missing:pcFontStats.unmatchedNames
+    };
     const used=result.fontUsage?.local||0;
     const bundledUsed=result.fontUsage?.bundled||0;
     const pcNote=used>0
