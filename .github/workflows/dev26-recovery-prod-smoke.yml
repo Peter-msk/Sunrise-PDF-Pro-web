@@ -21,12 +21,19 @@ jobs:
           node -e 'const x=require("/tmp/health.json");if(x.rhwp_version!=="0.8.7"||x.wasm_sha256!=="54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989") process.exit(1);console.log("RELEASE_HEALTH_PASS");'
           curl --fail --silent --show-error --location --retry 2 --max-time 20 "$BASE/local/" -o /tmp/index.html
           grep -Fq 'compat-raster' /tmp/index.html
+          grep -Fq 'id="font-check"' /tmp/index.html
+          grep -Fq 'value="hybrid-filter"' /tmp/index.html
+          grep -Fq 'value="professional" selected' /tmp/index.html
+          echo 'RELEASE_FONT_AND_HYBRID_UI_PASS'
           echo 'RELEASE_HTML_PASS'
           curl --fail --silent --show-error --location --retry 2 --max-time 20 "$BASE/local/assets/local-bundle.js" -o /tmp/local-bundle.js
           grep -Fq 'compat-retry' /tmp/local-bundle.js
           grep -Fq '이 파일만 이미지 PDF로 복구' /tmp/local-bundle.js
           grep -Fq 'SVG_FILTER_EFFECT_UNSUPPORTED' /tmp/local-bundle.js
           grep -Fq 'PDF_STREAM_TIMEOUT' /tmp/local-bundle.js
+          grep -Fq 'font-check' /tmp/local-bundle.js
+          grep -Fq 'hybrid-filter' /tmp/local-bundle.js
+          echo 'RELEASE_FONT_AND_HYBRID_SCRIPT_PASS'
           echo 'RELEASE_PER_FILE_RECOVERY_CODE_PASS'
           curl --fail --silent --show-error --location --head --retry 2 --max-time 20 "$BASE/local/rhwp_bg.wasm" -o /tmp/wasm.headers
           grep -qi '^content-type: application/wasm' /tmp/wasm.headers
