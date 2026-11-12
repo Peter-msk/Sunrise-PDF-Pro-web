@@ -78,3 +78,27 @@ test('font access verification is retained for actual conversion, with honest ba
  assert.match(html,/id="background-policy"/);
  assert.match(pdf,/registerFont\(face\.name,face\.bytes,face\.collectionFontName\|\|undefined\)/);
 });
+
+test('abort interrupts clamped timer fallback without waiting for a timer tick',async()=>{
+ const controller=new AbortController(),cleared=[];
+ const host={setTimeout(){return 91;},clearTimeout:id=>cleared.push(id)};
+ const pending=cooperativeYield({host,signal:controller.signal});
+ controller.abort();
+ await assert.rejects(pending,{name:'AbortError'});
+ assert.deepEqual(cleared,[91]);
+});
+
+test('timer-only fallback still resolves without an abort',async()=>{
+ let scheduled=0;
+ const host={setTimeout(fn){scheduled++;queueMicrotask(fn);return 12;},
+  clearTimeout(){throw Error('normal yield must not clear the timer');}};
+ await cooperativeYield({host});
+ assert.equal(scheduled,1);
+});
+
+test('synchronous abort during fallback timer registration clears late timer',async()=>{
+ const controller=new AbortController(),cleared=[];
+ const host={setTimeout(){controller.abort();return 4;},clearTimeout:id=>cleared.push(id)};
+ await assert.rejects(cooperativeYield({host,signal:controller.signal}),{name:'AbortError'});
+ assert.deepEqual(cleared,[4]);
+});
