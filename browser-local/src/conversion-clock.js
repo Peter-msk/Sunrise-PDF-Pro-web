@@ -25,6 +25,7 @@ export function createConversionClock({doc=globalThis.document,now=()=>performan
  const hint=doc.createElement('small');hint.className='conversion-clock-hint';
  widget.append(info,hint);status.before(widget);
  let startMs=null,fileStartMs=null,lastAdvanced=0,progress=0,total=1,stage='',timer=null,active=false;
+ let hidden=doc?.hidden===true,frozen=false;
  const set=(key,value)=>{values.get(key).textContent=value;};
  const stop=()=>{if(timer!==null){clearIntervalFn(timer);timer=null;}};
  function render(){
@@ -33,20 +34,28 @@ export function createConversionClock({doc=globalThis.document,now=()=>performan
   set('elapsed',formatDuration(elapsed));
   if(fileStartMs!==null)set('current',formatDuration(Math.max(0,moment-fileStartMs)));
   if(!active)return;
-  const remaining=estimateRemaining(elapsed,progress,Math.max(0,moment-lastAdvanced));
+  const remaining=hidden||frozen?null:
+   estimateRemaining(elapsed,progress,Math.max(0,moment-lastAdvanced));
   if(remaining===null){set('remaining','계산 중');set('finish','—');}
   else{
    set('remaining','약 '+formatDuration(remaining));
    set('finish',new Intl.DateTimeFormat('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(wallNow()+remaining)));
   }
   const stale=moment-lastAdvanced>20000&&progress<1;
-  hint.textContent=stale?stage+' 처리 중 · 진행률 갱신이 지연되어 예상 완료시간을 보류합니다.':'예상 시간은 문서 용량·표·도형·글꼴에 따라 달라집니다.';
+  hint.textContent=frozen?'브라우저가 이 탭을 동결했습니다. 다시 활성화하기 전에는 JavaScript 변환이 진행되지 않습니다.':
+   hidden?'다른 탭 또는 최소화 상태입니다. 진행이 제한될 수 있어 완료 예상시간을 보류합니다.':
+   stale?stage+' 처리 중 · 진행률 갱신이 지연되어 예상 완료시간을 보류합니다.':
+   '예상 시간은 문서 용량·표·도형·글꼴에 따라 달라집니다.';
  }
  function start(count){
-  stop();total=Math.max(1,Number(count)||1);
+  stop();hidden=doc?.hidden===true;frozen=false;total=Math.max(1,Number(count)||1);
   startMs=now();fileStartMs=null;lastAdvanced=startMs;progress=0;stage='PC 글꼴 확인';active=true;
   widget.hidden=false;set('current','대기');hint.textContent='PC 글꼴 접근 및 분석 중';
   render();timer=setIntervalFn(render,1000);
+ }
+ function setLifecycle({isHidden=hidden,isFrozen=frozen}={}){
+  hidden=!!isHidden;frozen=!!isFrozen;
+  if(active)render();
  }
  function itemStart(){if(!active)return;fileStartMs=now();stage='문서 읽기';render();}
  function update(done,part,phase){
@@ -68,5 +77,5 @@ export function createConversionClock({doc=globalThis.document,now=()=>performan
   hint.textContent='최종 소요시간입니다.';
  }
  function reset(){stop();active=false;startMs=null;fileStartMs=null;progress=0;widget.hidden=true;}
- return {start,itemStart,update,itemDone,finish,reset,render,get active(){return active;}};
+ return {start,itemStart,update,itemDone,finish,reset,render,setLifecycle,get active(){return active;}};
 }

@@ -1,3 +1,4 @@
+import {cooperativeYield} from './cooperative-yield.mjs';
 /**
  * Sunrise PDF PRO - R37 DEV5, opt-in high-fidelity vector candidate.
  * SVG-to-PDFKit and PDFKit are MIT dependencies, loaded only when selected.
@@ -7,7 +8,10 @@ import {resolveFont,resolveFontRuns,missingCodepoint,splitFontFamilies,familyKey
 import {validateTextGeometry} from './svg-text-geometry.js';
 import {flattenLocalSvgStyles} from './svg-style.js';
 import {loadBrowserPdfBackend} from './pdfkit-backend.js';
+import {createSvgVectorBudget} from './svg-vector-budget.mjs';
 import {waitForImageOperation} from './svg-safe-grayscale.mjs';
+import {linkPdfWriterAbort} from './pdf-stream-abort.mjs';
+import {assertSvgSourceWithinBudget,checkSvgPathBudget} from './svg-render-guard.mjs';
 
 const PX_TO_PT=72/96;
 const SUPPORTED=new Set([
@@ -79,6 +83,26 @@ function inlineStyleToAttributes(el){
   return null;
 }
 
+/**
+ * A font-run split is safe only for independently shaped Unicode graphemes
+ * and unchanged start-anchor positioning. Do not guess text advances or
+ * reshape an emoji sequence, combining cluster, or centred/right-aligned run.
+ * Browser engines without Intl.Segmenter keep the original unsplit text.
+ */
+function safeTextRunSplit(el,value,Segmenter=globalThis.Intl?.Segmenter){
+  if(typeof Segmenter!=='function')return false;
+  try{
+    for(const {segment} of new Segmenter(undefined,{granularity:'grapheme'}).segment(value)){
+      if(Array.from(segment).length!==1)return false;
+    }
+  }catch{return false;}
+  for(let node=el;node&&typeof node.getAttribute==='function';node=node.parentElement){
+    const anchor=node.getAttribute('text-anchor');
+    if(anchor!==null&&anchor!==undefined&&String(anchor).trim()!=='start')return false;
+  }
+  return true;
+}
+
 function textDirectlyIn(el){
   if(el.childNodes){
     let value='';
@@ -98,13 +122,16 @@ function textDirectlyIn(el){
 export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
   if(!checked||typeof checked.svg!=='string'||!(checked.width>0&&checked.height>0))
     return {ok:false,reason:'SVG_INVALID'};
+  try{ assertSvgSourceWithinBudget(checked.svg); }
+  catch(error){ return {ok:false,reason:error.message}; }
   const doc=new DOMParser().parseFromString(checked.svg,'image/svg+xml');
   if(doc.querySelector('parsererror')||doc.doctype||doc.documentElement?.localName!=='svg')
     return {ok:false,reason:'SVG_PARSE_ERROR'};
   const root=doc.documentElement;
   const styles=flattenLocalSvgStyles(root);
   if(!styles.ok)return {ok:false,reason:styles.reason};
-  let changed=styles.changed,nodes=0,hasText=false,textPages=0,positionedRuns=0;
+  let changed=styles.changed,nodes=0,hasText=false,textPages=0,positionedRuns=0,pathChars=0;
+  const vectorBudget=createSvgVectorBudget();
   const substituteFamilies=new Set();
   // SVG text without a declared family must use the same selected font in
   // the preflight and in SVG-to-PDFKit's fontCallback; no silent divergence.
@@ -117,6 +144,11 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
   while(stack.length){
     const {el,family,weight,style}=stack.pop();
     if(++nodes>60000)return {ok:false,reason:'SVG_COMPLEXITY'};
+    const vectorIssue=vectorBudget.element(el);
+    if(vectorIssue)return {ok:false,reason:vectorIssue};
+    const pathCheck=checkSvgPathBudget(el,pathChars);
+    if(!pathCheck.ok)return {ok:false,reason:pathCheck.reason};
+    pathChars=pathCheck.total;
     if(!SUPPORTED.has(el.localName))return {ok:false,reason:'UNSUPPORTED_'+el.localName};
     if(el.hasAttribute('class'))return {ok:false,reason:'CLASS_STYLE_UNSUPPORTED'};
     const hadInlineStyle=el.hasAttribute('style');
@@ -154,35 +186,52 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
     let currentStyle=el.getAttribute('font-style')??style;
     if(el.localName==='text'||el.localName==='tspan'||el.localName==='textPath'){
       const value=textDirectlyIn(el);
+      const textIssue=vectorBudget.text(value);
+      if(textIssue)return {ok:false,reason:textIssue};
       if(value.trim()){
         hasText=true;textPages++;
         const face=resolveFont(fontRegistry,currentFamily,currentWeight,currentStyle,value);
-        if(!face){
-          const runs=resolveFontRuns(fontRegistry,currentFamily,currentWeight,currentStyle,value);
-          const canSplit=runs?.length>1 && runs.length<=128 &&
-            (el.localName==='text'||el.localName==='tspan') &&
-            !el.children?.length && !el.hasAttribute('textLength') &&
-            !['x','y','dx','dy','rotate'].some(n=>{
-              const raw=el.getAttribute(n);
-              return raw&&/[,\s]+/.test(raw.trim());
-            }) && el.ownerDocument?.createElementNS;
-          if(canSplit){
-            const familyName=splitFontFamilies(currentFamily)[0]||'기본 글꼴';
-            el.textContent='';
-            for(const run of runs){
-              const span=el.ownerDocument.createElementNS('http://www.w3.org/2000/svg','tspan');
-              span.textContent=run.text;
-              span.setAttribute('font-family',run.face.family);
-              span.setAttribute('font-weight',run.face.bold?'bold':'normal');
-              span.setAttribute('font-style',run.face.italic?'italic':'normal');
-              el.appendChild(span);
-              substituteFamilies.add(familyName.slice(0,48)+' → '+run.face.family);
-            }
-            changed=true;
-            for(const child of Array.from(el.children).reverse())
-              stack.push({el:child,family:currentFamily,weight:currentWeight,style:currentStyle});
-            continue;
+        // A single unsupported glyph must not replace an otherwise available
+        // locally installed source face for the entire text run.  Reuse the
+        // existing per-character run resolver only when an explicitly named
+        // local face can render part of the text. Other pages stay unchanged.
+        const namedLocal=!!face?.isFallback && splitFontFamilies(currentFamily)
+          .some(name=>fontRegistry.faces.some(candidate=>!candidate.isFallback &&
+            !candidate.standard && candidate.aliases?.includes(familyKey(name))));
+        const runs=(!face||namedLocal)
+          ? resolveFontRuns(fontRegistry,currentFamily,currentWeight,currentStyle,value) : null;
+        const mixedOriginal=namedLocal && runs?.some(run=>
+          !run.face.isFallback && !run.face.standard);
+        const canSplit=(!face||mixedOriginal) && runs?.length>1 && runs.length<=128 &&
+          (el.localName==='text'||el.localName==='tspan') &&
+          !el.children?.length && !el.hasAttribute('textLength') &&
+          // Never detach combining marks from their base characters.
+          !/\p{Mark}/u.test(value) &&
+          safeTextRunSplit(el,value) &&
+          !['x','y','dx','dy','rotate'].some(n=>{
+            const raw=el.getAttribute(n);
+            return raw&&/[,\s]+/.test(raw.trim());
+          }) && el.ownerDocument?.createElementNS;
+        if(canSplit){
+          const familyName=splitFontFamilies(currentFamily)[0]||'기본 글꼴';
+          const originalKey=familyKey(familyName);
+          el.textContent='';
+          for(const run of runs){
+            const span=el.ownerDocument.createElementNS('http://www.w3.org/2000/svg','tspan');
+            span.textContent=run.text;
+            span.setAttribute('font-family',run.face.family||run.face.name);
+            span.setAttribute('font-weight',run.face.bold?'bold':'normal');
+            span.setAttribute('font-style',run.face.italic?'italic':'normal');
+            el.appendChild(span);
+            if(run.face.isFallback || !run.face.aliases?.includes(originalKey))
+              substituteFamilies.add(familyName.slice(0,48)+' → '+(run.face.family||run.face.name));
           }
+          changed=true;
+          for(const child of Array.from(el.children).reverse())
+            stack.push({el:child,family:currentFamily,weight:currentWeight,style:currentStyle});
+          continue;
+        }
+        if(!face){
           const missing=[...value].find(c=>!/\s/u.test(c)&&
             !fontRegistry.faces.some(font=>font.characterSet?.has(c.codePointAt(0))));
           const glyph=missing?' (미지원 문자 U+'+missing.codePointAt(0).toString(16).toUpperCase()+')':'';
@@ -258,7 +307,7 @@ export async function localPngBytes(blob,signal){
 export async function tryProfessionalDocument(hwpDoc,count,{
   checkedSvg,rasterPage,signal,fontRegistry={faces:[]},
   onProgress=()=>{},loadLibraries,imageBytes=localPngBytes,allowRasterFallback=false,
-  finalizeTimeoutMs=120_000
+  finalizeTimeoutMs=120_000,filterOnlyRasterFallback=false
 }={}){
   const cancel=()=>{if(signal?.aborted)
     throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');};
@@ -270,7 +319,31 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     throw Error('PROFESSIONAL_DEPENDENCY_UNAVAILABLE');
   registerStdFonts?.(Helvetica);
   const pdf=new PDFDocument({autoFirstPage:false,margin:0,compress:true,font:null});
-  const pending=toBlob(pdf,signal);
+  // PDFKit can emit bytes while pdf.end() is running. Expose actual bytes
+  // only once finalization starts, not during vector page drawing.
+  let reportingFinalStream=false;
+  let currentPdfPage=0;
+  // An internal PDF finalization timeout must abort the byte collector too.
+  // Aborting only pdf.destroy() leaves toBlob listeners and queued chunks alive.
+  const writerAbort=linkPdfWriterAbort(signal);
+  let pending;
+  const streamProbe={};
+  try{
+    pending=toBlob(pdf,writerAbort.signal,({bytes})=>{
+      // PDFKit can emit bytes while drawing a page, before pdf.end().
+      // Distinguish page-writing bytes from the final stream; do not call
+      // either one completion until PDF integrity checks have succeeded.
+      try{onProgress({stage:'professional',
+        page:reportingFinalStream?count:(currentPdfPage||1),total:count,
+        detail:reportingFinalStream?'pdf_stream':'pdf_write',bytes});}
+      catch{/* A UI observer must not corrupt the PDF stream. */}
+    },undefined,streamProbe);
+  }catch(error){
+    writerAbort.abort();
+    writerAbort.close();
+    try{pdf.destroy?.();}catch{/* Preserve the original writer error. */}
+    throw error;
+  }
   pending.catch(()=>{});
   let ended=false;
   let previewBlob=null,textCandidatePages=0;
@@ -279,23 +352,33 @@ export async function tryProfessionalDocument(hwpDoc,count,{
   const substituteFamilies=new Set();
   const usedLocal=new Set(),usedBundled=new Set(),usedManual=new Set();
   try{
-    for(const face of fontRegistry.faces)pdf.registerFont(face.name,face.bytes);
+    for(const face of fontRegistry.faces)pdf.registerFont(face.name,face.bytes,face.collectionFontName||undefined);
     for(let i=0;i<count;i++){
+      currentPdfPage=i+1;
       cancel();
       onProgress({stage:'professional',page:i+1,total:count,detail:'svg_build'});
       // Flush the progress event before synchronous rhwp/WASM rendering.
-      await new Promise(resolve=>setTimeout(resolve,0));cancel();
+      await cooperativeYield({signal});cancel();
+      const svgBuildStarted=Date.now();
       const rawSvg=hwpDoc.renderPageSvgWithProfile(i,'print');
-      onProgress({stage:'professional',page:i+1,total:count,detail:'svg_normalize'});
+      // A synchronous WASM call cannot be interrupted by a JS timer.
+      // Record elapsed time on return and block oversized SVG before parsing.
+      assertSvgSourceWithinBudget(rawSvg);
+      onProgress({stage:'professional',page:i+1,total:count,detail:'svg_normalize',
+        elapsedMs:Date.now()-svgBuildStarted,svgChars:rawSvg.length});
       const checked=await checkedSvg(rawSvg,{page:i+1,total:count});
       cancel();
       onProgress({stage:'professional',page:i+1,total:count,detail:'svg_preflight'});
-      await new Promise(resolve=>setTimeout(resolve,0));cancel();
-      const preflight=preflightProfessionalSvg(checked,{fontRegistry});
+      await cooperativeYield({signal});cancel();
+      const forceFilterRaster=allowRasterFallback&&
+        checked.forceRasterReason==='SVG_FILTER_EFFECT_UNSUPPORTED';
+      const preflight=forceFilterRaster
+        ?{ok:false,reason:'SVG_FILTER_EFFECT_UNSUPPORTED'}
+        :preflightProfessionalSvg(checked,{fontRegistry});
       const width=checked.width*PX_TO_PT,height=checked.height*PX_TO_PT;
       for(const family of preflight.substituteFamilies||[])substituteFamilies.add(family);
       if(!preflight.ok){
-        if(!allowRasterFallback){
+        if(!allowRasterFallback||(filterOnlyRasterFallback&&!forceFilterRaster)){
           const fontInfo=preflight.fontFamily?' 필요한 글꼴: '+preflight.fontFamily+
             (preflight.fontWeight?' (굵기 '+preflight.fontWeight+', 스타일 '+preflight.fontStyle+')':'')+'.':'';
           const attrInfo=preflight.unsupportedAttribute?' · 미지원 SVG 속성: '+preflight.unsupportedAttribute:'';
@@ -316,7 +399,9 @@ export async function tryProfessionalDocument(hwpDoc,count,{
         pdf.addPage({size:[width,height],margins:{top:0,bottom:0,left:0,right:0}});
         const warnings=[];
         onProgress({stage:'professional',page:i+1,total:count,detail:'svg_vector'});
-        await new Promise(resolve=>setTimeout(resolve,0));cancel();
+        await cooperativeYield({signal});cancel();
+        assertSvgSourceWithinBudget(preflight.svg);
+        const vectorStarted=Date.now();
         SVGtoPDF(pdf,preflight.svg,0,0,{
           width,height,assumePt:false,
           fontCallback:(family,bold,italic)=>{
@@ -335,27 +420,51 @@ export async function tryProfessionalDocument(hwpDoc,count,{
           warningCallback:message=>warnings.push(String(message))
         });
         if(warnings.length)throw Error('PROFESSIONAL_SVG_WARNING_'+warnings[0].slice(0,200));
-        onProgress({stage:'professional',page:i+1,total:count,detail:'svg_vector_done'});
+        onProgress({stage:'professional',page:i+1,total:count,detail:'svg_vector_done',
+          elapsedMs:Date.now()-vectorStarted});
         if(preflight.hasText)textCandidatePages++;
         vectorPages++;
       }
-      await new Promise(resolve=>setTimeout(resolve,0));
+      await cooperativeYield({signal});
     }
     cancel();
     onProgress({stage:'professional',page:count,total:count,detail:'pdf_finalize'});
-    await new Promise(resolve=>setTimeout(resolve,0));cancel();
+    await cooperativeYield({signal});cancel();
     ended=true;
+    reportingFinalStream=true;
+    const pdfEndStarted=Date.now();
+    const bytesBeforeEnd=streamProbe.bytes||0;
+    const chunksBeforeEnd=streamProbe.chunks||0;
     pdf.end();
-    onProgress({stage:'professional',page:count,total:count,detail:'pdf_stream'});
-    // The PDFKit 'end' event may never arrive after a large embedded image.
-    // This bounds asynchronous finalization only, not synchronous SVGtoPDF work.
-    const blob=await waitForImageOperation(pending,signal,finalizeTimeoutMs,'PDF_STREAM_TIMEOUT');
+    onProgress({stage:'professional',page:count,total:count,detail:'pdf_stream',
+      elapsedMs:Date.now()-pdfEndStarted});
+    // A timeout can mean no bytes, bytes before end but none afterwards,
+    // or finalization bytes without PDFKit's end event. Report only aggregate
+    // counters in the local error; never include original document content.
+    let blob;
+    try{
+      blob=await waitForImageOperation(pending,signal,finalizeTimeoutMs,'PDF_STREAM_TIMEOUT');
+    }catch(error){
+      if(error?.message==='PDF_STREAM_TIMEOUT'){
+        const bytes=streamProbe.bytes||0;
+        const finalBytes=Math.max(0,bytes-bytesBeforeEnd);
+        const finalChunks=Math.max(0,(streamProbe.chunks||0)-chunksBeforeEnd);
+        const reason=streamProbe.endSeen?'END_SEEN_NO_COMPLETION':
+          !bytes?'NO_BYTES':!finalBytes?'NO_FINAL_BYTES':'FINAL_BYTES_NO_END';
+        const sinceLast=streamProbe.lastChunkAt
+          ?Math.max(0,Date.now()-streamProbe.lastChunkAt):null;
+        error.message='PDF_STREAM_TIMEOUT ('+reason+', emitted='+bytes+
+          'B, final='+finalBytes+'B/'+finalChunks+'chunks'+
+          (sinceLast===null?'':', idle='+sinceLast+'ms')+')';
+      }
+      throw error;
+    }
     cancel();
-    onProgress({stage:'professional',page:count,total:count,detail:'pdf_done'});
     if(!(blob instanceof Blob)||blob.size<100)throw Error('PROFESSIONAL_PDF_EMPTY');
     const header=new Uint8Array(await blob.slice(0,5).arrayBuffer());
     if(header[0]!==37||header[1]!==80||header[2]!==68||header[3]!==70||header[4]!==45)
       throw Error('PROFESSIONAL_PDF_INVALID_HEADER');
+    onProgress({stage:'professional',page:count,total:count,detail:'pdf_done'});
     // PDF.js opens the output PDF itself; a second SVG-to-PNG preview can
     // fail after pdf.end(), incorrectly turning a valid document into failure.
     const preview=previewBlob||null;
@@ -363,11 +472,28 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     return {pdf:blob,preview,pages:count,bytes:blob.size,renderMode,
       vectorPages,rasterPages,fallbackPages,textCandidatePages,searchablePages:null,
       fontUsage:{local:usedLocal.size,bundled:usedBundled.size,selected:usedManual.size},
+      // SVG-to-PDFKit selected these faces. PDF resource/FontDescriptor
+      // confirmation is an independent, opt-in post-generation audit.
+      fontSelections:{local:[...usedLocal].map(id=>{
+        const face=fontRegistry.faces.find(f=>f.name===id);
+        return {family:face?.family||id,postscriptName:face?.postscriptName||'',
+         bold:!!face?.bold,italic:!!face?.italic};
+      }),manual:usedManual.size,bundled:usedBundled.size},
       substituteFamilies:[...substituteFamilies]};
   }catch(error){
-    if(typeof pdf.destroy==='function')pdf.destroy();
-    else if(!ended){ended=true;pdf.end();}
+    // Reject toBlob's pending collector and release all queued PDF chunks
+    // before disposing the writer, even if this failure was not user-driven.
+    writerAbort.abort();
+    // PDFKit disposal can itself throw (or emit a late failure). Never replace
+    // the original PDF_STREAM_TIMEOUT / SVG / font error with a cleanup error.
+    // The collector was already aborted and must not publish a partial PDF.
+    try{
+      if(typeof pdf.destroy==='function')pdf.destroy();
+      else if(!ended){ended=true;pdf.end();}
+    }catch{/* Keep the primary failure reason and fail closed. */}
     throw error;
+  }finally{
+    writerAbort.close();
   }
 }
 

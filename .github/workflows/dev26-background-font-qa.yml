@@ -1,0 +1,68 @@
+name: DEV26 background page + installed font remediation QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/dev26-background-font-20261112
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      CF_PAGES_BRANCH: release/dev26-cloud-build-20261112
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Full cumulative source, tests, Vite and WASM build
+        run: bash .release/build-dev26-cloudflare.sh
+      - name: Real embedded TTC collection through fontkit and PDFKit
+        run: node --test browser-local/tests/r66-ttc-real.mjs
+      - name: Install Chromium for real hidden-tab conversion
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Fetch pinned public HWP and HWPX fixtures
+        run: |
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: True Chromium hidden tab HWP conversion and cached PC font identity
+        run: SUNRISE_HEADFUL_TEST=1 xvfb-run -a node browser-local/tests/r66-hidden-tab-browser.mjs
+      - name: Launch isolated local Worker for HWP/HWPX full conversion
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 >/tmp/background-font-worker.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8787/local/health >/tmp/background-font-health.json; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/background-font-worker.log
+          exit 1
+      - name: Real HWP HWPX default vector PDF browser regression
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/e2e.mjs
+      - name: Real HWP HWPX hybrid browser PDF regression
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/hybrid-real-browser.mjs
+      - name: Preserve logs only without user document content
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev26-background-font-qa
+          path: |
+            /tmp/background-font-worker.log
+            /tmp/background-font-health.json
+            r29-browser-real-evidence/R40_BROWSER_LOCAL_E2E.json
+            r29-browser-real-evidence/DEV26_HYBRID_BROWSER_E2E.json
+          if-no-files-found: warn
+          retention-days: 7

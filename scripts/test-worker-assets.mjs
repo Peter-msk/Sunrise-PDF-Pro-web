@@ -24,7 +24,7 @@ const requested=[];
 const assets={fetch:async request=>{
  const path=new URL(request.url).pathname;
  requested.push(path);
- const types={'/app.html':'text/html','/pdf-worker.mjs':'application/javascript','/assets/local-bundle.js':'application/javascript','/assets/local-chunk-Engine_01.js':'application/javascript','/rhwp_bg.wasm':'application/wasm','/fonts/NanumGothic-Regular.ttf':'font/ttf','/fonts/SunriseSymbols.otf':'font/otf','/fonts/SunriseMarks.ttf':'font/ttf'};
+ const types={'/app.html':'text/html','/pdf-worker.mjs':'application/javascript','/pdf-worker-legacy.mjs':'application/javascript','/assets/local-bundle.js':'application/javascript','/assets/local-chunk-Engine_01.js':'application/javascript','/rhwp_bg.wasm':'application/wasm','/fonts/NanumGothic-Regular.ttf':'font/ttf','/fonts/SunriseSymbols.otf':'font/otf','/fonts/SunriseMarks.ttf':'font/ttf'};
  if(!(path in types))return new Response('Not Found',{status:404});
  return new Response(request.method==='HEAD'?null:'test-asset',{status:200,headers:{'Content-Type':types[path]}});
 }};
@@ -32,6 +32,7 @@ const env={ASSETS:assets};
 for(const [route,assetPath,contentType] of [
  ['/local/','/app.html','text/html'],
  ['/local/pdf-worker.mjs','/pdf-worker.mjs','application/javascript'],
+ ['/local/pdf-worker-legacy.mjs','/pdf-worker-legacy.mjs','application/javascript'],
  ['/local/assets/local-bundle.js','/assets/local-bundle.js','application/javascript'],
  ['/local/assets/local-chunk-Engine_01.js','/assets/local-chunk-Engine_01.js','application/javascript'],
  ['/local/rhwp_bg.wasm','/rhwp_bg.wasm','application/wasm'],
@@ -88,6 +89,12 @@ console.log('Bundled font asset routing: PASS');
 
 assert.match(htmlResponse.headers.get('content-security-policy'),/worker-src 'self'/);
 assert.equal((await worker.fetch(new Request('https://sunrise.example/local/pdf-worker.mjs',{method:'POST'}),env)).status,405);
+assert.equal((await worker.fetch(new Request('https://sunrise.example/local/pdf-worker-legacy.mjs',{method:'POST'}),env)).status,405);
+for(const forbidden of ['/local/pdf-worker-legacy.mjs.map','/local/pdf-worker-fake.mjs',
+ '/local/pdf-worker-legacy.mjs/../private']){
+ const response=await worker.fetch(new Request('https://sunrise.example'+forbidden),env);
+ assert.equal(response.status,404,'non-allowlisted PDF.js worker request must fail closed: '+forbidden);
+}
 
 // R55 Trace v2 / R56 compact queue assets: safe methods, privacy and same-origin policy.
 for(const [path,contentType] of [['/ops-r56.js','javascript'],['/ops-r56.css','text/css']]){

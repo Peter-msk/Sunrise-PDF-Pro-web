@@ -1,0 +1,414 @@
+diff --git a/browser-local/index.html b/browser-local/index.html
+index 6db74a5..eab4750 100644
+--- a/browser-local/index.html
++++ b/browser-local/index.html
+@@ -60,7 +60,7 @@ button,.download{font-size:14px;min-height:44px}.caption,.counter{font-size:13px
+ <label class="upload" id="drop"><input id="source" type="file" accept=".hwp,.hwpx,.xls,.xlsx,.jpg,.jpeg,.png" multiple><span class="upload-icon">↑</span><span><strong>문서를 선택하거나 여기에 놓으세요</strong><small>HWP·HWPX·XLS·XLSX·JPG·PNG 여러 파일을 추가하세요.</small></span><span class="upload-action">파일 선택 +</span></label>
+ <p id="filename" class="muted" hidden>선택된 파일이 없습니다.</p><div class="toolbar"><button id="convert" class="primary" disabled>전체 PDF 변환</button><button id="cancel" class="secondary" disabled>변환 취소</button><button id="reset" class="secondary" disabled>목록 비우기</button><span class="spacer"></span><span class="muted">파일별로 순서대로 처리합니다.</span></div>
+ <div class="queue"><div class="queue-head"><b>문서 목록</b><span class="counter" id="queue-count">0개 파일</span></div><ul class="files" id="file-list"><li class="empty">선택한 문서가 여기에 표시됩니다.</li></ul></div>
+-<details class="options advanced"><summary>출력 및 글꼴 옵션</summary><div class="option-grid"><div><label for="pdf-engine">한글 문서 출력 방식</label><input id="pdf-engine" type="hidden" value="professional"><p class="muted">rhwp 문서 해석 · 글자·도형 보존</p></div><div><p class="muted" id="installed-font-policy">PC 설치 글꼴 자동 사용(기본 적용). 최초 변환 시 Chrome·Edge가 글꼴 접근 권한을 요청할 수 있으며, 허용 시 문서에 맞는 PC 서체를 우선 사용합니다. 미지원·권한 거부·원본 서체 미설치 시 내장 글꼴로 대체됩니다. 글꼴은 사용자 PC에서만 처리합니다.</p><label for="pdf-font">한글 원본 글꼴 추가 (선택)</label><input id="pdf-font" type="file" accept=".ttf,.otf" multiple aria-describedby="font-info"><p id="font-info" class="muted">원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.</p></div></div><div class="print-actions"><button class="secondary" id="print-prepare" disabled>선택 문서 인쇄 준비</button><button class="secondary" id="print-save" disabled>PDF로 인쇄/저장</button></div><p class="muted">인쇄 보조 기능은 선택한 HWP/HWPX 한 개에 적용됩니다. 혼합 용지는 현재 인쇄 준비가 제한됩니다.</p></details>
++<details class="options advanced"><summary>출력 및 글꼴 옵션</summary><div class="option-grid"><div><label for="pdf-engine">한글 문서 출력 방식</label><select id="pdf-engine" aria-describedby="pdf-engine-help"><option value="professional" selected>기본 · 글자·도형 보존 (고품질)</option><option value="compat-raster">호환 · 페이지 이미지 PDF (글자 검색 불가)</option></select><p class="muted" id="pdf-engine-help">기본 방식을 권장합니다. SVG 필터 미지원 또는 PDF 출력 정체 오류가 발생한 문서에서만 호환 방식을 직접 선택하세요. 호환 방식은 글자·벡터를 이미지로 변환하므로 원본과 전체 페이지를 비교해야 합니다.</p></div><div><p class="muted" id="installed-font-policy">PC 설치 글꼴 자동 사용(기본 적용). 최초 변환 시 Chrome·Edge가 글꼴 접근 권한을 요청할 수 있으며, 허용 시 문서에 맞는 PC 서체를 우선 사용합니다. 미지원·권한 거부·원본 서체 미설치 시 내장 글꼴로 대체됩니다. 글꼴은 사용자 PC에서만 처리합니다.</p><label for="pdf-font">한글 원본 글꼴 추가 (선택)</label><input id="pdf-font" type="file" accept=".ttf,.otf" multiple aria-describedby="font-info"><p id="font-info" class="muted">원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.</p></div></div><div class="print-actions"><button class="secondary" id="print-prepare" disabled>선택 문서 인쇄 준비</button><button class="secondary" id="print-save" disabled>PDF로 인쇄/저장</button></div><p class="muted">인쇄 보조 기능은 선택한 HWP/HWPX 한 개에 적용됩니다. 혼합 용지는 현재 인쇄 준비가 제한됩니다.</p></details>
+ </div></section><aside class="panel side"><div class="summary"><h2>변환 현황</h2><span class="pill" id="summary-state">대기 중</span></div><div class="metrics"><div class="metric"><span>전체</span><strong id="total-count">0</strong></div><div class="metric"><span>완료</span><strong id="done-count">0</strong></div><div class="metric"><span>확인 필요</span><strong id="failed-count">0</strong></div></div><div class="track"><progress id="progress" max="100" value="0" aria-label="전체 변환 진행률"></progress></div><p id="status" role="status" aria-live="polite">PDF 변환 기능 준비 중</p><a id="download-all" class="download primary archive" download="Sunrise_PDF_변환결과.zip" hidden>완료 파일 ZIP 다운로드</a><a id="download" download hidden></a><div class="preview-title"><span>생성된 PDF 검토</span><span id="pages" class="caption"></span></div><div class="viewer-file" id="viewer-file">문서를 선택하세요</div><div class="viewer-tools"><button id="page-prev" class="secondary" disabled aria-label="이전 페이지">이전</button><span id="page-position">0 / 0쪽</span><button id="page-next" class="secondary" disabled aria-label="다음 페이지">다음</button><label>확대 <select id="preview-zoom" aria-label="PDF 확대 비율"><option value="1">맞춤</option><option value="1.5">150%</option><option value="2">200%</option></select></label><a id="active-download" class="download" hidden>PDF 저장</a></div><div id="preview" class="preview" role="region" aria-label="실제 PDF 페이지"><canvas id="pdf-canvas" hidden></canvas><span class="muted">변환을 완료한 문서를 선택하면<br>실제 PDF의 모든 페이지를 검토할 수 있습니다.</span></div><div id="quality-detail" class="quality-detail" role="status"></div><div class="notice"><b>출력 안내</b><br>한글은 글자·도형을, 엑셀은 셀 내용과 표를 보존합니다. 이미지는 비율을 유지합니다. 엑셀 차트·그림·원본 서식은 재현하지 않으며 수식은 저장된 계산값을 사용합니다. 원본 글꼴이 없으면 제공되는 대체 글꼴이 사용될 수 있으며, 표·도면과 줄바꿈은 저장한 PDF에서 확인해 주세요.</div></aside></div><div class="foot">Sunrise PDF PRO · 문서는 내 브라우저에서 처리됩니다. <a href="https://github.com/edwardkim/rhwp" rel="noopener noreferrer">오픈소스 안내</a> · 지원 기능: HWP/HWPX·XLS/XLSX·JPG/PNG 변환, 문서별 다운로드, 일괄 ZIP, 취소 및 다시 시작</div></main><span hidden>출력 안내 · 지원 기능</span><script type="module" src="./src/main.js"></script><nav aria-label="서비스 운영 안내"><a href="/news/">공지사항·업데이트</a> · <a href="/contact/">고객 문의</a></nav>
+ </body></html>
+ 
+diff --git a/browser-local/package.json b/browser-local/package.json
+index 2af775e..ac7eb2a 100644
+--- a/browser-local/package.json
++++ b/browser-local/package.json
+@@ -8,7 +8,7 @@
+     "build": "node scripts/copy-wasm.mjs && vite build",
+     "dev": "node scripts/copy-wasm.mjs && vite --host 127.0.0.1",
+     "preview": "vite preview --host 127.0.0.1 --port 4173",
+-    "test": "node --test tests/svg-gif.mjs tests/local-fonts.mjs tests/svg-embedded.mjs tests/multi-format.mjs tests/multi-format-pdf.mjs tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs tests/conversion-clock.mjs tests/r62-hwp-progress.mjs tests/r64-font-watchdog.mjs tests/r65-last-page-stall.mjs tests/r66-page-deadline.mjs tests/r66-file-reader-watchdog.mjs tests/r66-pdf-stream-progress.mjs tests/r66-sync-render-guard.mjs tests/r66-pdf-writer-disposal.mjs tests/r66-engine-contract.mjs tests/r66-pdf-early-stream.mjs tests/r66-font-run-fidelity.mjs tests/r66-font-layout-guard.mjs tests/r66-jpeg-predecode.mjs tests/r66-image-operation-budget.mjs tests/r66-xlsx-package-guard.mjs tests/r66-spreadsheet-wrap.mjs tests/r66-xlsx-structure-extra.mjs tests/r66-spreadsheet-layout.mjs tests/r66-pdf-output-integrity.mjs tests/r66-pdf-xref-target.mjs tests/r66-raster-watchdog.mjs tests/r66-hwp-svg-preprocess.mjs tests/r66-hwp-svg-cooperative.mjs tests/r66-svg-vector-budget.mjs",
++    "test": "node --test tests/svg-gif.mjs tests/local-fonts.mjs tests/svg-embedded.mjs tests/multi-format.mjs tests/multi-format-pdf.mjs tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs tests/conversion-clock.mjs tests/r62-hwp-progress.mjs tests/r64-font-watchdog.mjs tests/r65-last-page-stall.mjs tests/r66-page-deadline.mjs tests/r66-file-reader-watchdog.mjs tests/r66-pdf-stream-progress.mjs tests/r66-sync-render-guard.mjs tests/r66-pdf-writer-disposal.mjs tests/r66-engine-contract.mjs tests/r66-pdf-early-stream.mjs tests/r66-font-run-fidelity.mjs tests/r66-font-layout-guard.mjs tests/r66-jpeg-predecode.mjs tests/r66-image-operation-budget.mjs tests/r66-xlsx-package-guard.mjs tests/r66-spreadsheet-wrap.mjs tests/r66-xlsx-structure-extra.mjs tests/r66-spreadsheet-layout.mjs tests/r66-pdf-output-integrity.mjs tests/r66-pdf-xref-target.mjs tests/r66-raster-watchdog.mjs tests/r66-hwp-svg-preprocess.mjs tests/r66-hwp-svg-cooperative.mjs tests/r66-svg-vector-budget.mjs tests/r66-real-failure-compat.mjs",
+     "check:engine": "node scripts/verify-engine-contract.mjs",
+     "check:source": "node scripts/check-source.mjs",
+     "test:local": "npm run check:source && npm test",
+diff --git a/browser-local/src/converter.js b/browser-local/src/converter.js
+index a0d04fe..be5cfa3 100644
+--- a/browser-local/src/converter.js
++++ b/browser-local/src/converter.js
+@@ -10,6 +10,7 @@ import { loadDocumentLocalFonts } from './local-fonts.js';
+ import { normalizeGifSvg } from './svg-gif.js';
+ import { normalizeEmbeddedPngSvg } from './svg-embedded-raster-budget.mjs';
+ import { normalizeSvgGrayscale } from './svg-safe-grayscale.mjs';
++import { buildRasterCompatibilityPdf } from './raster-compat-pdf.mjs';
+ 
+ // File-size limits are intentionally absent. Runtime memory and page pixels
+ // remain bounded by the browser/device; those are not upload-size limits.
+@@ -101,7 +102,7 @@ export async function rasterPage(svg,signal){
+  */
+ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
+  options={engine:'professional',...options};
+- if(options.engine!=='professional')throw Error('HWP/HWPX는 글자·도형 보존 출력만 지원합니다. 이미지 PDF 변환은 허용하지 않습니다.');
++ if(!['professional','compat-raster'].includes(options.engine))throw Error('HWP/HWPX 출력 방식을 확인하세요.');
+  throwIfCancelled(signal);
+  // Check the first bytes before allocating a whole large file in browser RAM.
+  // This removes the former 20MiB rejection without eliminating magic checks.
+@@ -161,6 +162,20 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
+   if(!doc)doc=new HwpDocument(new Uint8Array(buf));
+   const count=doc.pageCount();
+   if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
++  if(options.engine==='compat-raster'){
++   // This option must be explicitly selected in the UI. It is never an
++   // automatic downgrade of the original object-preserving PDF route.
++   // Keep the WASM document alive until every asynchronous raster page is finished.
++   // Returning an unawaited Promise would run the enclosing finally immediately,
++   // freeing the document and causing "null pointer passed to rust".
++   return await buildRasterCompatibilityPdf(doc,count,{signal,onProgress,rasterPage,
++    preprocessSvg:async(rawSvg)=>{
++     const hasImage=typeof rawSvg==='string'&&/image/i.test(rawSvg);
++     const gifSvg=hasImage?await normalizeGifSvg(rawSvg,signal):rawSvg;
++     const png=hasImage?await normalizeEmbeddedPngSvg(gifSvg,signal):{svg:gifSvg};
++     return checkedSvg(png.svg).svg;
++    }});
++  }
+   if(options.engine==='professional'){
+    // A failed object-preserving export must stay failed, never become an image PDF.
+    const resizedPngs=[],svgFilterStats=[];
+diff --git a/browser-local/src/main.js b/browser-local/src/main.js
+index 1e0f916..98f0985 100644
+--- a/browser-local/src/main.js
++++ b/browser-local/src/main.js
+@@ -25,7 +25,7 @@ function show(item){
+  const link=$('active-download');link.hidden=!item?.result;
+  if(!item?.result){link.removeAttribute('href');$('pages').textContent='';$('quality-detail').replaceChildren();viewer.open(null);sync();return;}
+  link.href=item.pdfUrl;link.download=uniquePdfNames(items.map(i=>i.file))[items.indexOf(item)];
+- const r=item.result;const mode=r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='spreadsheet-text'?'셀·글자 보존 · 원본 서식 제한':r.renderMode==='source-image'?'원본 이미지':'PDF';
++ const r=item.result;const mode=r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='raster-compat'?'호환 이미지 PDF · 글자 검색 불가':r.renderMode==='spreadsheet-text'?'셀·글자 보존 · 원본 서식 제한':r.renderMode==='source-image'?'원본 이미지':'PDF';
+  $('pages').textContent=r.pages+'쪽 · '+mode;
+  const title=document.createElement('strong');title.textContent='출력 확인 · '+mode;
+  const detail=document.createElement('div');
+@@ -51,7 +51,7 @@ function draw(){
+   const body=document.createElement('div'),name=document.createElement('div'),meta=document.createElement('div');name.className='file-name';name.textContent=item.file.name;meta.className='file-meta';
+   const labels={ready:'변환 대기',working:'변환 중',done:'변환 완료',failed:'변환 실패',invalid:'지원하지 않는 파일',cancelled:'취소됨 · 다시 변환 가능'};
+   let message=labels[item.state]||'';
+-  if(item.error){message+=' · '+item.error;meta.classList.add('error');}
++  if(item.error){message+=' · '+item.error;meta.classList.add('error');if(isHwp(item.file)&&/SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT/.test(item.error))message+=' · 아래 출력 및 글꼴 옵션에서 호환 방식 선택 후 다시 변환할 수 있습니다(이미지 PDF, 글자 검색 불가).';}
+   if(item.result?.substituteFamilies?.length)message+=' · 대체 글꼴: '+item.result.substituteFamilies.join(', ');
+   if(item.result?.warnings?.length)message+=' · '+item.result.warnings.join(' ');
+   if(['done','failed','cancelled'].includes(item.state)&&Number.isFinite(item._proDurationMs))message+=' · 처리시간 '+formatDuration(item._proDurationMs);
+@@ -77,7 +77,7 @@ for(const event of ['dragenter','dragover'])$('drop').addEventListener(event,e=>
+ for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{e.preventDefault();$('drop').classList.remove('drag');});
+ $('drop').addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer?.files||[])));
+ $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.';sync();});
+-$('pdf-engine').addEventListener('change',()=>{clearPrint();status('변경한 출력 방식은 다음 변환부터 적용됩니다.');sync();});
++$('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');sync();});
+ $('convert').addEventListener('click',async()=>{
+  if(busy||!ready)return;const pending=items.filter(i=>['ready','failed','cancelled'].includes(i.state));if(!pending.length)return;
+  conversionClock.start(pending.length);
+@@ -95,7 +95,7 @@ $('convert').addEventListener('click',async()=>{
+    const result=await convertToPdf(file,info=>{
+     const phases=new Set(['svg_build','svg_normalize','image_gif','image_png',
+      'image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done',
+-     'pdf_finalize','pdf_write','pdf_stream','pdf_done']);
++     'pdf_finalize','pdf_write','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save']);
+     item._proDiagStage=info.stage==='load'?'load':
+      info.stage==='fonts'?(info.detail==='read'?'font_read':info.detail==='bundled'?'font_bundle':
+       info.detail==='measure'?'font_measure':info.detail==='scan'?'font_scan':'fonts'):
+@@ -130,7 +130,7 @@ $('convert').addEventListener('click',async()=>{
+      svg_preflight:'글꼴·벡터 사전 검사',svg_vector:'SVG 벡터 PDF 출력',
+      svg_vector_done:'페이지 PDF 출력 완료',
+      pdf_finalize:'PDF 최종 저장 준비',pdf_write:'페이지 PDF 작성 중',pdf_stream:'PDF 바이트 생성 중',
+-     pdf_done:'PDF 바이트 생성 완료'
++     pdf_done:'PDF 바이트 생성 완료',compat_raster:'호환 이미지 페이지 생성',compat_page_done:'호환 이미지 페이지 완료',compat_save:'호환 PDF 저장 중'
+     };
+     const message=info.stage==='load'?'문서 읽는 중':
+      info.stage==='fonts'?fontStatus:
+diff --git a/browser-local/src/pro-telemetry.js b/browser-local/src/pro-telemetry.js
+index b69eeb9..099a7b8 100644
+--- a/browser-local/src/pro-telemetry.js
++++ b/browser-local/src/pro-telemetry.js
+@@ -5,7 +5,7 @@
+ const sid=crypto.randomUUID();
+ let lastActivity=Date.now();
+ const acceptedFeatures=new Set(['hwp','hwpx','xlsx','xls','png','jpg','batch','ui','other']);
+-const acceptedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','svg_build','svg_normalize','image_gif','image_png','image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done','pdf_finalize','pdf_stream','pdf_done','pdf','download','open','viewer','unknown']);
++const acceptedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','svg_build','svg_normalize','image_gif','image_png','image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done','pdf_finalize','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save','pdf','download','open','viewer','unknown']);
+ /** Classify only the extension. Never return the filename or directory. */
+ export function proFeature(file){
+  const name=typeof file?.name==='string'?file.name:'';
+diff --git a/browser-local/src/raster-compat-pdf.mjs b/browser-local/src/raster-compat-pdf.mjs
+new file mode 100644
+index 0000000..c8b33e8
+--- /dev/null
++++ b/browser-local/src/raster-compat-pdf.mjs
+@@ -0,0 +1,80 @@
++/**
++ * Explicit, opt-in compatibility export for documents that the professional
++ * SVG/PDFKit path cannot complete. It deliberately uses a DIFFERENT PDF writer
++ * and browser-rendered pages so unsupported SVG filter effects remain visible.
++ *
++ * This output is page images, not selectable/vector text. Never call this from
++ * the professional path as an automatic fallback or claim fidelity equivalence.
++ * No file bytes are uploaded to the server.
++ */
++import {assertCompletePdfBytes} from './pdf-output-integrity.mjs';
++import {waitForImageOperation} from './svg-safe-grayscale.mjs';
++
++const MAX_PAGES=120;
++const MAX_OUTPUT_BYTES=512*1024*1024;
++const PDF_SAVE_TIMEOUT_MS=120_000;
++const cancelled=signal=>{
++ if(signal?.aborted)throw new DOMException('호환 PDF 변환이 취소되었습니다.','AbortError');
++};
++
++export async function buildRasterCompatibilityPdf(hwpDoc,count,{
++ signal,onProgress=()=>{},preprocessSvg,rasterPage,
++ loadPdfLib=()=>import('pdf-lib')
++}={}){
++ if(!Number.isSafeInteger(count)||count<1||count>MAX_PAGES)
++  throw Error('COMPAT_PAGE_COUNT_INVALID');
++ if(typeof hwpDoc?.renderPageSvgWithProfile!=='function'||
++    typeof preprocessSvg!=='function'||typeof rasterPage!=='function')
++  throw Error('COMPAT_RENDERER_UNAVAILABLE');
++ cancelled(signal);
++ const library=await loadPdfLib();
++ if(typeof library?.PDFDocument?.create!=='function')throw Error('COMPAT_PDF_DEPENDENCY_UNAVAILABLE');
++ const pdf=await library.PDFDocument.create();
++ cancelled(signal);
++ for(let i=0;i<count;i++){
++  cancelled(signal);
++  const page=i+1;
++  onProgress({stage:'professional',detail:'svg_build',page,total:count});
++  // rhwp is synchronous. Yield before the WASM call, without claiming that
++  // cancellation can interrupt a synchronous SVG render already in progress.
++  await new Promise(resolve=>setTimeout(resolve,0));cancelled(signal);
++  const svg=hwpDoc.renderPageSvgWithProfile(i,'print');
++  onProgress({stage:'professional',detail:'image_filter',page,total:count});
++  const checked=await preprocessSvg(svg,page,count);
++  cancelled(signal);
++  onProgress({stage:'professional',detail:'compat_raster',page,total:count});
++  // SVG filters are rendered by Chromium's SVG engine, not discarded or
++  // approximated by PDFKit. rasterPage enforces the per-page pixel budget.
++  const image=await rasterPage(checked,signal);
++  cancelled(signal);
++  if(!(image?.blob instanceof Blob)||image.blob.type!=='image/png'||
++    !Number.isFinite(image.widthPt)||!Number.isFinite(image.heightPt)||
++    image.widthPt<=0||image.heightPt<=0||image.widthPt>20000||image.heightPt>20000)
++   throw Error('COMPAT_PAGE_IMAGE_INVALID');
++  const bytes=new Uint8Array(await image.blob.arrayBuffer());
++  cancelled(signal);
++  const png=await pdf.embedPng(bytes);
++  cancelled(signal);
++  const sheet=pdf.addPage([image.widthPt,image.heightPt]);
++  sheet.drawImage(png,{x:0,y:0,width:image.widthPt,height:image.heightPt});
++  onProgress({stage:'professional',detail:'compat_page_done',page,total:count});
++  await new Promise(resolve=>setTimeout(resolve,0));
++ }
++ cancelled(signal);
++ onProgress({stage:'professional',detail:'compat_save',page:count,total:count});
++ const bytes=await waitForImageOperation(pdf.save({useObjectStreams:true}),
++  signal,PDF_SAVE_TIMEOUT_MS,'COMPAT_PDF_SAVE_TIMEOUT');
++ cancelled(signal);
++ if(!(bytes instanceof Uint8Array)||bytes.byteLength>MAX_OUTPUT_BYTES)
++  throw Error('COMPAT_PDF_OUTPUT_BYTES_LIMIT');
++ assertCompletePdfBytes(bytes,MAX_OUTPUT_BYTES);
++ onProgress({stage:'professional',detail:'pdf_done',page:count,total:count});
++ return {
++  pdf:new Blob([bytes],{type:'application/pdf'}),pages:count,bytes:bytes.byteLength,
++  renderMode:'raster-compat',vectorPages:0,rasterPages:count,
++  warnings:[
++   '호환 방식으로 전체 페이지를 고해상도 이미지 PDF로 저장했습니다. 글자 검색·선택 및 벡터 객체 편집은 지원하지 않습니다.',
++   '복잡한 필터 및 글꼴 차이가 있을 수 있으므로 원본과 모든 페이지를 눈으로 비교하세요.'
++  ]
++ };
++}
+diff --git a/browser-local/tests/compat-real-browser.mjs b/browser-local/tests/compat-real-browser.mjs
+new file mode 100644
+index 0000000..9d2542c
+--- /dev/null
++++ b/browser-local/tests/compat-real-browser.mjs
+@@ -0,0 +1,60 @@
++/**
++ * Playwright acceptance of the explicitly selected compatibility output.
++ * Uses published HWP/HWPX fixture files. Default professional conversion is
++ * covered by e2e.mjs; this test ensures a second, independent PDF writer works.
++ */
++import {chromium} from 'playwright';
++import {PDFDocument} from 'pdf-lib';
++import {existsSync,readFileSync,mkdirSync,writeFileSync} from 'node:fs';
++import {resolve} from 'node:path';
++const root=resolve(import.meta.dirname,'../..');
++const site=process.env.SUNRISE_TEST_URL||'http://127.0.0.1:8787/local/';
++const origin=new URL(site).origin;
++const output=resolve(root,'r29-browser-real-evidence');
++mkdirSync(output,{recursive:true});
++const reports=[];
++const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
++try{
++ const page=await browser.newPage({acceptDownloads:true});
++ const external=[],errors=[],failedRequests=[];
++ page.on('pageerror',error=>errors.push(error.message));
++ page.on('requestfailed',request=>failedRequests.push(request.url()+': '+request.failure()?.errorText));
++ page.on('request',request=>{const u=request.url();if(!u.startsWith(origin+'/')&&!u.startsWith('data:')&&!u.startsWith('blob:'))external.push(u);});
++ await page.goto(site,{waitUntil:'networkidle',timeout:30000});
++ await page.waitForFunction(()=>/변환 준비 완료|초기화 실패|변환 기능 초기화 실패/.test(document.querySelector('#status')?.textContent||''),null,{timeout:90000});
++ const boot=await page.locator('#status').innerText();
++ if(!boot.includes('변환 준비 완료'))throw Error('WASM boot did not pass: '+boot);
++ if(await page.locator('#pdf-engine').inputValue()!=='professional')throw Error('default professional output changed');
++ await page.locator('details.options.advanced summary').click();
++ await page.locator('#pdf-engine').selectOption('compat-raster');
++ const files=['hwp','hwpx'].map(ext=>resolve(root,'r29-browser-fixtures/genuine.'+ext));
++ for(const file of files)if(!existsSync(file))throw Error('Missing acceptance fixture '+file);
++ await page.locator('#source').setInputFiles(files);
++ await page.locator('#convert').click();
++ await page.waitForFunction(()=>{
++  const completed=document.getElementById('done-count')?.textContent==='2';
++  const failed=Number(document.getElementById('failed-count')?.textContent||0)>0;
++  const idle=document.getElementById('cancel')?.disabled;
++  return (completed||failed)&&idle;
++ },null,{timeout:240000});
++ const done=await page.locator('#done-count').innerText();
++ if(done!=='2')throw Error('Compatibility PDF failed: '+(await page.locator('#file-list').innerText()));
++ const links=page.locator('#file-list a.download');
++ if(await links.count()!==2)throw Error('Expected 2 PDFs');
++ for(let i=0;i<2;i++){
++  const pending=page.waitForEvent('download',{timeout:30000});
++  await links.nth(i).click();
++  const download=await pending;
++  const filePath=resolve(output,'compat-genuine-'+(i===0?'hwp':'hwpx')+'.pdf');
++  await download.saveAs(filePath);
++  const data=readFileSync(filePath);
++  const document=await PDFDocument.load(data);
++  if(document.getPageCount()<1)throw Error('PDF has no pages');
++  reports.push({format:i===0?'hwp':'hwpx',pages:document.getPageCount(),size:data.length,status:'PASS'});
++ }
++ if(errors.length||external.length||failedRequests.length)throw Error(JSON.stringify({errors,external,failedRequests}));
++ await page.close();
++}finally{await browser.close();}
++reports.push({status:'PASS',engine:'opt-in compatibility raster',test:'real HWP/HWPX browser PDF downloads'});
++writeFileSync(resolve(output,'DEV26_COMPAT_BROWSER_E2E.json'),JSON.stringify(reports,null,2)+'\n');
++console.log(JSON.stringify(reports));
+diff --git a/browser-local/tests/r66-real-failure-compat.mjs b/browser-local/tests/r66-real-failure-compat.mjs
+new file mode 100644
+index 0000000..8b00bb5
+--- /dev/null
++++ b/browser-local/tests/r66-real-failure-compat.mjs
+@@ -0,0 +1,87 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {readFileSync} from 'node:fs';
++import {buildRasterCompatibilityPdf} from '../src/raster-compat-pdf.mjs';
++
++const validPdf=new Uint8Array(readFileSync(new URL('./fixtures/r66-validated.pdf',import.meta.url)));
++const png=new Blob([new Uint8Array([137,80,78,71,13,10,26,10,0])],{type:'image/png'});
++function setup({count=2,pages=[],result=validPdf,controller,failPreprocess=false}={}){
++ const events=[];
++ const pdf={
++  saved:false,embedPng:async bytes=>{assert.ok(bytes instanceof Uint8Array);return {key:'png'};},
++  addPage:size=>{pages.push(size);return {drawImage:(image,settings)=>{assert.equal(image.key,'png');assert.equal(settings.width,size[0]);assert.equal(settings.height,size[1]);}};},
++  save:async()=>{pdf.saved=true;return result;}
++ };
++ const doc={renderPageSvgWithProfile:(i,profile)=>{assert.equal(profile,'print');return `<svg data-page="${i}"/>`;}};
++ return {doc,pdf,events,options:{
++  signal:controller?.signal,
++  onProgress:x=>events.push(x),
++  preprocessSvg:async(svg)=>{if(failPreprocess)throw Error('SVG_UNSAFE');return svg;},
++  rasterPage:async(svg)=>{assert.match(svg,/^<svg/);return {blob:png,widthPt:300,heightPt:600};},
++  loadPdfLib:async()=>({PDFDocument:{create:async()=>pdf}})
++ },count};
++}
++
++test('explicit compat generates full PDF from page images, preserves page count and warns about quality',async()=>{
++ const pages=[],x=setup({count:3,pages});
++ const r=await buildRasterCompatibilityPdf(x.doc,x.count,x.options);
++ assert.deepEqual(pages,[[300,600],[300,600],[300,600]]);
++ assert.equal(r.pages,3);assert.equal(r.renderMode,'raster-compat');
++ assert.equal(r.vectorPages,0);assert.equal(r.rasterPages,3);
++ assert.equal(r.bytes,validPdf.byteLength);assert.equal(r.pdf.type,'application/pdf');
++ assert.ok(r.warnings.some(s=>/검색/.test(s)));assert.ok(r.warnings.some(s=>/원본/.test(s)));
++ assert.equal(x.events.filter(e=>e.detail==='compat_page_done').length,3);
++ assert.equal(x.events.at(-1).detail,'pdf_done');
++});
++
++test('compat cancellation stops before reading another page or saving PDF',async()=>{
++ const abort=new AbortController(),x=setup({count:2,controller:abort});
++ x.options.rasterPage=async()=>{abort.abort();return {blob:png,widthPt:300,heightPt:600};};
++ await assert.rejects(buildRasterCompatibilityPdf(x.doc,x.count,x.options),e=>e.name==='AbortError');
++ assert.equal(x.pdf.saved,false);
++});
++
++test('compat writer cannot claim a truncated or invalid PDF as success',async()=>{
++ const x=setup({count:1,result:new Uint8Array([1,2,3,4,5])});
++ await assert.rejects(buildRasterCompatibilityPdf(x.doc,x.count,x.options),/PDF_OUTPUT_HEADER_INVALID/);
++});
++
++test('compat rejects unsafe source and malformed page image, rather than bypassing validation',async()=>{
++ const x=setup({count:1,failPreprocess:true});
++ await assert.rejects(buildRasterCompatibilityPdf(x.doc,x.count,x.options),/SVG_UNSAFE/);
++ const y=setup({count:1});y.options.rasterPage=async()=>({blob:png,widthPt:0,heightPt:600});
++ await assert.rejects(buildRasterCompatibilityPdf(y.doc,y.count,y.options),/COMPAT_PAGE_IMAGE_INVALID/);
++});
++
++test('compat is strictly opt-in; default vector engine does not silently rasterize a failed source',()=>{
++ const src=readFileSync(new URL('../src/converter.js',import.meta.url),'utf8');
++ const ui=readFileSync(new URL('../index.html',import.meta.url),'utf8');
++ assert.match(src,/if\(options\.engine==='compat-raster'\)/);
++ // The surrounding try/finally frees the WASM document. Await the async
++ // compatibility build before finally, else Chromium sees a freed Rust ptr.
++ assert.match(src,/return await buildRasterCompatibilityPdf\(doc,count,/);
++ assert.match(src,/allowRasterFallback:false/);
++ assert.match(src,/options=\{engine:'professional',\.\.\.options\}/);
++ assert.match(ui,/<option value="professional" selected>/);
++ assert.match(ui,/<option value="compat-raster">/);
++});
++
++test('compat output is bounded and per-page processing yields to cancellation',async()=>{
++ const x=setup({count:0});
++ await assert.rejects(buildRasterCompatibilityPdf(x.doc,x.count,x.options),/COMPAT_PAGE_COUNT_INVALID/);
++ const y=setup({count:121});
++ await assert.rejects(buildRasterCompatibilityPdf(y.doc,y.count,y.options),/COMPAT_PAGE_COUNT_INVALID/);
++});
++
++
++test('compat stages are whitelisted by both client and server telemetry and traced with real phases',()=>{
++ const client=readFileSync(new URL('../src/pro-telemetry.js',import.meta.url),'utf8');
++ const server=readFileSync(new URL('../../src/admin/handler.js',import.meta.url),'utf8');
++ const trace=readFileSync(new URL('../../src/trace-dev4-runtime.js',import.meta.url),'utf8');
++ for(const name of ['compat_raster','compat_page_done','compat_save']){
++  assert.match(client,new RegExp(name));
++  assert.match(server,new RegExp(name));
++ }
++ assert.match(trace,/image_\|compat_raster/);
++ assert.match(trace,/pdf_\|compat_save/);
++});
+diff --git a/browser-local/tests/unit.mjs b/browser-local/tests/unit.mjs
+index 4d979b2..2c11720 100644
+--- a/browser-local/tests/unit.mjs
++++ b/browser-local/tests/unit.mjs
+@@ -51,7 +51,7 @@ test('HWP conversion rejects image export and releases HWP instance',()=>{
+  assert.match(source,/doc\.free\(\)/);
+  assert.doesNotMatch(source,/legacy-vector'/);
+  assert.doesNotMatch(source,/pdf\.embedPng|renderMode:'raster'/);
+- assert.match(source,/options\.engine!=='professional'/);
++ assert.match(source,/if\(options\.engine==='compat-raster'\)/); // explicit user-only compatibility path
+ });
+ 
+ test('only object-preserving HWP export loads local font registry',()=>{
+diff --git a/src/admin/handler.js b/src/admin/handler.js
+index 51b8da7..bf4d846 100644
+--- a/src/admin/handler.js
++++ b/src/admin/handler.js
+@@ -17,7 +17,7 @@ const cleanText=(value,limit)=>typeof value==='string'&&value.trim().length>0&&v
+ const validId=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+ const eventKinds=new Set(['visit','convert_start','convert_progress','convert_success','convert_failure','convert_cancel','render_error','active_30s']);
+ const allowedFeatures=new Set(['hwp','hwpx','xlsx','xls','png','jpg','batch','ui','other']);
+-const allowedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','svg_build','svg_normalize','image_gif','image_png','image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done','pdf_finalize','pdf_stream','pdf_done','pdf','download','open','viewer','unknown']);
++const allowedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','svg_build','svg_normalize','image_gif','image_png','image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done','pdf_finalize','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save','pdf','download','open','viewer','unknown']);
+ const allowedStatuses=new Set(['new','in_progress','resolved']);
+ const allowedPublicationStates=new Set(['draft','published','archived']);
+ const allowedKinds=new Set(['announcement','release']);
+diff --git a/src/trace-dev4-runtime.js b/src/trace-dev4-runtime.js
+index fcdd33a..871b304 100644
+--- a/src/trace-dev4-runtime.js
++++ b/src/trace-dev4-runtime.js
+@@ -103,7 +103,7 @@ export async function traceDev4Route(req,env){
+ }
+ export const TRACE_DEV4_RELEASE=RELEASE;
+ 
+-const TRACE_CLIENT="/* PRO Trace v2 DEV4 observer: records only fixed event vocabulary, never file data. */\n(()=>{\n 'use strict';\n if(window.__proTraceDev4)return;\n window.__proTraceDev4=true;\n const original=window.fetch;\n if(typeof original!=='function'||!crypto?.randomUUID)return;\n const FEATURE=new Set(['hwp','hwpx','xls','xlsx','jpg','png','batch','other']);\n const PHASE=new Set(['load','fonts','parse','render','pdf','download']);\n const session_id=crypto.randomUUID();\n let active=null,seen=0;\n const bucket=ms=>ms<100?'0to99':ms<500?'100to499':ms<2000?'500to1999':ms<10000?'2000to9999':'ge10000';\n const browser=()=>/Edg\\//.test(navigator.userAgent)?'edge':/Firefox\\//.test(navigator.userAgent)?'firefox':/Chrome\\//.test(navigator.userAgent)?'chrome':/Safari\\//.test(navigator.userAgent)?'safari':'other';\n function mark(step){if(!active||active.steps.at(-1)?.step===step)return;active.steps.push({step,duration:bucket(performance.now()-active.started)});if(active.steps.length>12)active.steps.shift();}\n function showId(id){try{const area=document.querySelector('.queue')||document.getElementById('status');if(!area)return;const p=document.createElement('p');p.className='trace-dev4-id';p.textContent='변환 오류 진단번호: '+id;p.style.cssText='font-size:12px;overflow-wrap:anywhere';area.append(p);}catch{}}\n function onStatus(){if(!active)return;const s=document.getElementById('status')?.textContent||'';\n  if(/읽는 중/.test(s))mark('load_start');\n  else if(/글꼴|서체/.test(s))mark('fonts_start');\n  else if(/변환 중/.test(s))mark('render_start');\n  else if(/ZIP 준비/.test(s))mark('pdf_start');\n }\n const registerObserver=()=>{const el=document.getElementById('status');if(el)new MutationObserver(onStatus).observe(el,{childList:true,characterData:true,subtree:true});};\n if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',registerObserver,{once:true});else registerObserver();\n function onEvent(x){if(!x||typeof x!=='object')return;\n  if(x.kind==='convert_start'){\n   active={trace_id:crypto.randomUUID(),operation_id:crypto.randomUUID(),started:performance.now(),feature:FEATURE.has(x.feature)?x.feature:'other',steps:[]};mark('select');mark('load_start');return;\n  }\n  if(!active)return;\n  if(x.kind==='convert_success'){mark('pdf_ok');active=null;return;}\n  if(x.kind==='convert_cancel'){mark('cancelled');active=null;return;}\n  if(x.kind!=='convert_failure')return;\n  const phase=PHASE.has(x.stage)?x.stage:'unknown';\n  const code=typeof x.error_code==='string'&&/^[A-Z][A-Z0-9_]{2,63}$/.test(x.error_code)?x.error_code:'CONVERSION_FAILED';\n  const module=phase==='fonts'?'pdf_fonts':phase==='render'?(active.feature==='hwp'||active.feature==='hwpx'?'svg_professional':'converter'):phase==='pdf'?'pdf_writer':phase==='download'?'batch':active.feature==='xls'||active.feature==='xlsx'?'spreadsheet':active.feature==='jpg'||active.feature==='png'?'image_pdf':'converter';\n  const callsite=phase==='fonts'?'select_fonts':phase==='render'?(module==='svg_professional'?'render_svg':'render_page'):phase==='pdf'?'write_pdf':phase==='download'?'make_archive':phase==='load'?'read_file':'convert_one';\n  mark('failed');const t=active;active=null;\n  const payload={schema:2,trace_id:t.trace_id,operation_id:t.operation_id,session_id,feature:t.feature,code,phase,module,callsite,size_bucket:'unknown',browser:browser(),client_release:'trace2-dev4-pro-20261110',duration_bucket:bucket(performance.now()-t.started),steps:t.steps};\n  if(++seen>40)return;\n  try{const body=JSON.stringify(payload);if(body.length>2900)return;original.call(window,'/api/public/trace-dev4',{method:'POST',headers:{'content-type':'application/json'},body,credentials:'same-origin',keepalive:true}).catch(()=>{});showId(t.trace_id);}catch{}\n }\n window.fetch=function(input,init){\n  try{const url=typeof input==='string'?input:input?.url;const path=new URL(url,location.href);\n   if(path.origin===location.origin&&path.pathname==='/api/public/telemetry'&&(init?.method||'GET').toUpperCase()==='POST'&&typeof init?.body==='string')onEvent(JSON.parse(init.body));\n  }catch{}\n  return Reflect.apply(original,this,arguments);\n };\n})();\n";
++const TRACE_CLIENT="/* PRO Trace v2 DEV4 observer: records only fixed event vocabulary, never file data. */\n(()=>{\n 'use strict';\n if(window.__proTraceDev4)return;\n window.__proTraceDev4=true;\n const original=window.fetch;\n if(typeof original!=='function'||!crypto?.randomUUID)return;\n const FEATURE=new Set(['hwp','hwpx','xls','xlsx','jpg','png','batch','other']);\n const PHASE=new Set(['load','fonts','parse','render','pdf','download']);\n const session_id=crypto.randomUUID();\n let active=null,seen=0;\n const bucket=ms=>ms<100?'0to99':ms<500?'100to499':ms<2000?'500to1999':ms<10000?'2000to9999':'ge10000';\n const browser=()=>/Edg\\//.test(navigator.userAgent)?'edge':/Firefox\\//.test(navigator.userAgent)?'firefox':/Chrome\\//.test(navigator.userAgent)?'chrome':/Safari\\//.test(navigator.userAgent)?'safari':'other';\n function mark(step){if(!active||active.steps.at(-1)?.step===step)return;active.steps.push({step,duration:bucket(performance.now()-active.started)});if(active.steps.length>12)active.steps.shift();}\n function showId(id){try{const area=document.querySelector('.queue')||document.getElementById('status');if(!area)return;const p=document.createElement('p');p.className='trace-dev4-id';p.textContent='변환 오류 진단번호: '+id;p.style.cssText='font-size:12px;overflow-wrap:anywhere';area.append(p);}catch{}}\n function onStatus(){if(!active)return;const s=document.getElementById('status')?.textContent||'';\n  if(/읽는 중/.test(s))mark('load_start');\n  else if(/글꼴|서체/.test(s))mark('fonts_start');\n  else if(/변환 중/.test(s))mark('render_start');\n  else if(/ZIP 준비/.test(s))mark('pdf_start');\n }\n const registerObserver=()=>{const el=document.getElementById('status');if(el)new MutationObserver(onStatus).observe(el,{childList:true,characterData:true,subtree:true});};\n if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',registerObserver,{once:true});else registerObserver();\n function onEvent(x){if(!x||typeof x!=='object')return;\n  if(x.kind==='convert_start'){\n   active={trace_id:crypto.randomUUID(),operation_id:crypto.randomUUID(),started:performance.now(),feature:FEATURE.has(x.feature)?x.feature:'other',steps:[]};mark('select');mark('load_start');return;\n  }\n  if(!active)return;\n  if(x.kind==='convert_success'){mark('pdf_ok');active=null;return;}\n  if(x.kind==='convert_cancel'){mark('cancelled');active=null;return;}\n  if(x.kind!=='convert_failure')return;\n  const phase=PHASE.has(x.stage)?x.stage:/^(?:svg_|image_|compat_raster|compat_page_done)/.test(x.stage)?'render':/^(?:pdf_|compat_save)/.test(x.stage)?'pdf':/^font_/.test(x.stage)?'fonts':'unknown';\n  const code=typeof x.error_code==='string'&&/^[A-Z][A-Z0-9_]{2,63}$/.test(x.error_code)?x.error_code:'CONVERSION_FAILED';\n  const module=phase==='fonts'?'pdf_fonts':phase==='render'?(active.feature==='hwp'||active.feature==='hwpx'?'svg_professional':'converter'):phase==='pdf'?'pdf_writer':phase==='download'?'batch':active.feature==='xls'||active.feature==='xlsx'?'spreadsheet':active.feature==='jpg'||active.feature==='png'?'image_pdf':'converter';\n  const callsite=phase==='fonts'?'select_fonts':phase==='render'?(module==='svg_professional'?'render_svg':'render_page'):phase==='pdf'?'write_pdf':phase==='download'?'make_archive':phase==='load'?'read_file':'convert_one';\n  mark('failed');const t=active;active=null;\n  const payload={schema:2,trace_id:t.trace_id,operation_id:t.operation_id,session_id,feature:t.feature,code,phase,module,callsite,size_bucket:'unknown',browser:browser(),client_release:'trace2-dev4-pro-20261110',duration_bucket:bucket(performance.now()-t.started),steps:t.steps};\n  if(++seen>40)return;\n  try{const body=JSON.stringify(payload);if(body.length>2900)return;original.call(window,'/api/public/trace-dev4',{method:'POST',headers:{'content-type':'application/json'},body,credentials:'same-origin',keepalive:true}).catch(()=>{});showId(t.trace_id);}catch{}\n }\n window.fetch=function(input,init){\n  try{const url=typeof input==='string'?input:input?.url;const path=new URL(url,location.href);\n   if(path.origin===location.origin&&path.pathname==='/api/public/telemetry'&&(init?.method||'GET').toUpperCase()==='POST'&&typeof init?.body==='string')onEvent(JSON.parse(init.body));\n  }catch{}\n  return Reflect.apply(original,this,arguments);\n };\n})();\n";
+ 
+ const TRACE_ADMIN_JS="(()=>{'use strict';\nconst $=id=>document.getElementById(id);\nlet current=null,csrf='';\nconst request=async(path,options={})=>{const r=await fetch(path,{credentials:'same-origin',cache:'no-store',...options});const b=await r.json();if(!r.ok)throw Error(b.error||'HTTP '+r.status);return b;};\nconst line=(parent,text)=>{const p=document.createElement('p');p.textContent=text;parent.append(p);};\nasync function load(){\n $('notice').textContent='오류 사건을 조회하는 중';$('groups').replaceChildren();\n try{const session=await request('/api/admin/session');csrf=session.csrf;\n  const j=await request('/api/admin/trace-dev4/incidents');$('notice').textContent='최근 14일 · '+j.items.length+'개 오류 유형';\n  for(const x of j.items){const b=document.createElement('button');b.type='button';b.textContent=x.feature+' · '+x.code+' · '+x.n+'건 · '+x.status+(x.recurred?' · 재발':'');b.onclick=()=>inspect(x);$('groups').append(b);}\n  if(!j.items.length)line($('groups'),'수집된 Trace DEV4 오류가 없습니다.');\n }catch(e){$('notice').textContent='조회 실패: '+e.message;}\n}\nasync function inspect(x){current=x;$('selected').textContent=x.fingerprint+' · '+x.feature+' · '+x.code+' · '+x.phase+' · '+x.module_id+'.'+x.callsite_id;\n $('status').value=x.status;$('note').value=x.note||'';$('revision').textContent='수정 버전 '+x.revision;\n $('steps').replaceChildren();$('history').replaceChildren();\n try{const hs=await request('/api/admin/trace-dev4/incidents/'+x.fingerprint+'/history');for(const h of hs.items)line($('history'),new Date(h.happened_at*1000).toLocaleString('ko-KR')+' · '+h.status+' · '+h.note);\n const latest=await request('/api/admin/trace-dev4/latest/'+x.fingerprint);if(latest.trace_id){const tr=await request('/api/admin/trace-dev4/traces/'+latest.trace_id);for(const s of tr.trace.steps)line($('steps'),s.step+' · '+s.duration);line($('steps'),'진단번호: '+tr.trace.trace_id);}\n }catch(e){line($('steps'),'상세 오류: '+e.message);}\n}\n$('save').onclick=async()=>{if(!current)return;try{const b=await request('/api/admin/trace-dev4/incidents/'+current.fingerprint,{method:'PATCH',headers:{'content-type':'application/json','X-Sunrise-CSRF':csrf},body:JSON.stringify({status:$('status').value,note:$('note').value,revision:current.revision,fix_commit:null})});$('notice').textContent='조사 상태 저장 완료 · '+b.revision;await load();}catch(e){$('notice').textContent='저장 실패: '+e.message;}};\n$('refresh').onclick=load;load();\n})();\n";
+ 

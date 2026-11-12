@@ -1,6 +1,28 @@
+import {cooperativeYield} from './cooperative-yield.mjs';
 import {familyKey,splitFontFamilies,loadPdfFonts} from './pdf-fonts.js';
 import {flattenLocalSvgStyles} from './svg-style.js';
 import {boundedFontStep} from './font-timeout.mjs';
+
+// Only verified bilingual family names, never a fuzzy/fingerprint-based match.
+// Windows exposes a different localized family name to Local Font Access than
+// the Korean HWP file sometimes names. Treat these spellings as the SAME family
+// while retaining the HWP's original name for CSS measurement and PDF output.
+const BILINGUAL_FAMILIES=[
+ ['맑은 고딕','Malgun Gothic'],['굴림','Gulim'],['굴림체','GulimChe'],
+ ['돋움','Dotum'],['돋움체','DotumChe'],['바탕','Batang'],
+ ['바탕체','BatangChe'],['궁서','Gungsuh'],['궁서체','GungsuhChe'],
+ ['함초롬바탕','HCR Batang'],['함초롬돋움','HCR Dotum'],
+ ['나눔고딕','Nanum Gothic'],['나눔명조','Nanum Myeongjo']
+];
+const bilingual=new Map();
+for(const [korean,english] of BILINGUAL_FAMILIES){
+ const a=familyKey(korean),b=familyKey(english);
+ bilingual.set(a,new Set([a,b]));bilingual.set(b,new Set([a,b]));
+}
+export function localFamilyKeys(name){
+ const key=familyKey(name);
+ return new Set(key?(bilingual.get(key)||[key]):[]);
+}
 
 // Capture permission during the actual button click; keep font bytes in memory only.
 export function requestLocalFontAccess(host=globalThis){
@@ -38,29 +60,48 @@ export function svgFontFamilies(svg,Parser=globalThis.DOMParser){
 }
 
 export async function loadDocumentLocalFonts(doc,count,available,parser,signal,onProgress=()=>{}){
- const needed=new Map();
+ const needed=new Map(),neededPages=new Map();
  // Report before the expensive synchronous WASM/SVG scan.
  if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
  onProgress({stage:'fonts',page:0,total:count,detail:'scan'});
  for(let i=0;i<count;i++){
   if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
   const page=svgFontFamilies(doc.renderPageSvgWithProfile(i,'print'));
-  for(const [key,name] of page)needed.set(key,name);
+  for(const [key,name] of page){
+   needed.set(key,name);
+   neededPages.set(key,(neededPages.get(key)||0)+1);
+  }
   onProgress({stage:'fonts',page:i+1,total:count,detail:'scan'});
-  await new Promise(resolve=>setTimeout(resolve,0));
+  await cooperativeYield({signal});
  }
- const faces=[],seen=new Set(),attempted=new Set();
+ // The OS normally enumerates its fonts in an arbitrary order. For a large
+ // document, the previous 22-second budget could expire BEFORE the most-used
+ // family was read. Rank only document-matching candidates by page frequency,
+ // with exact names ahead of verified Korean/English aliases, then process.
+ const candidates=[];
+ for(let index=0;index<available.length;index++){
+  const item=available[index];
+  if(!item||typeof item.blob!=='function')continue;
+  const observed=[item.family,item.fullName,item.postscriptName].filter(Boolean);
+  const literalKeys=new Set(observed.map(familyKey).filter(Boolean));
+  const expanded=new Set(observed.flatMap(name=>[...localFamilyKeys(name)]));
+  const requested=[...expanded].filter(key=>needed.has(key));
+  if(!requested.length)continue;
+  const originalNames=[...new Set(requested.map(key=>needed.get(key)))];
+  const exact=originalNames.some(name=>literalKeys.has(familyKey(name)));
+  const frequency=requested.reduce((total,key)=>total+(neededPages.get(key)||0),0);
+  candidates.push({item,index,expanded,originalNames,score:frequency*10+(exact?5:0)});
+ }
+ candidates.sort((a,b)=>b.score-a.score||a.index-b.index);
+ const faces=[],seen=new Set(),attempted=new Set(),loadedNames=new Set();
  const started=Date.now(),maxReadMs=22000;
  let unreadable=0,matched=0,timedOutFonts=0,skippedByBudget=0;
- for(const item of available){
-  const keys=[item.family,item.fullName,item.postscriptName].filter(Boolean).map(familyKey);
-  const requested=[...new Set(keys.filter(key=>needed.has(key)))];
-  if(!requested.length)continue;
+ for(const candidate of candidates){
+  const {item,expanded,originalNames}=candidate;
   const sourceKey=familyKey(item.postscriptName||item.fullName||item.family)+'|'+
    familyKey(item.style||'');
   if(attempted.has(sourceKey))continue;
-  attempted.add(sourceKey);
-  matched++;
+  attempted.add(sourceKey);matched++;
   if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
   const remaining=maxReadMs-(Date.now()-started);
   if(remaining<=0){skippedByBudget++;continue;}
@@ -69,8 +110,11 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   try{
    const blob=await boundedFontStep(()=>item.blob(),{signal,
     timeoutMs:Math.min(4000,remaining),code:'PC_FONT_BLOB_TIMEOUT'});
+   // The blob is an SFNT container, not necessarily a .ttf outline. Fontkit
+   // inspects the bytes, not the extension, and rejects unsupported formats.
    const file=new File([blob],'local-font.ttf',{type:'font/ttf'});
-   loaded=await boundedFontStep(()=>loadPdfFonts([file],parser,signal),{signal,
+   loaded=await boundedFontStep(()=>loadPdfFonts([file],parser,signal,
+    {postscriptName:item.postscriptName||null}),{signal,
     timeoutMs:Math.min(4000,Math.max(1,maxReadMs-(Date.now()-started))),
     code:'PC_FONT_PARSE_TIMEOUT'});
   }catch(error){
@@ -84,12 +128,16 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   if(seen.has(identity))continue;
   seen.add(identity);
   face.name='LocalFont'+(faces.length+1);
-  face.isLocal=true; // Provenance marker for the PDF font callback, not a user identifier.
-  face.cssAliases=requested.map(key=>needed.get(key));
-  face.aliases=[...new Set([...face.aliases,...keys,...requested])];
+  face.isLocal=true;
+  face.cssAliases=originalNames;
+  face.aliases=[...new Set([...face.aliases,...expanded])];
   faces.push(face);
+  for(const name of originalNames)loadedNames.add(familyKey(name));
  }
+
  onProgress({stage:'fonts',page:count,total:count,detail:'loaded'});
  return {faces,requestedFamilies:needed.size,requestedNames:[...needed.values()],
-  matchedFontData:matched,unreadableFonts:unreadable,timedOutFonts,skippedByBudget};
+  matchedFontData:matched,unreadableFonts:unreadable,timedOutFonts,skippedByBudget,
+  unmatchedNames:[...needed.values()].filter(name=>!loadedNames.has(familyKey(name)))
+ }; // Names are displayed only in the current browser, never sent in telemetry.
 }

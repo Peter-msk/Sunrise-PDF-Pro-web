@@ -1,0 +1,108 @@
+name: DEV26 release build and guarded production deploy
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dev26-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      CLOUDFLARE_ACCOUNT_ID: '569c0b66d1f480e577ca67cd68592203'
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Confirm R65 baseline and apply DEV26 cumulative patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 2a11edbdb3d1413b3ef4a6eccb150dd442c2f7cf HEAD
+          test "$(git hash-object .release/DEV26_R65_INTEGRATED_DIFF.patch)" = 'd8e7b953237f2930965ec7a41b3ab2470273c3da'
+          echo '5821e41d655f5d87b11fcf2b4b8b7bfdec8be0f3fd5f33292211dfb7e7592d96  .release/DEV26_R65_INTEGRATED_DIFF.patch' | sha256sum -c -
+          git apply --binary --check .release/DEV26_R65_INTEGRATED_DIFF.patch
+          git apply --binary .release/DEV26_R65_INTEGRATED_DIFF.patch
+          echo '42b9cf09b541eb0d555e852abbc8db0043cb59145d872b745be62bdd81e37118  .release/DEV26_TEST_JPEG_FIX.patch' | sha256sum -c -
+          git apply --check .release/DEV26_TEST_JPEG_FIX.patch
+          git apply .release/DEV26_TEST_JPEG_FIX.patch
+          git diff --check
+          test -f browser-local/tests/r66-svg-vector-budget.mjs
+          node --version
+      - name: Install pinned dependencies and run the complete tests and release build
+        run: npm run build
+      - name: Validate Worker static assets and WASM
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix browser-local run verify:dist
+          node scripts/verify-browser-build.mjs
+          node scripts/test-worker-assets.mjs
+          test -s browser-local/dist/rhwp_bg.wasm
+          sha256sum browser-local/dist/rhwp_bg.wasm
+      - name: Validate Wrangler Worker bundle without deploying
+        run: npx --yes wrangler@4 deploy --dry-run --outdir /tmp/sunrise-dev26-worker-dry-run
+      - name: Install Chromium for real-document acceptance
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Download published HWP and HWPX acceptance samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Start isolated local Worker with DEV26 assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 > /tmp/dev26-local-worker.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl --fail --silent 'http://127.0.0.1:8787/local/health' >/tmp/dev26-health.json; then
+              cat /tmp/dev26-health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/dev26-local-worker.log
+          exit 1
+      - name: Real Chromium HWP and HWPX to PDF acceptance
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/e2e.mjs
+      - name: Require deployment credentials before any production mutation
+        shell: bash
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo 'BLOCKED: Repository secret CLOUDFLARE_API_TOKEN or CF_API_TOKEN is absent.'
+            exit 3
+          fi
+      - name: Deploy only validated DEV26 Worker assets to the existing production Worker
+        shell: bash
+        run: npx --yes wrangler@4 deploy --config wrangler.jsonc
+      - name: Verify public service after deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLSs --retry 4 --retry-delay 3 'https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/health' | tee /tmp/dev26-live-health.json
+          curl -fLIs --retry 4 --retry-delay 3 'https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/rhwp_bg.wasm'
+          curl -fLIs --retry 4 --retry-delay 3 'https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/'
+      - name: Upload test and build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev26-cloud-release-evidence
+          path: |
+            /tmp/dev26-health.json
+            /tmp/dev26-live-health.json
+            r29-browser-real-evidence/
+          if-no-files-found: warn
+          retention-days: 5

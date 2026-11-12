@@ -1,3 +1,4 @@
+import {cooperativeYield} from './cooperative-yield.mjs';
 import {Zip,ZipPassThrough} from 'fflate';
 
 export function uniquePdfNames(files){
@@ -37,7 +38,14 @@ export async function runBatch(items,convert,signal,onChange=()=>{}){
   notify(item);
   // Allow the UI thread to release completed document resources before
   // starting the next large HWP; it is not a timeout or an artificial delay.
-  await new Promise(resolve=>setTimeout(resolve,0));
+  if(signal?.aborted)break;
+  try{await cooperativeYield({signal});}
+  catch(error){
+   // Cancellation during the boundary between completed documents is not
+   // a failed conversion. Keep the completed PDF and queued files untouched.
+   if(error?.name==='AbortError'||signal?.aborted)break;
+   throw error;
+  }
  }
  return items;
 }
@@ -63,7 +71,7 @@ export async function makePdfArchive(items,signal,onProgress=()=>{}){
    file.push(new Uint8Array(await ready[index].result.pdf.arrayBuffer()),true);
    if(zipError)throw zipError;
    onProgress(index+1,ready.length);
-   await new Promise(resolve=>setTimeout(resolve,0));
+   await cooperativeYield({signal});
   }
   if(signal?.aborted)throw new DOMException('ZIP 생성이 취소되었습니다.','AbortError');
   zip.end();if(zipError)throw zipError;

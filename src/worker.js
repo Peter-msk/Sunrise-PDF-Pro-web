@@ -127,9 +127,12 @@ export default {
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       return localAsset(request,env,path.slice('/local'.length),method,'application/javascript; charset=utf-8');
     }
-    if(path==='/local/pdf-worker.mjs'){
+    if(path==='/local/pdf-worker.mjs'||path==='/local/pdf-worker-legacy.mjs'){
       if(!['GET','HEAD'].includes(method))return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
-      return localAsset(request,env,'/pdf-worker.mjs',method,'application/javascript; charset=utf-8');
+      // Exact allowlist of the two self-hosted PDF.js workers. No wildcard
+      // for arbitrary .mjs, source maps or client-controlled file paths.
+      const name=path.slice('/local/'.length);
+      return localAsset(request,env,'/'+name,method,'application/javascript; charset=utf-8');
     }
     const fontPath=/^\/local\/fonts\/(Nanum(?:Gothic|Myeongjo)-(?:Regular|Bold)\.ttf|SunriseSymbols\.otf|SunriseMarks\.ttf)$/.exec(path);
     if(fontPath){

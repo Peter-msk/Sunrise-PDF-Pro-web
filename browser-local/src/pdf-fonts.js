@@ -125,7 +125,7 @@ export function missingCodepoint(face,text){
  * @param {AbortSignal} [signal]
  * @returns {Promise<{faces:Array<object>}>} metadata and bytes for PDFKit
  */
-export async function loadPdfFonts(fontFiles,parser,signal){
+export async function loadPdfFonts(fontFiles,parser,signal,{postscriptName=null}={}){
   const files=Array.from(fontFiles||[]);
   const faces=[];
   for(const file of files){
@@ -134,9 +134,20 @@ export async function loadPdfFonts(fontFiles,parser,signal){
       throw Error('글꼴 파일은 TTF/OTF만 지원합니다.');
     const bytes=new Uint8Array(await file.arrayBuffer());
     if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
+    // Fontkit's second create() argument is a TTC collection selector.
+    // Passing an OS PostScript name to a *single* TTF/OTF can fail parsing,
+    // even though that face is installed and matches the HWP font family.
+    const collection=bytes.length>=4 && bytes[0]===116 && bytes[1]===116 && bytes[2]===99 && bytes[3]===102;
     let parsed;
-    try{parsed=parser.create(bytes);}
+    try{parsed=collection?parser.create(bytes,postscriptName||null):parser.create(bytes);}
     catch(e){throw Error('글꼴 파일을 분석할 수 없습니다: '+file.name+' ('+String(e?.message||e)+')');}
+    // Never guess a TTC member; a single-face OS postscriptName must also
+    // agree with the actual embedded SFNT, not just the filename.
+    if(collection&&(!postscriptName||familyKey(parsed?.postscriptName)!==familyKey(postscriptName)))
+      throw Error('PC_FONT_COLLECTION_FACE_UNAVAILABLE');
+    if(!collection&&postscriptName&&
+       familyKey(parsed?.postscriptName)!==familyKey(postscriptName))
+      throw Error('PC_FONT_SINGLE_FACE_MISMATCH');
     if(!Array.isArray(parsed?.characterSet) || !parsed.familyName)
       throw Error('글꼴의 유니코드 문자표 또는 패밀리 정보를 찾을 수 없습니다: '+file.name);
     const subfamily=String(parsed.subfamilyName||'');
@@ -147,7 +158,9 @@ export async function loadPdfFonts(fontFiles,parser,signal){
     if(faces.some(f=>f.bold===bold&&f.italic===italic&&aliases.some(a=>f.aliases.includes(a))))
       throw Error('같은 글꼴 패밀리와 스타일을 중복 선택했습니다: '+file.name);
     faces.push({name:'SunriseFont'+(faces.length+1),family:parsed.familyName,
-      aliases,bold,italic,characterSet:new Set(parsed.characterSet),bytes});
+      postscriptName:parsed.postscriptName||'',aliases,bold,italic,
+      characterSet:new Set(parsed.characterSet),bytes,
+      ...(collection?{collectionFontName:parsed.postscriptName}: {})});
   }
   return {faces};
 }
@@ -167,13 +180,21 @@ export async function installMeasureFonts(registry,signal,
   if(!fontSet?.add||!fontSet?.delete||typeof FontFaceImpl!=='function')
     throw Error('이 브라우저는 사용자 글꼴의 임시 로딩을 지원하지 않습니다.');
   const installed=[],registeredIds=new Set(),start=Date.now();
-  const stats={loaded:0,skipped:0,timedOut:0,budgetExceeded:false};
+  const stats={loaded:0,skipped:0,timedOut:0,budgetExceeded:false,ttcMeasurementUnverified:0};
   const cleanup=()=>{for(const font of installed)fontSet.delete(font);};
   cleanup.stats=stats;
   try{
     const explicitlyProvided=new Set(faces.filter(face=>!face.isFallback).flatMap(face=>
       [face.family,...(face.cssAliases||[])].map(name=>familyKey(name)+'|'+face.bold+'|'+face.italic)));
     for(const face of faces){
+      // PDFKit selects a TTC face by PostScript name. FontFace(ArrayBuffer)
+      // has NO matching face-index argument; loading the entire TTC as a CSS
+      // face can silently measure its first face instead of the selected one.
+      // Leave Windows' installed face resolution intact and warn locally.
+      if(face.collectionFontName){
+        stats.ttcMeasurementUnverified++;
+        continue;
+      }
       const names=[...new Set([face.family,...(face.cssAliases||[])])];
       for(const family of names){
         const id=familyKey(family)+'|'+face.bold+'|'+face.italic;

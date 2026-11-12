@@ -1,0 +1,37 @@
+name: DEV26 release fixed deadline CI gate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/dev26-deadline-ci-20261112
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      CF_PAGES_BRANCH: release/dev26-cloud-build-20261112
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Verify all pinned cumulative patches, full tests and WASM build
+        run: bash .release/build-dev26-cloudflare.sh
+      - name: Assert deterministic shared PNG page deadline contract (no wall-time flake)
+        run: |
+          set -euo pipefail
+          node --test browser-local/tests/r66-page-deadline.mjs
+          node --check browser-local/src/svg-embedded-raster-budget.mjs
+          node --check browser-local/tests/r66-page-deadline.mjs
+          test -s browser-local/dist/rhwp_bg.wasm
+          grep -q 'id="font-check"' browser-local/dist/index.html
+          grep -q 'value="hybrid-filter"' browser-local/dist/index.html
+          echo 'DEADLINE_RELEASE_GATE_PASS'

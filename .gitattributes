@@ -1,0 +1,5 @@
+# Office and PDF regression fixtures are byte-for-byte assets, never line-ending normalized.
+browser-local/tests/fixtures/*.pdf -text -diff
+browser-local/tests/fixtures/*.xlsx -text -diff
+browser-local/tests/fixtures/*.jpg -text -diff
+browser-local/tests/fixtures/*.zip -text -diff

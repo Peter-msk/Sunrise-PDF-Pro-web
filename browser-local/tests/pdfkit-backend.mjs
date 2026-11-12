@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
+import {readFileSync} from 'node:fs';
+const validPdf=readFileSync(new URL('./fixtures/r66-validated.pdf',import.meta.url));
 import {loadBrowserPdfBackend} from '../src/pdfkit-backend.js';
 function fixtures(){
  class PDFDoc extends EventEmitter {
-  end(){this.emit('data',new TextEncoder().encode('%PDF-1.7\n'+'X'.repeat(200)));this.emit('end');}
+  end(){this.emit('data',validPdf);this.emit('end');}
  }
  const imports=[],registered=[];
  const Helvetica={family:'Helvetica'};
@@ -18,7 +20,7 @@ test('browser adapter collects binary chunks and exposes actual standard-font re
  assert.deepEqual(f.registered,[f.Helvetica]);
  const pdf=new backend.PDFDocument(),pending=backend.toBlob(pdf);pdf.end();
  const blob=await pending;
- assert.equal(blob.type,'application/pdf');assert.match(await blob.text(),/^%PDF-1.7/);
+ assert.equal(blob.type,'application/pdf');assert.match(await blob.text(),/^%PDF-1\.[0-7]/);
  assert.equal(pdf.listenerCount('data'),0);assert.equal(pdf.listenerCount('end'),0);
  assert.equal(pdf.listenerCount('error'),0);
 });

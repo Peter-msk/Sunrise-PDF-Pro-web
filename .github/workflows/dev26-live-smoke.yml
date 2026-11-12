@@ -1,0 +1,26 @@
+name: Sunrise PDF PRO DEV26 production HTTP smoke
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-http-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify live health, HTML and HWP WASM asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://sunrise-pdf-pro-web.ko-pg.workers.dev'
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 --max-time 20 "$base/local/health" -o /tmp/pro-health.json
+          node -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync("/tmp/pro-health.json","utf8"));if(h.rhwp_version!=="0.8.7"||h.wasm_sha256!=="54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989"||h.wasm_bytes!==11821756)process.exit(2);console.log("LIVE_HEALTH_PASS",h.rhwp_version,h.wasm_sha256,h.wasm_bytes);'
+          curl --fail --silent --show-error --location --head --retry 3 --retry-delay 2 --max-time 20 "$base/local/rhwp_bg.wasm" -o /tmp/pro-wasm-headers
+          grep -qi '^content-type: application/wasm' /tmp/pro-wasm-headers
+          echo 'WASM_HTTP_HEAD_PASS'
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 --max-time 20 "$base/local/" -o /tmp/pro-local.html
+          grep -q '<html' /tmp/pro-local.html
+          echo 'WEB_UI_HTTP_PASS'
+          grep -q 'value="compat-raster"' /tmp/pro-local.html
+          grep -q 'value="professional" selected' /tmp/pro-local.html
+          echo 'LIVE_COMPAT_OPT_IN_UI_PASS'

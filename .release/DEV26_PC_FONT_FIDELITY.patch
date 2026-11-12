@@ -1,0 +1,424 @@
+diff --git a/browser-local/src/local-fonts.js b/browser-local/src/local-fonts.js
+--- a/browser-local/src/local-fonts.js
++++ b/browser-local/src/local-fonts.js
+@@ -1,6 +1,27 @@
+ import {familyKey,splitFontFamilies,loadPdfFonts} from './pdf-fonts.js';
+ import {flattenLocalSvgStyles} from './svg-style.js';
+ import {boundedFontStep} from './font-timeout.mjs';
++
++// Only verified bilingual family names, never a fuzzy/fingerprint-based match.
++// Windows exposes a different localized family name to Local Font Access than
++// the Korean HWP file sometimes names. Treat these spellings as the SAME family
++// while retaining the HWP's original name for CSS measurement and PDF output.
++const BILINGUAL_FAMILIES=[
++ ['맑은 고딕','Malgun Gothic'],['굴림','Gulim'],['굴림체','GulimChe'],
++ ['돋움','Dotum'],['돋움체','DotumChe'],['바탕','Batang'],
++ ['바탕체','BatangChe'],['궁서','Gungsuh'],['궁서체','GungsuhChe'],
++ ['함초롬바탕','HCR Batang'],['함초롬돋움','HCR Dotum'],
++ ['나눔고딕','Nanum Gothic'],['나눔명조','Nanum Myeongjo']
++];
++const bilingual=new Map();
++for(const [korean,english] of BILINGUAL_FAMILIES){
++ const a=familyKey(korean),b=familyKey(english);
++ bilingual.set(a,new Set([a,b]));bilingual.set(b,new Set([a,b]));
++}
++export function localFamilyKeys(name){
++ const key=familyKey(name);
++ return new Set(key?(bilingual.get(key)||[key]):[]);
++}
+ 
+ // Capture permission during the actual button click; keep font bytes in memory only.
+ export function requestLocalFontAccess(host=globalThis){
+@@ -38,29 +59,48 @@
+ }
+ 
+ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,onProgress=()=>{}){
+- const needed=new Map();
++ const needed=new Map(),neededPages=new Map();
+  // Report before the expensive synchronous WASM/SVG scan.
+  if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
+  onProgress({stage:'fonts',page:0,total:count,detail:'scan'});
+  for(let i=0;i<count;i++){
+   if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
+   const page=svgFontFamilies(doc.renderPageSvgWithProfile(i,'print'));
+-  for(const [key,name] of page)needed.set(key,name);
++  for(const [key,name] of page){
++   needed.set(key,name);
++   neededPages.set(key,(neededPages.get(key)||0)+1);
++  }
+   onProgress({stage:'fonts',page:i+1,total:count,detail:'scan'});
+   await new Promise(resolve=>setTimeout(resolve,0));
+  }
+- const faces=[],seen=new Set(),attempted=new Set();
++ // The OS normally enumerates its fonts in an arbitrary order. For a large
++ // document, the previous 22-second budget could expire BEFORE the most-used
++ // family was read. Rank only document-matching candidates by page frequency,
++ // with exact names ahead of verified Korean/English aliases, then process.
++ const candidates=[];
++ for(let index=0;index<available.length;index++){
++  const item=available[index];
++  if(!item||typeof item.blob!=='function')continue;
++  const observed=[item.family,item.fullName,item.postscriptName].filter(Boolean);
++  const literalKeys=new Set(observed.map(familyKey).filter(Boolean));
++  const expanded=new Set(observed.flatMap(name=>[...localFamilyKeys(name)]));
++  const requested=[...expanded].filter(key=>needed.has(key));
++  if(!requested.length)continue;
++  const originalNames=[...new Set(requested.map(key=>needed.get(key)))];
++  const exact=originalNames.some(name=>literalKeys.has(familyKey(name)));
++  const frequency=requested.reduce((total,key)=>total+(neededPages.get(key)||0),0);
++  candidates.push({item,index,expanded,originalNames,score:frequency*10+(exact?5:0)});
++ }
++ candidates.sort((a,b)=>b.score-a.score||a.index-b.index);
++ const faces=[],seen=new Set(),attempted=new Set(),loadedNames=new Set();
+  const started=Date.now(),maxReadMs=22000;
+  let unreadable=0,matched=0,timedOutFonts=0,skippedByBudget=0;
+- for(const item of available){
+-  const keys=[item.family,item.fullName,item.postscriptName].filter(Boolean).map(familyKey);
+-  const requested=[...new Set(keys.filter(key=>needed.has(key)))];
+-  if(!requested.length)continue;
++ for(const candidate of candidates){
++  const {item,expanded,originalNames}=candidate;
+   const sourceKey=familyKey(item.postscriptName||item.fullName||item.family)+'|'+
+    familyKey(item.style||'');
+   if(attempted.has(sourceKey))continue;
+-  attempted.add(sourceKey);
+-  matched++;
++  attempted.add(sourceKey);matched++;
+   if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
+   const remaining=maxReadMs-(Date.now()-started);
+   if(remaining<=0){skippedByBudget++;continue;}
+@@ -69,6 +109,8 @@
+   try{
+    const blob=await boundedFontStep(()=>item.blob(),{signal,
+     timeoutMs:Math.min(4000,remaining),code:'PC_FONT_BLOB_TIMEOUT'});
++   // The blob is an SFNT container, not necessarily a .ttf outline. Fontkit
++   // inspects the bytes, not the extension, and rejects unsupported formats.
+    const file=new File([blob],'local-font.ttf',{type:'font/ttf'});
+    loaded=await boundedFontStep(()=>loadPdfFonts([file],parser,signal),{signal,
+     timeoutMs:Math.min(4000,Math.max(1,maxReadMs-(Date.now()-started))),
+@@ -84,12 +126,16 @@
+   if(seen.has(identity))continue;
+   seen.add(identity);
+   face.name='LocalFont'+(faces.length+1);
+-  face.isLocal=true; // Provenance marker for the PDF font callback, not a user identifier.
+-  face.cssAliases=requested.map(key=>needed.get(key));
+-  face.aliases=[...new Set([...face.aliases,...keys,...requested])];
++  face.isLocal=true;
++  face.cssAliases=originalNames;
++  face.aliases=[...new Set([...face.aliases,...expanded])];
+   faces.push(face);
++  for(const name of originalNames)loadedNames.add(familyKey(name));
+  }
++
+  onProgress({stage:'fonts',page:count,total:count,detail:'loaded'});
+  return {faces,requestedFamilies:needed.size,requestedNames:[...needed.values()],
+-  matchedFontData:matched,unreadableFonts:unreadable,timedOutFonts,skippedByBudget};
++  matchedFontData:matched,unreadableFonts:unreadable,timedOutFonts,skippedByBudget,
++  unmatchedNames:[...needed.values()].filter(name=>!loadedNames.has(familyKey(name)))
++ }; // Names are displayed only in the current browser, never sent in telemetry.
+ }
+diff --git a/browser-local/src/converter.js b/browser-local/src/converter.js
+--- a/browser-local/src/converter.js
++++ b/browser-local/src/converter.js
+@@ -151,7 +151,8 @@
+     :bundled.faces;
+    pcFontStats=options.localFonts?{
+      listed:options.localFonts.length,selected:localOnly.length,
+-     required:local.requestedFamilies||0,unreadable:local.unreadableFonts||0,
++     required:local.requestedFamilies||0,matched:local.matchedFontData||0,
++     unmatchedNames:local.unmatchedNames||[],unreadable:local.unreadableFonts||0,
+      timedOut:local.timedOutFonts||0,budgetSkipped:local.skippedByBudget||0
+    }:null;
+    fontRegistry={faces:[...selected.faces,...localOnly,...tailoredBundled]};
+@@ -245,13 +246,18 @@
+       ?'PC 글꼴 후보 '+pcFontStats.selected+'개를 준비했지만 출력 단계에서 선택한 PC 글꼴은 0개입니다. 원본의 글꼴 이름·굵기·기울임을 확인하세요.'
+       :'이번 문서에서 PC 글꼴 후보를 등록하지 못했습니다. 원본 지정 서체와 PC 설치 서체의 이름을 확인하세요.';
+     const bundledNote=bundledUsed?' 내장 대체 글꼴 '+bundledUsed+'개가 PDF 출력에 사용됐습니다.':'';
+-    const readNote=pcFontStats.unreadable>0?' PC 글꼴 '+pcFontStats.unreadable+'개는 읽을 수 없어 건너뛰었습니다.':'';
++    const missing=pcFontStats.unmatchedNames||[];
++    const matchNote=' 문서 지정 글꼴 '+pcFontStats.required+'종 중 PC 글꼴 후보 '+
++     pcFontStats.matched+'개를 찾았으며 '+pcFontStats.selected+'개를 등록했습니다.';
++    const missingNote=missing.length?' PC 글꼴에서 일치하는 서체를 등록하지 못한 이름: '+
++     missing.slice(0,5).join(', ')+(missing.length>5?' 외 '+(missing.length-5)+'종':'')+'.':'';
++    const readNote=pcFontStats.unreadable>0?' PC 글꼴 '+pcFontStats.unreadable+'개는 읽거나 분석할 수 없어 건너뛰었습니다.':'';
+     const fontTimeoutNote=pcFontStats.timedOut||pcFontStats.budgetSkipped
+      ?' 글꼴 읽기 지연 '+(pcFontStats.timedOut+pcFontStats.budgetSkipped)+'건으로 일부 PC 서체를 사용하지 못했습니다.':'';
+     const measure=releaseMeasureFonts.stats;
+     const measureNote=measure?.skipped
+      ?' 측정용 글꼴 '+measure.skipped+'건을 제시간에 불러오지 못해 줄바꿈에 차이가 있을 수 있습니다.':'';
+-    result.warnings=[...(result.warnings||[]),pcNote+bundledNote+readNote+fontTimeoutNote+measureNote];
++    result.warnings=[...(result.warnings||[]),pcNote+matchNote+bundledNote+missingNote+readNote+fontTimeoutNote+measureNote];
+    }
+    return result;
+   }
+diff --git a/browser-local/src/main.js b/browser-local/src/main.js
+--- a/browser-local/src/main.js
++++ b/browser-local/src/main.js
+@@ -9,7 +9,7 @@
+ import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
+ import {canRecoverFile,planConversion} from './conversion-recovery.mjs';
+ import {requestLocalFontAccess} from './local-fonts.js';
+-import {settleInstalledFonts} from './local-font-policy.mjs';
++import {settleInstalledFonts,localFontCapability} from './local-font-policy.mjs';
+ const USE_PC_FONTS_BY_DEFAULT=true;
+ const $=id=>document.getElementById(id);
+ const conversionClock=createConversionClock();
+@@ -17,6 +17,29 @@
+ let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
+ let requestedFileRecovery=null;
+ const status=value=>{$('status').textContent=value;};
++const fontStatus=value=>{const node=$('pc-font-status');if(node)node.textContent=value;};
++// Permission is requested only in a real click. Enumeration is NOT proof a
++// font can be embedded into PDF. A separate PDF usage count is shown after
++// the document has been rendered.
++const fontCapability=localFontCapability();
++fontStatus(!fontCapability.secure?'PC 글꼴 접근은 HTTPS 연결에서만 지원됩니다.':
++ !fontCapability.supported?'이 브라우저는 PC 글꼴 파일 접근을 지원하지 않습니다. Chrome/Edge 데스크톱에서 확인하거나 글꼴 파일을 직접 추가하세요.':
++ 'PC 글꼴 조회 가능 여부: 아직 확인하지 않음 · 글꼴 연결 확인을 누르면 사이트 권한을 요청할 수 있습니다.');
++$('font-check')?.addEventListener('click',async()=>{
++ if(busy)return;
++ const button=$('font-check');button.disabled=true;
++ let request=null;
++ try{
++  request=requestLocalFontAccess();
++  fontStatus('PC 글꼴 권한을 확인하는 중입니다. 브라우저 요청이 나타나면 허용 여부를 선택하세요.');
++  const result=await settleInstalledFonts(request,{timeoutMs:30000});
++  fontStatus(result.status==='ready'
++   ?'PC 설치 글꼴 '+result.fonts.length+'개에 접근 가능합니다. 문서 지정 서체와 일치·글꼴 파일 읽기·PDF 실제 임베딩은 변환 결과에서 별도로 확인하세요.'
++   :result.notice||'PC 글꼴에 접근할 수 없습니다. TTF/OTF를 직접 추가할 수 있습니다.');
++ }catch(error){
++  fontStatus('PC 글꼴 조회를 시작하지 못했습니다: '+String(error?.message||error));
++ }finally{button.disabled=false;}
++});
+ function clearPrint(){if(printJob){printJob.dispose();printJob=null;}}
+ function clearArchive(){if(archiveUrl)URL.revokeObjectURL(archiveUrl);archiveUrl=null;$('download-all').hidden=true;$('download-all').removeAttribute('href');}
+ function release(item){if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
+@@ -105,10 +128,11 @@
+  conversionClock.start(pending.length);
+  const fontFiles=Array.from($('pdf-font').files||[]);
+  if(plan.recovery)status('선택한 문서 1개만 호환 이미지 PDF로 다시 변환합니다. 글자 검색은 불가능합니다.');
+- let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&pending.some(i=>isHwp(i.file)))fontsRequest=requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
++ if(engine==='compat-raster')fontStatus('호환 이미지 PDF는 페이지를 그림으로 출력하므로 PC 글꼴의 PDF 임베딩 절차를 사용하지 않습니다.');
++ let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&engine!=='compat-raster'&&pending.some(i=>isHwp(i.file)))fontsRequest=requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
+  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();let completed=0;
+  try{
+-  let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');}
++  let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');fontStatus(access.status==='ready'?'PC 글꼴 '+localFonts.length+'개에 접근 확인 · 실제 PDF 사용 여부는 변환 결과를 확인하세요.':fontAccessNotice);}
+   await runBatch(pending,async(file,item)=>{
+    item._proDiagStage='load';
+    item.lastEngine=engine;
+diff --git a/browser-local/src/r56-ui.js b/browser-local/src/r56-ui.js
+--- a/browser-local/src/r56-ui.js
++++ b/browser-local/src/r56-ui.js
+@@ -7,11 +7,7 @@
+   if(!Number.isFinite(size)||size<0)return '—';
+   return size>=1048576?(size/1048576).toFixed(2)+' MB':size>=1024?(size/1024).toFixed(1)+' KB':Math.round(size)+' B';
+  };
+- // The legacy compiled bundle reads this checkbox, so enforce the new invariant before each click.
+- document.addEventListener('click',event=>{
+-  if(!event.target?.closest?.('#convert, #print-prepare'))return;
+-  const control=byId('use-local-fonts');if(control)control.checked=true;
+- },true);
++ // Font access is managed by the explicit, user-activated request in main.js.
+  function rowCell(cls,text){
+   const el=document.createElement('span');el.className=cls;el.textContent=text;return el;
+  }
+diff --git a/browser-local/index.html b/browser-local/index.html
+--- a/browser-local/index.html
++++ b/browser-local/index.html
+@@ -60,7 +60,7 @@
+ <label class="upload" id="drop"><input id="source" type="file" accept=".hwp,.hwpx,.xls,.xlsx,.jpg,.jpeg,.png" multiple><span class="upload-icon">↑</span><span><strong>문서를 선택하거나 여기에 놓으세요</strong><small>HWP·HWPX·XLS·XLSX·JPG·PNG 여러 파일을 추가하세요.</small></span><span class="upload-action">파일 선택 +</span></label>
+ <p id="filename" class="muted" hidden>선택된 파일이 없습니다.</p><div class="toolbar"><button id="convert" class="primary" disabled>전체 PDF 변환</button><button id="cancel" class="secondary" disabled>변환 취소</button><button id="reset" class="secondary" disabled>목록 비우기</button><span class="spacer"></span><span class="muted">파일별로 순서대로 처리합니다.</span></div>
+ <div class="queue"><div class="queue-head"><b>문서 목록</b><span class="counter" id="queue-count">0개 파일</span></div><ul class="files" id="file-list"><li class="empty">선택한 문서가 여기에 표시됩니다.</li></ul></div>
+-<details class="options advanced"><summary>출력 및 글꼴 옵션</summary><div class="option-grid"><div><label for="pdf-engine">한글 문서 출력 방식</label><select id="pdf-engine" aria-describedby="pdf-engine-help"><option value="professional" selected>기본 · 글자·도형 보존 (고품질)</option><option value="hybrid-filter">혼합 · 미지원 필터가 있는 쪽만 이미지 (부분 검색 가능)</option><option value="compat-raster">호환 · 페이지 이미지 PDF (글자 검색 불가)</option></select><p class="muted" id="pdf-engine-help">기본 방식을 권장합니다. 미지원 SVG 필터 오류에는 혼합 방식을 직접 선택하면 해당 쪽만 이미지로, 나머지는 벡터로 출력합니다. PDF 스트림 정체 오류에는 호환 이미지 PDF를 사용하세요. 이미지로 바뀐 쪽은 글자 검색이 불가능하며 모든 페이지를 원본과 대조해야 합니다.</p></div><div><p class="muted" id="installed-font-policy">PC 설치 글꼴 자동 사용(기본 적용). 최초 변환 시 Chrome·Edge가 글꼴 접근 권한을 요청할 수 있으며, 허용 시 문서에 맞는 PC 서체를 우선 사용합니다. 미지원·권한 거부·원본 서체 미설치 시 내장 글꼴로 대체됩니다. 글꼴은 사용자 PC에서만 처리합니다.</p><label for="pdf-font">한글 원본 글꼴 추가 (선택)</label><input id="pdf-font" type="file" accept=".ttf,.otf" multiple aria-describedby="font-info"><p id="font-info" class="muted">원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.</p></div></div><div class="print-actions"><button class="secondary" id="print-prepare" disabled>선택 문서 인쇄 준비</button><button class="secondary" id="print-save" disabled>PDF로 인쇄/저장</button></div><p class="muted">인쇄 보조 기능은 선택한 HWP/HWPX 한 개에 적용됩니다. 혼합 용지는 현재 인쇄 준비가 제한됩니다.</p></details>
++<details class="options advanced"><summary>출력 및 글꼴 옵션</summary><div class="option-grid"><div><label for="pdf-engine">한글 문서 출력 방식</label><select id="pdf-engine" aria-describedby="pdf-engine-help"><option value="professional" selected>기본 · 글자·도형 보존 (고품질)</option><option value="hybrid-filter">혼합 · 미지원 필터가 있는 쪽만 이미지 (부분 검색 가능)</option><option value="compat-raster">호환 · 페이지 이미지 PDF (글자 검색 불가)</option></select><p class="muted" id="pdf-engine-help">기본 방식을 권장합니다. 미지원 SVG 필터 오류에는 혼합 방식을 직접 선택하면 해당 쪽만 이미지로, 나머지는 벡터로 출력합니다. PDF 스트림 정체 오류에는 호환 이미지 PDF를 사용하세요. 이미지로 바뀐 쪽은 글자 검색이 불가능하며 모든 페이지를 원본과 대조해야 합니다.</p></div><div><p class="muted" id="installed-font-policy">PC 설치 글꼴 자동 사용(기본 적용). 최초 변환 시 Chrome·Edge가 글꼴 접근 권한을 요청할 수 있으며, 허용 시 문서에 맞는 PC 서체를 우선 사용합니다. 미지원·권한 거부·원본 서체 미설치 시 내장 글꼴로 대체됩니다. 글꼴은 사용자 PC에서만 처리합니다.</p><label for="pdf-font">한글 원본 글꼴 추가 (선택)</label><input id="pdf-font" type="file" accept=".ttf,.otf" multiple aria-describedby="font-info"><p id="font-info" class="muted">원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.</p><div class="font-diagnostics"><button type="button" id="font-check" class="secondary">PC 글꼴 연결 확인</button><p id="pc-font-status" role="status" aria-live="polite" class="muted">PC 글꼴 접근 상태 확인 전</p></div></div></div><div class="print-actions"><button class="secondary" id="print-prepare" disabled>선택 문서 인쇄 준비</button><button class="secondary" id="print-save" disabled>PDF로 인쇄/저장</button></div><p class="muted">인쇄 보조 기능은 선택한 HWP/HWPX 한 개에 적용됩니다. 혼합 용지는 현재 인쇄 준비가 제한됩니다.</p></details>
+ </div></section><aside class="panel side"><div class="summary"><h2>변환 현황</h2><span class="pill" id="summary-state">대기 중</span></div><div class="metrics"><div class="metric"><span>전체</span><strong id="total-count">0</strong></div><div class="metric"><span>완료</span><strong id="done-count">0</strong></div><div class="metric"><span>확인 필요</span><strong id="failed-count">0</strong></div></div><div class="track"><progress id="progress" max="100" value="0" aria-label="전체 변환 진행률"></progress></div><p id="status" role="status" aria-live="polite">PDF 변환 기능 준비 중</p><a id="download-all" class="download primary archive" download="Sunrise_PDF_변환결과.zip" hidden>완료 파일 ZIP 다운로드</a><a id="download" download hidden></a><div class="preview-title"><span>생성된 PDF 검토</span><span id="pages" class="caption"></span></div><div class="viewer-file" id="viewer-file">문서를 선택하세요</div><div class="viewer-tools"><button id="page-prev" class="secondary" disabled aria-label="이전 페이지">이전</button><span id="page-position">0 / 0쪽</span><button id="page-next" class="secondary" disabled aria-label="다음 페이지">다음</button><label>확대 <select id="preview-zoom" aria-label="PDF 확대 비율"><option value="1">맞춤</option><option value="1.5">150%</option><option value="2">200%</option></select></label><a id="active-download" class="download" hidden>PDF 저장</a></div><div id="preview" class="preview" role="region" aria-label="실제 PDF 페이지"><canvas id="pdf-canvas" hidden></canvas><span class="muted">변환을 완료한 문서를 선택하면<br>실제 PDF의 모든 페이지를 검토할 수 있습니다.</span></div><div id="quality-detail" class="quality-detail" role="status"></div><div class="notice"><b>출력 안내</b><br>한글은 글자·도형을, 엑셀은 셀 내용과 표를 보존합니다. 이미지는 비율을 유지합니다. 엑셀 차트·그림·원본 서식은 재현하지 않으며 수식은 저장된 계산값을 사용합니다. 원본 글꼴이 없으면 제공되는 대체 글꼴이 사용될 수 있으며, 표·도면과 줄바꿈은 저장한 PDF에서 확인해 주세요.</div></aside></div><div class="foot">Sunrise PDF PRO · 문서는 내 브라우저에서 처리됩니다. <a href="https://github.com/edwardkim/rhwp" rel="noopener noreferrer">오픈소스 안내</a> · 지원 기능: HWP/HWPX·XLS/XLSX·JPG/PNG 변환, 문서별 다운로드, 일괄 ZIP, 취소 및 다시 시작</div></main><span hidden>출력 안내 · 지원 기능</span><script type="module" src="./src/main.js"></script><nav aria-label="서비스 운영 안내"><a href="/news/">공지사항·업데이트</a> · <a href="/contact/">고객 문의</a></nav>
+ </body></html>
+ 
+diff --git a/browser-local/package.json b/browser-local/package.json
+--- a/browser-local/package.json
++++ b/browser-local/package.json
+@@ -8,7 +8,7 @@
+     "build": "node scripts/copy-wasm.mjs && vite build",
+     "dev": "node scripts/copy-wasm.mjs && vite --host 127.0.0.1",
+     "preview": "vite preview --host 127.0.0.1 --port 4173",
+-    "test": "node --test tests/svg-gif.mjs tests/local-fonts.mjs tests/svg-embedded.mjs tests/multi-format.mjs tests/multi-format-pdf.mjs tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs tests/conversion-clock.mjs tests/r62-hwp-progress.mjs tests/r64-font-watchdog.mjs tests/r65-last-page-stall.mjs tests/r66-page-deadline.mjs tests/r66-file-reader-watchdog.mjs tests/r66-pdf-stream-progress.mjs tests/r66-sync-render-guard.mjs tests/r66-pdf-writer-disposal.mjs tests/r66-engine-contract.mjs tests/r66-pdf-early-stream.mjs tests/r66-font-run-fidelity.mjs tests/r66-font-layout-guard.mjs tests/r66-jpeg-predecode.mjs tests/r66-image-operation-budget.mjs tests/r66-xlsx-package-guard.mjs tests/r66-spreadsheet-wrap.mjs tests/r66-xlsx-structure-extra.mjs tests/r66-spreadsheet-layout.mjs tests/r66-pdf-output-integrity.mjs tests/r66-pdf-xref-target.mjs tests/r66-raster-watchdog.mjs tests/r66-hwp-svg-preprocess.mjs tests/r66-hwp-svg-cooperative.mjs tests/r66-svg-vector-budget.mjs tests/r66-real-failure-compat.mjs tests/r66-real-failure-retry.mjs tests/r66-hybrid-svg-filter.mjs tests/r66-hybrid-vector-integration.mjs",
++    "test": "node --test tests/svg-gif.mjs tests/local-fonts.mjs tests/svg-embedded.mjs tests/multi-format.mjs tests/multi-format-pdf.mjs tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs tests/conversion-clock.mjs tests/r62-hwp-progress.mjs tests/r64-font-watchdog.mjs tests/r65-last-page-stall.mjs tests/r66-page-deadline.mjs tests/r66-file-reader-watchdog.mjs tests/r66-pdf-stream-progress.mjs tests/r66-sync-render-guard.mjs tests/r66-pdf-writer-disposal.mjs tests/r66-engine-contract.mjs tests/r66-pdf-early-stream.mjs tests/r66-font-run-fidelity.mjs tests/r66-font-layout-guard.mjs tests/r66-jpeg-predecode.mjs tests/r66-image-operation-budget.mjs tests/r66-xlsx-package-guard.mjs tests/r66-spreadsheet-wrap.mjs tests/r66-xlsx-structure-extra.mjs tests/r66-spreadsheet-layout.mjs tests/r66-pdf-output-integrity.mjs tests/r66-pdf-xref-target.mjs tests/r66-raster-watchdog.mjs tests/r66-hwp-svg-preprocess.mjs tests/r66-hwp-svg-cooperative.mjs tests/r66-svg-vector-budget.mjs tests/r66-real-failure-compat.mjs tests/r66-real-failure-retry.mjs tests/r66-hybrid-svg-filter.mjs tests/r66-hybrid-vector-integration.mjs tests/r66-local-font-fidelity.mjs",
+     "check:engine": "node scripts/verify-engine-contract.mjs",
+     "check:source": "node scripts/check-source.mjs",
+     "test:local": "npm run check:source && npm test",
+diff --git a/browser-local/tests/r66-local-font-fidelity.mjs b/browser-local/tests/r66-local-font-fidelity.mjs
+new file mode 100644
+--- /dev/null
++++ b/browser-local/tests/r66-local-font-fidelity.mjs
+@@ -0,0 +1,85 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {File} from 'node:buffer';
++import {readFileSync} from 'node:fs';
++import {localFamilyKeys,loadDocumentLocalFonts} from '../src/local-fonts.js';
++import {resolveFont} from '../src/pdf-fonts.js';
++
++globalThis.File ||= File;
++const svg=family=>`<svg xmlns="http://www.w3.org/2000/svg" font-family="${family}"/>`;
++class FakeParser {
++ parseFromString(source){
++  const name=/font-family="([^"]+)"/.exec(source)?.[1]||'';
++  return {documentElement:{localName:'svg',getAttribute:k=>k==='font-family'?name:null},
++   querySelector:()=>null,querySelectorAll:()=>[]};
++ }
++}
++const oldParser=globalThis.DOMParser;
++globalThis.DOMParser=FakeParser;
++const fontkit={create:bytes=>({familyName:'Malgun Gothic',fullName:'Malgun Gothic',
++ postscriptName:'MalgunGothic',subfamilyName:'Regular',characterSet:[0xac00,0xb098,65]})};
++const font=(family,blob=async()=>new Blob(['SFNT']))=>({family,fullName:family,postscriptName:family+'PS',style:'Regular',blob});
++
++test('Korean and English names of verified Windows faces are equivalent, not fuzzy matched',()=>{
++ assert(localFamilyKeys('Malgun Gothic').has('맑은고딕'));
++ assert(localFamilyKeys('맑은 고딕').has('malgungothic'));
++ assert(localFamilyKeys('GulimChe').has('굴림체'));
++ assert(!localFamilyKeys('Malgun Gothic UI').has('맑은고딕'));
++ assert(!localFamilyKeys('GulimChe').has('굴림'));
++});
++
++test('Windows English metadata is registered as original Korean font family for PDF glyphs',async()=>{
++ const original=globalThis.DOMParser;globalThis.DOMParser=FakeParser;
++ try{
++  let readCount=0;
++  const doc={renderPageSvgWithProfile:()=>svg('맑은 고딕')};
++  const fonts=[font('Malgun Gothic',async()=>{readCount++;return new Blob(['BINARY'])}),
++   font('Other Font',async()=>{throw Error('unrelated never read')})];
++  const result=await loadDocumentLocalFonts(doc,1,fonts,fontkit);
++  assert.equal(readCount,1);
++  assert.equal(result.faces.length,1);
++  assert.deepEqual(result.faces[0].cssAliases,['맑은 고딕']);
++  assert(result.faces[0].aliases.includes('맑은고딕'));
++  assert.equal(result.unmatchedNames.length,0);
++  assert.equal(resolveFont({faces:result.faces},'맑은 고딕','normal','normal','가').isLocal,true);
++ }finally{globalThis.DOMParser=original;}
++});
++
++test('frequently used HWP families are read before alphabetic OS font enumeration',async()=>{
++ const original=globalThis.DOMParser;globalThis.DOMParser=FakeParser;
++ try{
++  let page=0;const read=[];
++  const doc={renderPageSvgWithProfile:()=>svg(['Rare','Most Frequent','Most Frequent'][page++])};
++  const available=[font('Rare',async()=>{read.push('Rare');return new Blob(['R'])}),
++   font('Most Frequent',async()=>{read.push('Most Frequent');return new Blob(['F'])})];
++  const result=await loadDocumentLocalFonts(doc,3,available,fontkit);
++  assert.deepEqual(read,['Most Frequent','Rare']);
++  assert.equal(result.matchedFontData,2);
++ }finally{globalThis.DOMParser=original;}
++});
++
++test('unsupported or unreadable families are counted and named locally without lying about installed fonts',async()=>{
++ const original=globalThis.DOMParser;globalThis.DOMParser=FakeParser;
++ try{
++  const doc={renderPageSvgWithProfile:()=>svg('미등록특수글꼴')};
++  const absent=await loadDocumentLocalFonts(doc,1,[font('Malgun Gothic')],fontkit);
++  assert.equal(absent.requestedFamilies,1);
++  assert.equal(absent.matchedFontData,0);
++  assert.deepEqual(absent.unmatchedNames,['미등록특수글꼴']);
++  const unreadable=await loadDocumentLocalFonts(doc,1,[font('미등록특수글꼴',async()=>{throw Error('access denied to bytes')})],fontkit);
++  assert.equal(unreadable.matchedFontData,1);
++  assert.equal(unreadable.unreadableFonts,1);
++  assert.deepEqual(unreadable.unmatchedNames,['미등록특수글꼴']);
++ }finally{globalThis.DOMParser=original;}
++});
++
++test('explicit PC font status and compatibility raster must not request irrelevant local fonts',()=>{
++ const src=new URL('../src/',import.meta.url);
++ const main=readFileSync(new URL('main.js',src),'utf8');
++ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
++ assert.match(main,/engine!=='compat-raster'&&pending\.some/);
++ assert.match(main,/font-check'\)\?\.addEventListener\('click'/);
++ assert.match(main,/fontStatus\(access\.status==='ready'/);
++ assert.match(html,/id="font-check"/);
++ assert.match(html,/id="pc-font-status"/);
++});
+diff --git a/browser-local/tests/r66-local-font-browser.mjs b/browser-local/tests/r66-local-font-browser.mjs
+new file mode 100644
+--- /dev/null
++++ b/browser-local/tests/r66-local-font-browser.mjs
+@@ -0,0 +1,50 @@
++/**
++ * Browser integration of the on-device PC font contract. A LOCAL test font
++ * simulates FontData from a permitted OS: it is not a claim that the CI
++ * runner has Korean Windows fonts installed. The bytes are real OFL SFNT.
++ */
++import {chromium} from 'playwright';
++import {spawn} from 'node:child_process';
++import {setTimeout as sleep} from 'node:timers/promises';
++import {get} from 'node:http';
++import {resolve} from 'node:path';
++const root=resolve(import.meta.dirname,'..');
++const base='http://127.0.0.1:4193/';
++const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','4193','--strictPort'],{cwd:root,stdio:'ignore'});
++let browser;
++try{
++ let ok=false;
++ for(let n=0;n<80;n++){
++  if(server.exitCode!==null)throw Error('Vite exited '+server.exitCode);
++  try{
++   const code=await new Promise((resolve,reject)=>get(base,r=>{r.resume();resolve(r.statusCode);}).on('error',reject));
++   if(code===200){ok=true;break;}
++  }catch{}
++  await sleep(250);
++ }
++ if(!ok)throw Error('Font test Vite startup timeout');
++ browser=await chromium.launch({headless:true,args:['--no-sandbox']});
++ const page=await browser.newPage();
++ await page.goto(base,{waitUntil:'networkidle'});
++ await page.waitForFunction(()=>document.querySelector('#status')?.textContent.includes('변환 준비 완료'),null,{timeout:90000});
++ await page.locator('details.options.advanced summary').click();
++ const available=await page.evaluate(async()=>{
++  const font=await fetch('/fonts/NanumGothic-Regular.ttf');
++  if(!font.ok)throw Error('test OFL font missing');
++  const payload=await font.blob();
++  window.queryLocalFonts=async()=>[{family:'Nanum Gothic',fullName:'Nanum Gothic',
++   postscriptName:'NanumGothic',style:'Regular',blob:async()=>payload}];
++  return payload.size;
++ });
++ if(available<1000)throw Error('test font bytes missing');
++ await page.locator('#font-check').click();
++ await page.waitForFunction(()=>document.querySelector('#pc-font-status')?.textContent.includes('1개에 접근 가능합니다'),null,{timeout:20000});
++ const report=await page.evaluate(async()=>{
++  const {verifyBilingualLocalFontPdf}=await import('/tests/r66-local-font-browser-entry.js');
++  return verifyBilingualLocalFontPdf();
++ });
++ if(report.signature!=='%PDF-'||report.fontUsage.local!==1||report.missing.length||report.localFaces!==1)
++  throw Error('Local PDF font browser integration failed: '+JSON.stringify(report));
++ console.log('LOCAL_FONT_BILINGUAL_BROWSER_AND_EMBED_PASS '+JSON.stringify(report));
++ await page.close();
++}finally{await browser?.close();server.kill('SIGTERM');}
+diff --git a/browser-local/tests/r66-local-font-browser-entry.js b/browser-local/tests/r66-local-font-browser-entry.js
+new file mode 100644
+--- /dev/null
++++ b/browser-local/tests/r66-local-font-browser-entry.js
+@@ -0,0 +1,25 @@
++// Served as a Vite module so bare npm imports resolve inside Chromium.
++// This models a user-approved FontData with the bytes of a real OFL font.
++import fontkit from '@pdf-lib/fontkit';
++import {loadDocumentLocalFonts} from '../src/local-fonts.js';
++import {resolveFont,installMeasureFonts} from '../src/pdf-fonts.js';
++import {tryProfessionalDocument} from '../src/svg-professional.js';
++
++export async function verifyBilingualLocalFontPdf(){
++ const svg='<svg xmlns="http://www.w3.org/2000/svg" width="794" height="1123"><text x="20" y="55" font-family="나눔고딕" font-size="22">가나다</text></svg>';
++ const doc={renderPageSvgWithProfile:()=>svg};
++ const registry=await loadDocumentLocalFonts(doc,1,await window.queryLocalFonts(),fontkit);
++ const selected=resolveFont(registry,'나눔고딕','normal','normal','가나다');
++ if(!selected?.isLocal)throw Error('Korean font family did not choose the local face');
++ const release=await installMeasureFonts(registry);
++ let pdf;
++ try{
++  pdf=await tryProfessionalDocument(doc,1,{
++   checkedSvg:()=>({svg,width:794,height:1123}),fontRegistry:registry,
++   rasterPage:async()=>{throw Error('raster unexpectedly used')}
++  });
++ }finally{release();}
++ const head=new Uint8Array(await pdf.pdf.slice(0,5).arrayBuffer());
++ return {pdfBytes:pdf.pdf.size,signature:String.fromCharCode(...head),
++  fontUsage:pdf.fontUsage,missing:registry.unmatchedNames,localFaces:registry.faces.length};
++}
