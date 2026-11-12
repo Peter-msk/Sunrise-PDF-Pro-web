@@ -147,7 +147,7 @@ function draw(){
      draw();
      try{
       const report=await inspectPdfVectorQuality(pdf,item.result,{signal,
-       workerSrc:new URL('pdf-worker.mjs',document.baseURI).href});
+       workerSrc:new URL('pdf-worker-legacy.mjs',document.baseURI).href});
       if(signal.aborted||!items.includes(item)||item.result.pdf!==pdf)return;
       const pages=report.pages.map(p=>p.page+'쪽 '+
        (p.mode==='raster-fallback'?'이미지':'벡터')+
