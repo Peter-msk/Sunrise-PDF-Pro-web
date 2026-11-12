@@ -1,0 +1,398 @@
+diff --git a/browser-local/index.html b/browser-local/index.html
+index 0d82080..1a69cea 100644
+--- a/browser-local/index.html
++++ b/browser-local/index.html
+@@ -60,7 +60,7 @@ button,.download{font-size:14px;min-height:44px}.caption,.counter{font-size:13px
+ <label class="upload" id="drop"><input id="source" type="file" accept=".hwp,.hwpx,.xls,.xlsx,.jpg,.jpeg,.png" multiple><span class="upload-icon">↑</span><span><strong>문서를 선택하거나 여기에 놓으세요</strong><small>HWP·HWPX·XLS·XLSX·JPG·PNG 여러 파일을 추가하세요.</small></span><span class="upload-action">파일 선택 +</span></label>
+ <p id="filename" class="muted" hidden>선택된 파일이 없습니다.</p><div class="toolbar"><button id="convert" class="primary" disabled>전체 PDF 변환</button><button id="cancel" class="secondary" disabled>변환 취소</button><button id="reset" class="secondary" disabled>목록 비우기</button><span class="spacer"></span><span class="muted">파일별로 순서대로 처리합니다.</span></div>
+ <div class="queue"><div class="queue-head"><b>문서 목록</b><span class="counter" id="queue-count">0개 파일</span></div><ul class="files" id="file-list"><li class="empty">선택한 문서가 여기에 표시됩니다.</li></ul></div>
+-<details class="options advanced"><summary>출력 및 글꼴 옵션</summary><div class="option-grid"><div><label for="pdf-engine">한글 문서 출력 방식</label><select id="pdf-engine" aria-describedby="pdf-engine-help"><option value="professional" selected>기본 · 글자·도형 보존 (고품질)</option><option value="compat-raster">호환 · 페이지 이미지 PDF (글자 검색 불가)</option></select><p class="muted" id="pdf-engine-help">기본 방식을 권장합니다. SVG 필터 미지원 또는 PDF 출력 정체 오류가 발생한 문서에서만 호환 방식을 직접 선택하세요. 호환 방식은 글자·벡터를 이미지로 변환하므로 원본과 전체 페이지를 비교해야 합니다.</p></div><div><p class="muted" id="installed-font-policy">PC 설치 글꼴 자동 사용(기본 적용). 최초 변환 시 Chrome·Edge가 글꼴 접근 권한을 요청할 수 있으며, 허용 시 문서에 맞는 PC 서체를 우선 사용합니다. 미지원·권한 거부·원본 서체 미설치 시 내장 글꼴로 대체됩니다. 글꼴은 사용자 PC에서만 처리합니다.</p><label for="pdf-font">한글 원본 글꼴 추가 (선택)</label><input id="pdf-font" type="file" accept=".ttf,.otf" multiple aria-describedby="font-info"><p id="font-info" class="muted">원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.</p></div></div><div class="print-actions"><button class="secondary" id="print-prepare" disabled>선택 문서 인쇄 준비</button><button class="secondary" id="print-save" disabled>PDF로 인쇄/저장</button></div><p class="muted">인쇄 보조 기능은 선택한 HWP/HWPX 한 개에 적용됩니다. 혼합 용지는 현재 인쇄 준비가 제한됩니다.</p></details>
++<details class="options advanced"><summary>출력 및 글꼴 옵션</summary><div class="option-grid"><div><label for="pdf-engine">한글 문서 출력 방식</label><select id="pdf-engine" aria-describedby="pdf-engine-help"><option value="professional" selected>기본 · 글자·도형 보존 (고품질)</option><option value="hybrid-filter">혼합 · 미지원 필터가 있는 쪽만 이미지 (부분 검색 가능)</option><option value="compat-raster">호환 · 페이지 이미지 PDF (글자 검색 불가)</option></select><p class="muted" id="pdf-engine-help">기본 방식을 권장합니다. 미지원 SVG 필터 오류에는 혼합 방식을 직접 선택하면 해당 쪽만 이미지로, 나머지는 벡터로 출력합니다. PDF 스트림 정체 오류에는 호환 이미지 PDF를 사용하세요. 이미지로 바뀐 쪽은 글자 검색이 불가능하며 모든 페이지를 원본과 대조해야 합니다.</p></div><div><p class="muted" id="installed-font-policy">PC 설치 글꼴 자동 사용(기본 적용). 최초 변환 시 Chrome·Edge가 글꼴 접근 권한을 요청할 수 있으며, 허용 시 문서에 맞는 PC 서체를 우선 사용합니다. 미지원·권한 거부·원본 서체 미설치 시 내장 글꼴로 대체됩니다. 글꼴은 사용자 PC에서만 처리합니다.</p><label for="pdf-font">한글 원본 글꼴 추가 (선택)</label><input id="pdf-font" type="file" accept=".ttf,.otf" multiple aria-describedby="font-info"><p id="font-info" class="muted">원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.</p></div></div><div class="print-actions"><button class="secondary" id="print-prepare" disabled>선택 문서 인쇄 준비</button><button class="secondary" id="print-save" disabled>PDF로 인쇄/저장</button></div><p class="muted">인쇄 보조 기능은 선택한 HWP/HWPX 한 개에 적용됩니다. 혼합 용지는 현재 인쇄 준비가 제한됩니다.</p></details>
+ </div></section><aside class="panel side"><div class="summary"><h2>변환 현황</h2><span class="pill" id="summary-state">대기 중</span></div><div class="metrics"><div class="metric"><span>전체</span><strong id="total-count">0</strong></div><div class="metric"><span>완료</span><strong id="done-count">0</strong></div><div class="metric"><span>확인 필요</span><strong id="failed-count">0</strong></div></div><div class="track"><progress id="progress" max="100" value="0" aria-label="전체 변환 진행률"></progress></div><p id="status" role="status" aria-live="polite">PDF 변환 기능 준비 중</p><a id="download-all" class="download primary archive" download="Sunrise_PDF_변환결과.zip" hidden>완료 파일 ZIP 다운로드</a><a id="download" download hidden></a><div class="preview-title"><span>생성된 PDF 검토</span><span id="pages" class="caption"></span></div><div class="viewer-file" id="viewer-file">문서를 선택하세요</div><div class="viewer-tools"><button id="page-prev" class="secondary" disabled aria-label="이전 페이지">이전</button><span id="page-position">0 / 0쪽</span><button id="page-next" class="secondary" disabled aria-label="다음 페이지">다음</button><label>확대 <select id="preview-zoom" aria-label="PDF 확대 비율"><option value="1">맞춤</option><option value="1.5">150%</option><option value="2">200%</option></select></label><a id="active-download" class="download" hidden>PDF 저장</a></div><div id="preview" class="preview" role="region" aria-label="실제 PDF 페이지"><canvas id="pdf-canvas" hidden></canvas><span class="muted">변환을 완료한 문서를 선택하면<br>실제 PDF의 모든 페이지를 검토할 수 있습니다.</span></div><div id="quality-detail" class="quality-detail" role="status"></div><div class="notice"><b>출력 안내</b><br>한글은 글자·도형을, 엑셀은 셀 내용과 표를 보존합니다. 이미지는 비율을 유지합니다. 엑셀 차트·그림·원본 서식은 재현하지 않으며 수식은 저장된 계산값을 사용합니다. 원본 글꼴이 없으면 제공되는 대체 글꼴이 사용될 수 있으며, 표·도면과 줄바꿈은 저장한 PDF에서 확인해 주세요.</div></aside></div><div class="foot">Sunrise PDF PRO · 문서는 내 브라우저에서 처리됩니다. <a href="https://github.com/edwardkim/rhwp" rel="noopener noreferrer">오픈소스 안내</a> · 지원 기능: HWP/HWPX·XLS/XLSX·JPG/PNG 변환, 문서별 다운로드, 일괄 ZIP, 취소 및 다시 시작</div></main><span hidden>출력 안내 · 지원 기능</span><script type="module" src="./src/main.js"></script><nav aria-label="서비스 운영 안내"><a href="/news/">공지사항·업데이트</a> · <a href="/contact/">고객 문의</a></nav>
+ </body></html>
+ 
+diff --git a/browser-local/package.json b/browser-local/package.json
+index 4c100c6..c3084a6 100644
+--- a/browser-local/package.json
++++ b/browser-local/package.json
+@@ -8,7 +8,7 @@
+     "build": "node scripts/copy-wasm.mjs && vite build",
+     "dev": "node scripts/copy-wasm.mjs && vite --host 127.0.0.1",
+     "preview": "vite preview --host 127.0.0.1 --port 4173",
+-    "test": "node --test tests/svg-gif.mjs tests/local-fonts.mjs tests/svg-embedded.mjs tests/multi-format.mjs tests/multi-format-pdf.mjs tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs tests/conversion-clock.mjs tests/r62-hwp-progress.mjs tests/r64-font-watchdog.mjs tests/r65-last-page-stall.mjs tests/r66-page-deadline.mjs tests/r66-file-reader-watchdog.mjs tests/r66-pdf-stream-progress.mjs tests/r66-sync-render-guard.mjs tests/r66-pdf-writer-disposal.mjs tests/r66-engine-contract.mjs tests/r66-pdf-early-stream.mjs tests/r66-font-run-fidelity.mjs tests/r66-font-layout-guard.mjs tests/r66-jpeg-predecode.mjs tests/r66-image-operation-budget.mjs tests/r66-xlsx-package-guard.mjs tests/r66-spreadsheet-wrap.mjs tests/r66-xlsx-structure-extra.mjs tests/r66-spreadsheet-layout.mjs tests/r66-pdf-output-integrity.mjs tests/r66-pdf-xref-target.mjs tests/r66-raster-watchdog.mjs tests/r66-hwp-svg-preprocess.mjs tests/r66-hwp-svg-cooperative.mjs tests/r66-svg-vector-budget.mjs tests/r66-real-failure-compat.mjs tests/r66-real-failure-retry.mjs",
++    "test": "node --test tests/svg-gif.mjs tests/local-fonts.mjs tests/svg-embedded.mjs tests/multi-format.mjs tests/multi-format-pdf.mjs tests/single-glyph-pdf.mjs tests/batch.mjs tests/unit.mjs tests/production-ui.mjs tests/page-geometry.mjs tests/pdfkit-backend.mjs tests/svg-security.mjs tests/native-print-policy.mjs tests/conversion-clock.mjs tests/r62-hwp-progress.mjs tests/r64-font-watchdog.mjs tests/r65-last-page-stall.mjs tests/r66-page-deadline.mjs tests/r66-file-reader-watchdog.mjs tests/r66-pdf-stream-progress.mjs tests/r66-sync-render-guard.mjs tests/r66-pdf-writer-disposal.mjs tests/r66-engine-contract.mjs tests/r66-pdf-early-stream.mjs tests/r66-font-run-fidelity.mjs tests/r66-font-layout-guard.mjs tests/r66-jpeg-predecode.mjs tests/r66-image-operation-budget.mjs tests/r66-xlsx-package-guard.mjs tests/r66-spreadsheet-wrap.mjs tests/r66-xlsx-structure-extra.mjs tests/r66-spreadsheet-layout.mjs tests/r66-pdf-output-integrity.mjs tests/r66-pdf-xref-target.mjs tests/r66-raster-watchdog.mjs tests/r66-hwp-svg-preprocess.mjs tests/r66-hwp-svg-cooperative.mjs tests/r66-svg-vector-budget.mjs tests/r66-real-failure-compat.mjs tests/r66-real-failure-retry.mjs tests/r66-hybrid-svg-filter.mjs tests/r66-hybrid-vector-integration.mjs",
+     "check:engine": "node scripts/verify-engine-contract.mjs",
+     "check:source": "node scripts/check-source.mjs",
+     "test:local": "npm run check:source && npm test",
+diff --git a/browser-local/src/conversion-recovery.mjs b/browser-local/src/conversion-recovery.mjs
+index 7d716da..84751e6 100644
+--- a/browser-local/src/conversion-recovery.mjs
++++ b/browser-local/src/conversion-recovery.mjs
+@@ -14,7 +14,7 @@ export function recoveryCode(error) {
+ export function canRecoverFile(item) {
+  return !!item&&item.state==='failed'&&
+   /\.(?:hwp|hwpx)$/i.test(String(item.file?.name||''))&&
+-  item.lastEngine==='professional'&&!!recoveryCode(item.error);
++  ['professional','hybrid-filter'].includes(item.lastEngine)&&!!recoveryCode(item.error);
+ }
+ 
+ /** Plan a single, user-confirmed recovery or an ordinary batch. */
+diff --git a/browser-local/src/converter.js b/browser-local/src/converter.js
+index be5cfa3..a1b4afa 100644
+--- a/browser-local/src/converter.js
++++ b/browser-local/src/converter.js
+@@ -11,6 +11,7 @@ import { normalizeGifSvg } from './svg-gif.js';
+ import { normalizeEmbeddedPngSvg } from './svg-embedded-raster-budget.mjs';
+ import { normalizeSvgGrayscale } from './svg-safe-grayscale.mjs';
+ import { buildRasterCompatibilityPdf } from './raster-compat-pdf.mjs';
++import {normalizeSvgForPdf} from './svg-filter-hybrid.mjs';
+ 
+ // File-size limits are intentionally absent. Runtime memory and page pixels
+ // remain bounded by the browser/device; those are not upload-size limits.
+@@ -102,7 +103,7 @@ export async function rasterPage(svg,signal){
+  */
+ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
+  options={engine:'professional',...options};
+- if(!['professional','compat-raster'].includes(options.engine))throw Error('HWP/HWPX 출력 방식을 확인하세요.');
++ if(!['professional','compat-raster','hybrid-filter'].includes(options.engine))throw Error('HWP/HWPX 출력 방식을 확인하세요.');
+  throwIfCancelled(signal);
+  // Check the first bytes before allocating a whole large file in browser RAM.
+  // This removes the former 20MiB rejection without eliminating magic checks.
+@@ -125,7 +126,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
+   const selectedFonts=options.fontFiles!==undefined
+     ?Array.from(options.fontFiles):options.fontFile?[options.fontFile]:[];
+   let fontRegistry={faces:[]};
+-  if(options.engine==='professional'){
++  if(options.engine==='professional'||options.engine==='hybrid-filter'){
+    const {default:fontkit}=await import('@pdf-lib/fontkit');
+    throwIfCancelled(signal);
+    const selected=selectedFonts.length?await loadPdfFonts(selectedFonts,fontkit,signal):{faces:[]};
+@@ -176,8 +177,9 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
+      return checkedSvg(png.svg).svg;
+     }});
+   }
+-  if(options.engine==='professional'){
+-   // A failed object-preserving export must stay failed, never become an image PDF.
++  if(options.engine==='professional'||options.engine==='hybrid-filter'){
++   // Explicit hybrid renders only SVG-filter-incompatible pages as images.
++   // The normal high-fidelity mode still rejects any such filter.
+    const resizedPngs=[],svgFilterStats=[];
+    const result=await tryProfessionalDocument(doc,count,{
+     checkedSvg:async(svg,meta={})=>{
+@@ -198,14 +200,28 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
+      // declaration nor a stylesheet. Keep the normalizer for ambiguous CSS.
+      // checkedSvg() still performs the full SVG security and geometry checks.
+      const reviewFilters=/filter|<\s*style\b|\bstyle\s*=/i.test(pngResult.svg);
+-     const grayResult=reviewFilters
+-       ?await normalizeSvgGrayscale(pngResult.svg,signal)
+-       :{svg:pngResult.svg,filtersApplied:0,imagesChanged:0};
+-     if(grayResult.filtersApplied)svgFilterStats.push(grayResult);
++     let normalized;
++     try{normalized=await normalizeSvgForPdf(pngResult.svg,
++       reviewFilters?s=>normalizeSvgGrayscale(s,signal)
++         :async s=>({svg:s,filtersApplied:0,imagesChanged:0}),
++       checkedSvg,{hybrid:options.engine==='hybrid-filter'});}
++     catch(error){
++      if(String(error?.message||error)==='SVG_FILTER_EFFECT_UNSUPPORTED')
++       throw Error((meta.page||1)+'쪽에서 미지원 SVG 필터가 발견됐습니다 (SVG_FILTER_EFFECT_UNSUPPORTED). 혼합 출력 또는 이미지 PDF를 명시적으로 선택하세요.');
++      throw error;
++     }
++     if(normalized.stats.filtersApplied)svgFilterStats.push(normalized.stats);
+      progress('svg_sanitize');
+-     return checkedSvg(grayResult.svg);
+-    },rasterPage,signal,fontRegistry,onProgress,allowRasterFallback:false
++     return normalized.checked;
++    },rasterPage,signal,fontRegistry,onProgress,
++    ...(options.engine==='hybrid-filter'
++      ?{allowRasterFallback:true,filterOnlyRasterFallback:true}
++      :{allowRasterFallback:false})
+    });
++   if(options.engine==='hybrid-filter'&&result.rasterPages){
++    result.warnings=[...(result.warnings||[]),
++      '선택한 혼합 출력에서 미지원 SVG 필터가 있는 '+result.rasterPages+'쪽을 이미지로 변환했습니다. 나머지 쪽은 벡터입니다. 이미지 쪽의 글자 선택·검색은 불가능하며 원본과 대조해야 합니다.'];
++   }
+    if(resizedPngs.length){
+     const unique=[...new Map(resizedPngs.map(img=>[
+      img.sourceWidth+'x'+img.sourceHeight+'>'+img.width+'x'+img.height,img])).values()];
+diff --git a/browser-local/src/main.js b/browser-local/src/main.js
+index 779cb37..1e2eef5 100644
+--- a/browser-local/src/main.js
++++ b/browser-local/src/main.js
+@@ -27,7 +27,7 @@ function show(item){
+  const link=$('active-download');link.hidden=!item?.result;
+  if(!item?.result){link.removeAttribute('href');$('pages').textContent='';$('quality-detail').replaceChildren();viewer.open(null);sync();return;}
+  link.href=item.pdfUrl;link.download=uniquePdfNames(items.map(i=>i.file))[items.indexOf(item)];
+- const r=item.result;const mode=r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='raster-compat'?'호환 이미지 PDF · 글자 검색 불가':r.renderMode==='spreadsheet-text'?'셀·글자 보존 · 원본 서식 제한':r.renderMode==='source-image'?'원본 이미지':'PDF';
++ const r=item.result;const mode=r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='mixed'?'혼합 PDF · 일부 쪽 이미지, 해당 쪽 검색 불가':r.renderMode==='raster-compat'?'호환 이미지 PDF · 글자 검색 불가':r.renderMode==='spreadsheet-text'?'셀·글자 보존 · 원본 서식 제한':r.renderMode==='source-image'?'원본 이미지':'PDF';
+  $('pages').textContent=r.pages+'쪽 · '+mode;
+  const title=document.createElement('strong');title.textContent='출력 확인 · '+mode;
+  const detail=document.createElement('div');
+@@ -95,7 +95,7 @@ for(const event of ['dragenter','dragover'])$('drop').addEventListener(event,e=>
+ for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{e.preventDefault();$('drop').classList.remove('drag');});
+ $('drop').addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer?.files||[])));
+ $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.';sync();});
+-$('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');sync();});
++$('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');sync();});
+ $('convert').addEventListener('click',async()=>{
+  if(busy||!ready)return;
+  const requested=requestedFileRecovery;requestedFileRecovery=null;
+@@ -114,7 +114,7 @@ $('convert').addEventListener('click',async()=>{
+    item.lastEngine=engine;
+    item._proStartedMs=performance.now();
+    item._lastDiagPhase='parse';item._lastDiagSentMs=item._proStartedMs;
+-   emitProEvent('convert_start',{feature:proFeature(file),stage:engine==='compat-raster'?'compat_raster':'none'});
++   emitProEvent('convert_start',{feature:proFeature(file),stage:engine==='compat-raster'?'compat_raster':engine==='hybrid-filter'?'svg_vector':'none'});
+    emitProEvent('convert_progress',{feature:proFeature(file),stage:'parse',duration_ms:0});
+    const result=await convertToPdf(file,info=>{
+     const phases=new Set(['svg_build','svg_normalize','image_gif','image_png',
+diff --git a/browser-local/src/svg-filter-hybrid.mjs b/browser-local/src/svg-filter-hybrid.mjs
+new file mode 100644
+index 0000000..a981b1c
+--- /dev/null
++++ b/browser-local/src/svg-filter-hybrid.mjs
+@@ -0,0 +1,24 @@
++/**
++ * Explicit hybrid-only bridge for SVG filters that svg-to-pdfkit cannot render.
++ * Never bypass the sanitizing checkedSvg boundary or silently downgrade the
++ * professional output. The returned marker is consumed only after opt-in.
++ */
++export const UNSUPPORTED_FILTER = 'SVG_FILTER_EFFECT_UNSUPPORTED';
++
++export async function normalizeSvgForPdf(svg,normalize,check,{hybrid=false}={}){
++  if(typeof svg!=='string'||typeof normalize!=='function'||typeof check!=='function')
++    throw Error('HYBRID_SVG_CONTRACT_INVALID');
++  let normalized;
++  try{
++    normalized=await normalize(svg);
++  }catch(error){
++    if(!hybrid||String(error?.message||error)!==UNSUPPORTED_FILTER)throw error;
++    // Sanitization must still happen BEFORE browser rasterization. The
++    // SVG may contain a filter, but no active/external resources are allowed.
++    const checked=check(svg);
++    return {checked:{...checked,forceRasterReason:UNSUPPORTED_FILTER},
++      stats:{filtersApplied:0,imagesChanged:0},rasterizedByChoice:true};
++  }
++  if(!normalized||typeof normalized.svg!=='string')throw Error('HYBRID_SVG_NORMALIZE_INVALID');
++  return {checked:check(normalized.svg),stats:normalized,rasterizedByChoice:false};
++}
+diff --git a/browser-local/src/svg-professional.js b/browser-local/src/svg-professional.js
+index e074eac..52f5475 100644
+--- a/browser-local/src/svg-professional.js
++++ b/browser-local/src/svg-professional.js
+@@ -306,7 +306,7 @@ export async function localPngBytes(blob,signal){
+ export async function tryProfessionalDocument(hwpDoc,count,{
+   checkedSvg,rasterPage,signal,fontRegistry={faces:[]},
+   onProgress=()=>{},loadLibraries,imageBytes=localPngBytes,allowRasterFallback=false,
+-  finalizeTimeoutMs=120_000
++  finalizeTimeoutMs=120_000,filterOnlyRasterFallback=false
+ }={}){
+   const cancel=()=>{if(signal?.aborted)
+     throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');};
+@@ -368,11 +368,15 @@ export async function tryProfessionalDocument(hwpDoc,count,{
+       cancel();
+       onProgress({stage:'professional',page:i+1,total:count,detail:'svg_preflight'});
+       await new Promise(resolve=>setTimeout(resolve,0));cancel();
+-      const preflight=preflightProfessionalSvg(checked,{fontRegistry});
++      const forceFilterRaster=allowRasterFallback&&
++        checked.forceRasterReason==='SVG_FILTER_EFFECT_UNSUPPORTED';
++      const preflight=forceFilterRaster
++        ?{ok:false,reason:'SVG_FILTER_EFFECT_UNSUPPORTED'}
++        :preflightProfessionalSvg(checked,{fontRegistry});
+       const width=checked.width*PX_TO_PT,height=checked.height*PX_TO_PT;
+       for(const family of preflight.substituteFamilies||[])substituteFamilies.add(family);
+       if(!preflight.ok){
+-        if(!allowRasterFallback){
++        if(!allowRasterFallback||(filterOnlyRasterFallback&&!forceFilterRaster)){
+           const fontInfo=preflight.fontFamily?' 필요한 글꼴: '+preflight.fontFamily+
+             (preflight.fontWeight?' (굵기 '+preflight.fontWeight+', 스타일 '+preflight.fontStyle+')':'')+'.':'';
+           const attrInfo=preflight.unsupportedAttribute?' · 미지원 SVG 속성: '+preflight.unsupportedAttribute:'';
+diff --git a/browser-local/tests/hybrid-real-browser.mjs b/browser-local/tests/hybrid-real-browser.mjs
+new file mode 100644
+index 0000000..3914d8b
+--- /dev/null
++++ b/browser-local/tests/hybrid-real-browser.mjs
+@@ -0,0 +1,60 @@
++/**
++ * Playwright acceptance of the explicitly selected compatibility output.
++ * Uses published HWP/HWPX fixture files. Default professional conversion is
++ * covered by e2e.mjs; this test ensures a second, independent PDF writer works.
++ */
++import {chromium} from 'playwright';
++import {PDFDocument} from 'pdf-lib';
++import {existsSync,readFileSync,mkdirSync,writeFileSync} from 'node:fs';
++import {resolve} from 'node:path';
++const root=resolve(import.meta.dirname,'../..');
++const site=process.env.SUNRISE_TEST_URL||'http://127.0.0.1:8787/local/';
++const origin=new URL(site).origin;
++const output=resolve(root,'r29-browser-real-evidence');
++mkdirSync(output,{recursive:true});
++const reports=[];
++const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
++try{
++ const page=await browser.newPage({acceptDownloads:true});
++ const external=[],errors=[],failedRequests=[];
++ page.on('pageerror',error=>errors.push(error.message));
++ page.on('requestfailed',request=>failedRequests.push(request.url()+': '+request.failure()?.errorText));
++ page.on('request',request=>{const u=request.url();if(!u.startsWith(origin+'/')&&!u.startsWith('data:')&&!u.startsWith('blob:'))external.push(u);});
++ await page.goto(site,{waitUntil:'networkidle',timeout:30000});
++ await page.waitForFunction(()=>/변환 준비 완료|초기화 실패|변환 기능 초기화 실패/.test(document.querySelector('#status')?.textContent||''),null,{timeout:90000});
++ const boot=await page.locator('#status').innerText();
++ if(!boot.includes('변환 준비 완료'))throw Error('WASM boot did not pass: '+boot);
++ if(await page.locator('#pdf-engine').inputValue()!=='professional')throw Error('default professional output changed');
++ await page.locator('details.options.advanced summary').click();
++ await page.locator('#pdf-engine').selectOption('hybrid-filter');
++ const files=['hwp','hwpx'].map(ext=>resolve(root,'r29-browser-fixtures/genuine.'+ext));
++ for(const file of files)if(!existsSync(file))throw Error('Missing acceptance fixture '+file);
++ await page.locator('#source').setInputFiles(files);
++ await page.locator('#convert').click();
++ await page.waitForFunction(()=>{
++  const completed=document.getElementById('done-count')?.textContent==='2';
++  const failed=Number(document.getElementById('failed-count')?.textContent||0)>0;
++  const idle=document.getElementById('cancel')?.disabled;
++  return (completed||failed)&&idle;
++ },null,{timeout:240000});
++ const done=await page.locator('#done-count').innerText();
++ if(done!=='2')throw Error('Hybrid PDF failed: '+(await page.locator('#file-list').innerText()));
++ const links=page.locator('#file-list a.download');
++ if(await links.count()!==2)throw Error('Expected 2 PDFs');
++ for(let i=0;i<2;i++){
++  const pending=page.waitForEvent('download',{timeout:30000});
++  await links.nth(i).click();
++  const download=await pending;
++  const filePath=resolve(output,'hybrid-genuine-'+(i===0?'hwp':'hwpx')+'.pdf');
++  await download.saveAs(filePath);
++  const data=readFileSync(filePath);
++  const document=await PDFDocument.load(data);
++  if(document.getPageCount()<1)throw Error('PDF has no pages');
++  reports.push({format:i===0?'hwp':'hwpx',pages:document.getPageCount(),size:data.length,status:'PASS'});
++ }
++ if(errors.length||external.length||failedRequests.length)throw Error(JSON.stringify({errors,external,failedRequests}));
++ await page.close();
++}finally{await browser.close();}
++reports.push({status:'PASS',engine:'opt-in hybrid SVG filter: vector where supported, filter-only page fallback',test:'real HWP/HWPX browser PDF downloads'});
++writeFileSync(resolve(output,'DEV26_HYBRID_BROWSER_E2E.json'),JSON.stringify(reports,null,2)+'\n');
++console.log(JSON.stringify(reports));
+diff --git a/browser-local/tests/r66-hybrid-svg-filter.mjs b/browser-local/tests/r66-hybrid-svg-filter.mjs
+new file mode 100644
+index 0000000..d0a4b51
+--- /dev/null
++++ b/browser-local/tests/r66-hybrid-svg-filter.mjs
+@@ -0,0 +1,36 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {readFileSync} from 'node:fs';
++import {normalizeSvgForPdf,UNSUPPORTED_FILTER} from '../src/svg-filter-hybrid.mjs';
++const svg='<svg xmlns="http://www.w3.org/2000/svg"><g filter="url(#shadow)"><rect width="10" height="10"/></g></svg>';
++const failed=async()=>{throw Error(UNSUPPORTED_FILTER)};
++const checked=x=>({svg:x,width:96,height:96});
++test('default professional rejects unsupported filter and never silently rasterizes',async()=>{
++ await assert.rejects(normalizeSvgForPdf(svg,failed,checked),/SVG_FILTER_EFFECT_UNSUPPORTED/);
++});
++test('explicit hybrid retains sanitized source and marks only filter-unsupported page',async()=>{
++ const x=await normalizeSvgForPdf(svg,failed,checked,{hybrid:true});
++ assert.equal(x.checked.svg,svg);assert.equal(x.checked.forceRasterReason,UNSUPPORTED_FILTER);
++ assert.equal(x.rasterizedByChoice,true);assert.equal(x.stats.filtersApplied,0);
++});
++test('normal SVG remains vector even with hybrid selected',async()=>{
++ const x=await normalizeSvgForPdf('<svg/>',async s=>({svg:s,filtersApplied:0}),checked,{hybrid:true});
++ assert.equal(x.checked.forceRasterReason,undefined);assert.equal(x.rasterizedByChoice,false);
++});
++test('hybrid fails closed on any other error including dangerous external resources',async()=>{
++ await assert.rejects(normalizeSvgForPdf(svg,async()=>{throw Error('SVG_EXTERNAL_RESOURCE')},checked,{hybrid:true}),/SVG_EXTERNAL_RESOURCE/);
++ await assert.rejects(normalizeSvgForPdf(svg,failed,()=>{throw Error('UNSAFE_SVG')},{hybrid:true}),/UNSAFE_SVG/);
++ await assert.rejects(normalizeSvgForPdf(svg,async()=>{throw Error('SVG_FILTER_IMAGE_DECODE_TIMEOUT')},checked,{hybrid:true}),/SVG_FILTER_IMAGE_DECODE_TIMEOUT/);
++});
++test('only explicit hybrid uses per-page raster policy and keeps default vector fail-closed',()=>{
++ const converter=readFileSync(new URL('../src/converter.js',import.meta.url),'utf8');
++ const engine=readFileSync(new URL('../src/svg-professional.js',import.meta.url),'utf8');
++ const ui=readFileSync(new URL('../index.html',import.meta.url),'utf8');
++ assert.match(converter,/allowRasterFallback:false/);
++ assert.match(converter,/filterOnlyRasterFallback:true/);
++ assert.match(engine,/filterOnlyRasterFallback&&!forceFilterRaster/);
++ assert.match(converter,/SVG_FILTER_EFFECT_UNSUPPORTED/);
++ assert.match(ui,/<option value="professional" selected>/);
++ assert.match(ui,/<option value="hybrid-filter">/);
++ assert.match(ui,/쪽만 이미지/);
++});
+diff --git a/browser-local/tests/r66-hybrid-vector-integration.mjs b/browser-local/tests/r66-hybrid-vector-integration.mjs
+new file mode 100644
+index 0000000..60efbcb
+--- /dev/null
++++ b/browser-local/tests/r66-hybrid-vector-integration.mjs
+@@ -0,0 +1,64 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {JSDOM} from 'jsdom';
++import {tryProfessionalDocument} from '../src/svg-professional.js';
++import {normalizeSvgForPdf,UNSUPPORTED_FILTER} from '../src/svg-filter-hybrid.mjs';
++
++const NS='http://www.w3.org/2000/svg';
++const svgPage=(inside)=>`<svg xmlns="${NS}" width="816" height="1056" viewBox="0 0 816 1056">${inside}</svg>`;
++const good=svgPage('<rect width="20" height="25" fill="#123456"/>');
++const unsupported=svgPage('<defs><filter id="shadow"><feGaussianBlur stdDeviation="3"/></filter></defs><g filter="url(#shadow)"><rect width="25" height="25"/></g>');
++function mockDOM(){
++ const old={DOMParser:globalThis.DOMParser,XMLSerializer:globalThis.XMLSerializer};
++ const window=new JSDOM('').window;
++ globalThis.DOMParser=window.DOMParser;globalThis.XMLSerializer=window.XMLSerializer;
++ return ()=>{globalThis.DOMParser=old.DOMParser;globalThis.XMLSerializer=old.XMLSerializer;window.close();};
++}
++function backend(stats){
++ let closed=false;
++ class PDFDocument {
++  registerFont(){}
++  addPage(){stats.pages++;return this;}
++  image(){stats.imagePages++;}
++  end(){closed=true;}
++  destroy(){closed=true;}
++ }
++ return async()=>({PDFDocument,Helvetica:{},registerStdFonts:()=>{},
++  SVGtoPDF:()=>{stats.vectorPages++;},
++  toBlob:async()=>{assert.equal(closed,false);return new Blob(['%PDF-1.7\n','abc'.repeat(60)],{type:'application/pdf'});}});
++}
++
++test('explicit hybrid preserves normal-page vectors and only rasterizes unsupported SVG filter page',async()=>{
++ const cleanup=mockDOM();
++ try{
++  const stats={pages:0,imagePages:0,vectorPages:0};
++  const originals=[good,unsupported,good];
++  const result=await tryProfessionalDocument({renderPageSvgWithProfile:i=>originals[i]},3,{
++   checkedSvg:async raw=>(await normalizeSvgForPdf(raw,async input=>{
++    if(input.includes('feGaussianBlur'))throw Error(UNSUPPORTED_FILTER);
++    return {svg:input,filtersApplied:0,imagesChanged:0};
++   },input=>({svg:input,width:816,height:1056}),{hybrid:true})).checked,
++   rasterPage:async source=>{assert.match(source,/feGaussianBlur/);return {blob:new Blob(['png'],{type:'image/png'})};},
++   imageBytes:async()=>Uint8Array.from([137,80,78,71,13,10,26,10,0]),
++   loadLibraries:backend(stats),allowRasterFallback:true,filterOnlyRasterFallback:true
++  });
++  assert.deepEqual([stats.pages,stats.imagePages,stats.vectorPages],[3,1,2]);
++  assert.equal(result.renderMode,'mixed');
++  assert.equal(result.vectorPages,2);assert.equal(result.rasterPages,1);
++  assert.deepEqual(result.fallbackPages,[{page:2,reason:UNSUPPORTED_FILTER}]);
++ }finally{cleanup();}
++});
++
++test('filter-only hybrid never rasterizes unrelated unsupported SVG feature',async()=>{
++ const cleanup=mockDOM();
++ try{
++  const stats={pages:0,imagePages:0,vectorPages:0};
++  const raw=svgPage('<unexpected-element/>');
++  await assert.rejects(tryProfessionalDocument({renderPageSvgWithProfile:()=>raw},1,{
++   checkedSvg:async input=>({svg:input,width:816,height:1056}),
++   rasterPage:async()=>{throw Error('RASTER_MUST_NOT_RUN');},
++   loadLibraries:backend(stats),allowRasterFallback:true,filterOnlyRasterFallback:true
++  }),/UNSUPPORTED_unexpected-element/);
++  assert.equal(stats.imagePages,0);
++ }finally{cleanup();}
++});
+diff --git a/browser-local/tests/r66-real-failure-retry.mjs b/browser-local/tests/r66-real-failure-retry.mjs
+index 66f174f..d64a134 100644
+--- a/browser-local/tests/r66-real-failure-retry.mjs
++++ b/browser-local/tests/r66-real-failure-retry.mjs
+@@ -35,6 +35,7 @@ test('do not expose recovery for non-HWP formats or unsupported failures',()=>{
+  assert.equal(canRecoverFile(failed('표.xlsx','PDF_STREAM_TIMEOUT')),false);
+  assert.equal(canRecoverFile(failed('문서.hwp','FONT_FAMILY_OR_VARIANT_UNAVAILABLE')),false);
+  assert.equal(canRecoverFile(failed('문서.hwp','PDF_STREAM_TIMEOUT','compat-raster')),false);
++ assert.equal(canRecoverFile(failed('문서.hwp','PDF_STREAM_TIMEOUT','hybrid-filter')),true);
+  assert.equal(canRecoverFile({...failed('문서.hwp','PDF_STREAM_TIMEOUT'),state:'done'}),false);
+  assert.equal(canRecoverFile(failed('문서.hwp','PREFIX_PDF_STREAM_TIMEOUT_EXTRA')),false);
+ });

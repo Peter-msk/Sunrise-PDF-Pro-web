@@ -1,0 +1,70 @@
+name: DEV26 HWP hybrid SVG filter trial (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/dev26-hybrid-svg-20261112
+permissions:
+  contents: read
+jobs:
+  verify-hybrid:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      CF_PAGES_BRANCH: release/dev26-cloud-build-20261112
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Apply pinned R65 DEV26 and hybrid patch; all tests and real WASM build
+        run: bash .release/build-dev26-cloudflare.sh
+      - name: Explicit filter-only hybrid safety contract
+        run: |
+          set -euo pipefail
+          node --test browser-local/tests/r66-hybrid-svg-filter.mjs browser-local/tests/r66-hybrid-vector-integration.mjs
+          grep -Fq 'hybrid-filter' browser-local/dist/index.html
+          test -s browser-local/dist/rhwp_bg.wasm
+          npm --prefix browser-local run check:source
+      - name: Chromium for actual browser HWP HWPX
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Fetch publicly versioned HWP and HWPX fixtures
+        run: |
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Launch isolated Worker, not Cloudflare production
+        run: |
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 >/tmp/hybrid-worker.log 2>&1 &
+          for n in $(seq 1 90); do
+            if curl -fsS 'http://127.0.0.1:8787/local/health' >/tmp/hybrid-health.json; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/hybrid-worker.log
+          exit 1
+      - name: Browser default vector regression HWP and HWPX
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/e2e.mjs
+      - name: Browser explicit hybrid HWP and HWPX PDF downloads
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/hybrid-real-browser.mjs
+      - name: Save evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev26-hybrid-filter-browser-qa
+          path: |
+            r29-browser-real-evidence/DEV26_HYBRID_BROWSER_E2E.json
+            r29-browser-real-evidence/R40_BROWSER_LOCAL_E2E.json
+            /tmp/hybrid-health.json
+            /tmp/hybrid-worker.log
+          if-no-files-found: warn
+          retention-days: 7
