@@ -169,3 +169,19 @@ test('actual PDFKit output retains vector fill and valid page geometry after ide
  assert.doesNotMatch(bytes.toString('latin1'),/\/Subtype\s*\/Image\b/);
  assert.match(bytes.toString('latin1'),/^%PDF-/);
 }));
+
+test('unused-filter scanner checks every URL fallback and direct href references',()=>dom(async()=>{
+ const filter=def('<feGaussianBlur stdDeviation="2"/>');
+ const inputs=[
+  svg(filter+'<rect fill="url(#other) url(#effect)" width="50" height="30"/>'),
+  svg(filter+'<use href="#effect"/>')
+ ];
+ for(const input of inputs)
+  await assert.rejects(normalize(input),/SVG_FILTER_UNRESOLVED_REFERENCE/);
+}));
+test('identity matrices do not normalize already-raster embedded images',()=>dom(async()=>{
+ const base64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4//8/AwAI/AL+Xj4UeQAAAABJRU5ErkJggg==';
+ const input=svg(def(color('saturate','values="1"'))+
+  '<image x="0" y="0" width="1" height="1" href="data:image/png;base64,'+base64+'" filter="url(#effect)"/>');
+ await assert.rejects(normalize(input),/SVG_FILTER_EFFECT_UNSUPPORTED/);
+}));
