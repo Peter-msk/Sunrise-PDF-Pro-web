@@ -58,5 +58,9 @@ jobs:
         env:
           SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
         run: node browser-local/tests/e2e.mjs
+      - name: Chromium real HWP PDF embedded-font per-file audit UI
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/r66-pc-font-audit-browser.mjs
       - name: Confirm no production deployment
         run: echo DEV26_PC_FONT_EMBED_AUDIT_PASS_NO_DEPLOY
