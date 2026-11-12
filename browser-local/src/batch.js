@@ -38,7 +38,14 @@ export async function runBatch(items,convert,signal,onChange=()=>{}){
   notify(item);
   // Allow the UI thread to release completed document resources before
   // starting the next large HWP; it is not a timeout or an artificial delay.
-  await cooperativeYield({signal});
+  if(signal?.aborted)break;
+  try{await cooperativeYield({signal});}
+  catch(error){
+   // Cancellation during the boundary between completed documents is not
+   // a failed conversion. Keep the completed PDF and queued files untouched.
+   if(error?.name==='AbortError'||signal?.aborted)break;
+   throw error;
+  }
  }
  return items;
 }
