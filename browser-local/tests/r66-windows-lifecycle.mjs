@@ -27,7 +27,7 @@ test('background transition suppresses ETA without pretending work progressed',(
  const p=clockFixture();
  try{
   p.clock.start(2);p.step(30000);p.clock.update(0,.5,'SVG 변환');
-  assert.match(p.get('remaining'),/약 00:30/);
+  assert.match(p.get('remaining'),/약 01:30/);
   p.hide(true);p.clock.setLifecycle({isHidden:true});
   assert.equal(p.get('remaining'),'계산 중');assert.equal(p.get('finish'),'—');
   assert.match(p.hint(),/다른 탭 또는 최소화/);
@@ -45,8 +45,8 @@ test('freeze and thaw preserve elapsed time, suppress ETA while frozen and do no
   p.clock.start(1);p.step(13000);p.clock.update(0,.5,'페이지');
   p.clock.setLifecycle({isHidden:true,isFrozen:true});
   assert.match(p.hint(),/동결/);assert.equal(p.get('remaining'),'계산 중');
-  p.step(17000);p.clock.setLifecycle({isHidden:false,isFrozen:false});
-  assert.equal(p.get('elapsed'),'00:30');
+  p.step(27000);p.clock.setLifecycle({isHidden:false,isFrozen:false});
+  assert.equal(p.get('elapsed'),'00:40');
   assert.equal(p.counter().scheduled,1,'one timer only, thaw does not create another');
   assert.equal(p.get('remaining'),'계산 중');
  }finally{p.clock.finish('done');p.close();}
