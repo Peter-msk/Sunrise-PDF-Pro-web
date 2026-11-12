@@ -18,7 +18,7 @@ const oldParser=globalThis.DOMParser;
 globalThis.DOMParser=FakeParser;
 const fontkit={create:bytes=>({familyName:'Malgun Gothic',fullName:'Malgun Gothic',
  postscriptName:'MalgunGothic',subfamilyName:'Regular',characterSet:[0xac00,0xb098,65]})};
-const font=(family,blob=async()=>new Blob(['SFNT']))=>({family,fullName:family,postscriptName:family+'PS',style:'Regular',blob});
+const font=(family,blob=async()=>new Blob(['SFNT']))=>({family,fullName:family,postscriptName:null,style:'Regular',blob});
 
 test('Korean and English names of verified Windows faces are equivalent, not fuzzy matched',()=>{
  assert(localFamilyKeys('Malgun Gothic').has('맑은고딕'));
