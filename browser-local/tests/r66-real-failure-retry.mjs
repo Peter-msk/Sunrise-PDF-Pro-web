@@ -62,7 +62,8 @@ test('UI uses the plan for exactly one retry without changing global option',()=
  assert.match(src,/requestedFileRecovery=item;/);
  assert.match(src,/planConversion\(items,\$\('pdf-engine'\)\.value,requested\)/);
  assert.match(src,/const \{pending,engine\}=plan/);
- assert.match(src,/item\.lastEngine=engine/);
+ assert.match(src,/item\.lastEngine=itemEngine/);
+  assert.match(src,/itemEngine=spec\?\.engine\|\|engine/);
  assert.match(src,/requested\?\.state==='done'\?requested/);
  assert.match(src,/plan\.recovery&&item===requested/);
  assert.match(html,/<option value="professional" selected>/);
