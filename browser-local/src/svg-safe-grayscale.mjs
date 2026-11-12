@@ -143,8 +143,11 @@ export function identifyIdentitySvgFilter(element){
   if(raw===null)return true; // SVG default matrix is identity.
   const vals=raw.trim().split(/[\s,]+/);
   const identity=[1,0,0,0,0, 0,1,0,0,0, 0,0,1,0,0, 0,0,0,1,0];
-  return vals.length===20&&vals.every((v,i)=>v!==''&&
-   Number.isFinite(Number(v))&&Math.abs(Number(v)-identity[i])<1e-12);
+  // SVG number grammar is decimal/scientific, not JavaScript hexadecimal.
+  // Require exact matrix identity: a near-identity colour shift is still an effect.
+  const svgNumber=/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+  return vals.length===20&&vals.every((v,i)=>svgNumber.test(v)&&
+   Number.isFinite(Number(v))&&Number(v)===identity[i]);
  }
  if(primitive.localName==='feComponentTransfer'){
   if(Array.from(primitive.attributes).some(a=>!['in','result'].includes(a.name)))return false;
