@@ -1,0 +1,37 @@
+name: DEV26 handover source defect targeted QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - dev/dev26-final-integrated-source-20261112
+    paths:
+      - .github/workflows/dev26-handover-audit-targeted-no-deploy.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - run: npm --prefix browser-local ci --no-audit --no-fund --ignore-scripts
+      - name: Test PDF stream-disposal root cause and nearby regression boundary
+        run: |
+          set -euo pipefail
+          node --test browser-local/tests/r66-hybrid-vector-integration.mjs browser-local/tests/r66-pdf-writer-disposal.mjs browser-local/tests/r66-pdf-stream-progress.mjs browser-local/tests/r66-real-failure-retry.mjs
+      - name: No-deploy JS/WASM static source and bundle checks
+        run: |
+          set -euo pipefail
+          npm --prefix browser-local run check:source
+          npm --prefix browser-local run build
+          npm --prefix browser-local run verify:dist
+          node scripts/verify-browser-build.mjs
+          node scripts/test-worker-assets.mjs
+      - name: Complete only if no production mutations were attempted
+        run: echo HANDOVER_PDF_STREAM_DISPOSAL_QA_PASS_NO_DEPLOY
