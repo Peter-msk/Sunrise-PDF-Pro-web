@@ -1,8 +1,6 @@
 name: DEV26 real failure recovery QA (no deployment)
 on:
-  push:
-    branches:
-      - release/dev26-cloud-build-20261112
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
