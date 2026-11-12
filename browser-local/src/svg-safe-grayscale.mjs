@@ -123,11 +123,15 @@ export function identifyGrayFilter(element){
 export function identifyIdentitySvgFilter(element){
  if(element?.localName!=='filter'||Array.from(element.attributes||[]).some(a=>
   !['id','color-interpolation-filters'].includes(a.name)))return false;
+ if(element.hasAttribute('color-interpolation-filters')&&
+  !['sRGB','linearRGB'].includes(element.getAttribute('color-interpolation-filters')))return false;
  const kids=Array.from(element.children||[]);
  if(kids.length!==1)return false;
  const primitive=kids[0];
  if(primitive.hasAttribute('in')&&primitive.getAttribute('in')!=='SourceGraphic')return false;
  if(primitive.localName==='feColorMatrix'){
+  if(primitive.hasAttribute('color-interpolation-filters')&&
+   !['sRGB','linearRGB'].includes(primitive.getAttribute('color-interpolation-filters')))return false;
   if(primitive.children.length||
    Array.from(primitive.attributes).some(a=>
     !['type','values','in','result','color-interpolation-filters'].includes(a.name)))return false;
@@ -430,7 +434,7 @@ export async function normalizeSvgGrayscale(svg,signal,{
   const noop= isCssIdentityFilter(descriptor.value)||
    (reference&&identifyIdentitySvgFilter(definitions.get(reference[1])));
   if(noop){
-   if(!isSafeIdentityTarget(el))fail('SVG_FILTER_IDENTITY_TARGET_UNSAFE');
+   if(!isSafeIdentityTarget(el))fail('SVG_FILTER_EFFECT_UNSUPPORTED');
    setNoFilter(el,descriptor);filtersApplied++;continue;
   }
   let mode;
