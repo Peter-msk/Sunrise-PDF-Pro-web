@@ -19,7 +19,7 @@ echo "5821e41d655f5d87b11fcf2b4b8b7bfdec8be0f3fd5f33292211dfb7e7592d96  $PATCH" 
 echo "42b9cf09b541eb0d555e852abbc8db0043cb59145d872b745be62bdd81e37118  $FIX" | sha256sum -c -
 echo "e1d085013ab1bb78baf0a6bda5e1cffa0f38571b3a3a32e26b4de9edc2de82b3  $HOTFIX" | sha256sum -c -
 echo "f5318ecd4834570c03985770981130fc7cbfbdb4da2f26709724833928c940ce  $RECOVERY" | sha256sum -c -
-echo "db98e5f570295de3c1c53f6bf9e0f476a3306a16161e4394680d31ca8f451d5a  $HYBRID" | sha256sum -c -
+echo "829530e22703943b981cc2066b12b45e30aaa38d2c29a5b79161b1ef41d3ddd5  $HYBRID" | sha256sum -c -
 
 if git cat-file -e "$BASE^{commit}" 2>/dev/null; then
   git merge-base --is-ancestor "$BASE" HEAD

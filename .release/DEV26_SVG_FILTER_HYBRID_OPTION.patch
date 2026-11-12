@@ -396,3 +396,16 @@ index 66f174f..d64a134 100644
   assert.equal(canRecoverFile({...failed('문서.hwp','PDF_STREAM_TIMEOUT'),state:'done'}),false);
   assert.equal(canRecoverFile(failed('문서.hwp','PREFIX_PDF_STREAM_TIMEOUT_EXTRA')),false);
  });
+diff --git a/browser-local/tests/unit.mjs b/browser-local/tests/unit.mjs
+index 2c11720..be90a10 100644
+--- a/browser-local/tests/unit.mjs
++++ b/browser-local/tests/unit.mjs
+@@ -55,7 +55,7 @@ test('HWP conversion rejects image export and releases HWP instance',()=>{
+ });
+ 
+ test('only object-preserving HWP export loads local font registry',()=>{
+- assert.match(source,/if\(options\.engine==='professional'\)/);
++ assert.match(source,/if\(options\.engine==='professional'\|\|options\.engine==='hybrid-filter'\)/);
+  assert.doesNotMatch(source,/pdf\.embedFont/);
+  assert.doesNotMatch(source,/appendVectorPage/);
+ });
