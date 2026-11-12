@@ -1,4 +1,5 @@
 name: DEV27 P0 failed-only SVG recovery targeted QA (NO DEPLOY)
+# Targeted retry after updating the prior single-file source-contract assertion.
 on:
   push:
     branches:
