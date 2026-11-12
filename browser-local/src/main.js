@@ -10,6 +10,7 @@ import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
 import {canRecoverFile,planConversion,recoveryEngine} from './conversion-recovery.mjs';
 import {requestLocalFontAccess} from './local-fonts.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
+import {summarizeVectorPreservation,inspectPdfVectorQuality} from './pdf-vector-quality.mjs';
 import {settleInstalledFonts,localFontCapability} from './local-font-policy.mjs';
 const USE_PC_FONTS_BY_DEFAULT=true;
 // Permission-granted FontData stays in this tab's memory only. A 'font-check'
@@ -76,7 +77,7 @@ $('font-check')?.addEventListener('click',async()=>{
 });
 function clearPrint(){if(printJob){printJob.dispose();printJob=null;}}
 function clearArchive(){if(archiveUrl)URL.revokeObjectURL(archiveUrl);archiveUrl=null;$('download-all').hidden=true;$('download-all').removeAttribute('href');}
-function release(item){item._fontAuditController?.abort();if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
+function release(item){item._fontAuditController?.abort();item._qualityAuditController?.abort();if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
 function show(item){
  active=item;clearPrint();
  for(const row of $('file-list').children)row.classList.toggle('is-active',row.dataset.id===String(item?.id));
@@ -90,6 +91,7 @@ function show(item){
  const detail=document.createElement('div');
  detail.textContent=[...(r.substituteFamilies?.length?['대체 글꼴: '+r.substituteFamilies.join(', ')]:[]),
   ...(r.warnings||[]),...(item.fontAuditMessage?[item.fontAuditMessage]:[]),
+  ...(item.qualityAuditMessage?[item.qualityAuditMessage]:[]),
   r.renderMode==='professional'?'HWP/HWPX 전체 페이지를 이미지로 바꾸지 않았습니다. 표·글상자·머리말·꼬리말은 페이지를 넘기며 확인하세요.':''].filter(Boolean).join(' ');
  $('quality-detail').replaceChildren(title,detail);viewer.open(item.result.pdf);sync();
 }
@@ -116,11 +118,65 @@ function draw(){
   if(item.result?.substituteFamilies?.length)message+=' · 대체 글꼴: '+item.result.substituteFamilies.join(', ');
   if(item.result?.warnings?.length)message+=' · '+item.result.warnings.join(' ');
   if(item.fontAuditMessage)message+=' · '+item.fontAuditMessage;
+  if(item.qualityAuditMessage)message+=' · '+item.qualityAuditMessage;
+  if(isHwp(item.file)&&item.result&&Number.isInteger(item.result.vectorPages)){
+   try{
+    const v=summarizeVectorPreservation(item.result);
+    message+=' · 벡터 페이지 보존 '+v.vectorPages+'/'+v.pageCount+
+      ' ('+v.vectorPagePercent+'%)'+
+      (v.rasterPages?' · 이미지화 '+v.rasterizedPageNumbers.join(', ')+'쪽':'');
+   }catch{/* An older/unverified record must not pretend to have valid counts. */}
+  }
   if(['done','failed','cancelled'].includes(item.state)&&Number.isFinite(item._proDurationMs))message+=' · 처리시간 '+formatDuration(item._proDurationMs);
   meta.textContent=message;body.append(name,meta);
   const actions=document.createElement('div');actions.className='file-actions';
   if(item.state==='done'){
    const preview=document.createElement('button');preview.className='secondary';preview.type='button';preview.textContent='PDF 검토';preview.disabled=busy;preview.addEventListener('click',()=>show(item));actions.append(preview);
+   if(isHwp(item.file)&&Number.isInteger(item.result?.vectorPages)){
+    const quality=document.createElement('button');
+    quality.className='secondary vector-quality-audit';quality.type='button';
+    quality.textContent=item._qualityAuditBusy?'품질 검사 중':'PDF 벡터 품질 확인';
+    quality.title='페이지별 실제 PDF 이미지 그리기·벡터 경로·텍스트 명령을 로컬에서 확인합니다. 원본 HWP와 시각적으로 동일하다는 의미는 아닙니다.';
+    quality.disabled=busy||!!item._qualityAuditBusy;
+    quality.addEventListener('click',async()=>{
+     if(busy||item._qualityAuditBusy||!items.includes(item))return;
+     const pdf=item.result.pdf;
+     item._qualityAuditBusy=true;
+     item._qualityAuditController=new AbortController();
+     const signal=item._qualityAuditController.signal;
+     draw();
+     try{
+      const report=await inspectPdfVectorQuality(pdf,item.result,{signal,
+       workerSrc:new URL('pdf-worker.mjs',document.baseURI).href});
+      if(signal.aborted||!items.includes(item)||item.result.pdf!==pdf)return;
+      const pages=report.pages.map(p=>p.page+'쪽 '+
+       (p.mode==='raster-fallback'?'이미지':'벡터')+
+       '(경로 '+p.vectorPathOps+', 글자 '+p.textPaintOps+
+       ', 이미지 '+p.imagePaints+')').join(' · ');
+      const errors=report.findings.filter(x=>x.severity==='error');
+      const review=report.findings.filter(x=>x.severity==='review');
+      item.qualityAuditMessage='PDF 구조 검증 '+(report.structuralPass?'통과':'확인 필요')+
+       ' · 페이지 기준 벡터 보존 '+report.vectorPages+'/'+report.pageCount+
+       ' ('+report.vectorPagePercent+'%) · 이미지화 쪽 '+
+       (report.rasterizedPageNumbers.join(', ')||'없음')+
+       (errors.length?' · 구조 오류 '+errors.map(x=>x.page+'쪽 '+x.code).join(', '):'')+
+       (review.length?' · 추가 검토 '+review.map(x=>x.page+'쪽 '+x.code).join(', '):'')+
+       ' · '+pages+
+       ' · 페이지별 그리기 명령 검사이며 원본 대비 시각적 동일성·벡터 면적률은 검증하지 않습니다.';
+      status('선택한 PDF의 페이지별 벡터·이미지 구조 검사가 완료됐습니다.');
+     }catch(error){
+      if(!signal.aborted&&items.includes(item)){
+       item.qualityAuditMessage='PDF 벡터 품질 검사를 완료하지 못했습니다 ('+
+        String(error?.message||error)+'). 출력 파일의 생성 상태와 별도로 확인하세요.';
+       status('PDF 품질 구조 검사 실패: '+String(error?.message||error));
+      }
+     }finally{
+      item._qualityAuditBusy=false;item._qualityAuditController=null;
+      if(items.includes(item)){draw();if(active===item)show(item);}
+     }
+    });
+    actions.append(quality);
+   }
    if(isHwp(item.file)&&['professional','mixed'].includes(item.result?.renderMode)){
     const fontAudit=document.createElement('button');
     fontAudit.type='button';fontAudit.className='secondary font-audit';
@@ -289,7 +345,10 @@ $('convert').addEventListener('click',async()=>{
      :'벡터·혼합 변환 오류('+plan.cause+') 후 이 문서만 전체 이미지 PDF로 복구했습니다. 모든 페이지를 원본과 비교하세요.'];
    return result;
   },signal,item=>{
-   if(item.state==='working'){conversionClock.itemStart();draw();return;}
+   if(item.state==='working'){
+    item._qualityAuditController?.abort();item.qualityAuditMessage=null;
+    conversionClock.itemStart();draw();return;
+   }
    const durationMs=Number.isFinite(item._proStartedMs)?Math.max(0,Math.round(performance.now()-item._proStartedMs)):0;
    item._proDurationMs=durationMs;
    if(item.state==='done')emitProEvent('convert_success',{feature:proFeature(item.file),stage:'pdf',duration_ms:durationMs});
