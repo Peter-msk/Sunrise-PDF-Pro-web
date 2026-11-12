@@ -341,7 +341,7 @@ diff --git a/browser-local/tests/r66-local-font-browser.mjs b/browser-local/test
 new file mode 100644
 --- /dev/null
 +++ b/browser-local/tests/r66-local-font-browser.mjs
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,50 @@
 +/**
 + * Browser integration of the on-device PC font contract. A LOCAL test font
 + * simulates FontData from a permitted OS: it is not a claim that the CI
@@ -384,29 +384,41 @@ new file mode 100644
 + await page.locator('#font-check').click();
 + await page.waitForFunction(()=>document.querySelector('#pc-font-status')?.textContent.includes('1개에 접근 가능합니다'),null,{timeout:20000});
 + const report=await page.evaluate(async()=>{
-+  const {default:fontkit}=await import('@pdf-lib/fontkit');
-+  const {loadDocumentLocalFonts}=await import('/src/local-fonts.js');
-+  const {resolveFont,installMeasureFonts}=await import('/src/pdf-fonts.js');
-+  const {tryProfessionalDocument}=await import('/src/svg-professional.js');
-+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="794" height="1123"><text x="20" y="55" font-family="나눔고딕" font-size="22">가나다</text></svg>';
-+  const doc={renderPageSvgWithProfile:()=>svg};
-+  const registry=await loadDocumentLocalFonts(doc,1,await window.queryLocalFonts(),fontkit);
-+  const selected=resolveFont(registry,'나눔고딕','normal','normal','가나다');
-+  if(!selected?.isLocal)throw Error('bilingual Korean family did not choose OS-metadata face');
-+  const release=await installMeasureFonts(registry);
-+  let pdf;
-+  try{
-+   pdf=await tryProfessionalDocument(doc,1,{
-+    checkedSvg:()=>({svg,width:794,height:1123}),fontRegistry:registry,
-+    rasterPage:async()=>{throw Error('raster unexpectedly used')}
-+   });
-+  }finally{release();}
-+  const head=new Uint8Array(await pdf.pdf.slice(0,5).arrayBuffer());
-+  return {pdfBytes:pdf.pdf.size,signature:String.fromCharCode(...head),
-+   fontUsage:pdf.fontUsage,missing:registry.unmatchedNames,localFaces:registry.faces.length};
++  const {verifyBilingualLocalFontPdf}=await import('/tests/r66-local-font-browser-entry.js');
++  return verifyBilingualLocalFontPdf();
 + });
 + if(report.signature!=='%PDF-'||report.fontUsage.local!==1||report.missing.length||report.localFaces!==1)
 +  throw Error('Local PDF font browser integration failed: '+JSON.stringify(report));
 + console.log('LOCAL_FONT_BILINGUAL_BROWSER_AND_EMBED_PASS '+JSON.stringify(report));
 + await page.close();
 +}finally{await browser?.close();server.kill('SIGTERM');}
+diff --git a/browser-local/tests/r66-local-font-browser-entry.js b/browser-local/tests/r66-local-font-browser-entry.js
+new file mode 100644
+--- /dev/null
++++ b/browser-local/tests/r66-local-font-browser-entry.js
+@@ -0,0 +1,25 @@
++// Served as a Vite module so bare npm imports resolve inside Chromium.
++// This models a user-approved FontData with the bytes of a real OFL font.
++import fontkit from '@pdf-lib/fontkit';
++import {loadDocumentLocalFonts} from '../src/local-fonts.js';
++import {resolveFont,installMeasureFonts} from '../src/pdf-fonts.js';
++import {tryProfessionalDocument} from '../src/svg-professional.js';
++
++export async function verifyBilingualLocalFontPdf(){
++ const svg='<svg xmlns="http://www.w3.org/2000/svg" width="794" height="1123"><text x="20" y="55" font-family="나눔고딕" font-size="22">가나다</text></svg>';
++ const doc={renderPageSvgWithProfile:()=>svg};
++ const registry=await loadDocumentLocalFonts(doc,1,await window.queryLocalFonts(),fontkit);
++ const selected=resolveFont(registry,'나눔고딕','normal','normal','가나다');
++ if(!selected?.isLocal)throw Error('Korean font family did not choose the local face');
++ const release=await installMeasureFonts(registry);
++ let pdf;
++ try{
++  pdf=await tryProfessionalDocument(doc,1,{
++   checkedSvg:()=>({svg,width:794,height:1123}),fontRegistry:registry,
++   rasterPage:async()=>{throw Error('raster unexpectedly used')}
++  });
++ }finally{release();}
++ const head=new Uint8Array(await pdf.pdf.slice(0,5).arrayBuffer());
++ return {pdfBytes:pdf.pdf.size,signature:String.fromCharCode(...head),
++  fontUsage:pdf.fontUsage,missing:registry.unmatchedNames,localFaces:registry.faces.length};
++}
