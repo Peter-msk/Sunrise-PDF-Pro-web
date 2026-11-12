@@ -356,7 +356,7 @@ $('convert').addEventListener('click',async()=>{
    if(fontAccessNotice&&isHwp(file))result.warnings=[...(result.warnings||[]),fontAccessNotice];
    if((plan.recovery&&item===requested)||spec){
     const cause=spec?.cause||plan.cause;
-    result.warnings=[...(result.warnings||[]),itemEngine==='hybrid-filter'
+    result.warnings=[...(result.warnings||[]),(spec?itemEngine==='hybrid-filter':plan.engine==='hybrid-filter')
      ?'기본 벡터 변환 오류('+cause+') 후 이 문서만 혼합 PDF로 복구했습니다. 이미지 출력 쪽을 원본과 비교하세요.'
      :'벡터·혼합 변환 오류('+cause+') 후 이 문서만 전체 이미지 PDF로 복구했습니다. 모든 페이지를 원본과 비교하세요.'];
    }
