@@ -1,4 +1,5 @@
 name: DEV26 SVG filter vector-safe regression (NO DEPLOY)
+# final rerun: scan every URL/href reference and reject raster identity
 on:
   push:
     branches:
