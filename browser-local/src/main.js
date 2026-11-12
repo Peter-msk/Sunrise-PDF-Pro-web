@@ -7,7 +7,7 @@ import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
-import {canRecoverFile,planConversion,recoveryEngine} from './conversion-recovery.mjs';
+import {canRecoverFile,planConversion,planBulkRecovery,recoveryEngine} from './conversion-recovery.mjs';
 import {requestLocalFontAccess} from './local-fonts.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
 import {summarizeVectorPreservation,inspectPdfVectorQuality} from './pdf-vector-quality.mjs';
@@ -20,7 +20,7 @@ const $=id=>document.getElementById(id);
 const conversionClock=createConversionClock();
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
-let requestedFileRecovery=null;
+let requestedFileRecovery=null,requestedBulkRecovery=false;
 const status=value=>{$('status').textContent=value;};
 const fontStatus=value=>{const node=$('pc-font-status');if(node)node.textContent=value;};
 // Permission is requested only in a real click. Enumeration is NOT proof a
@@ -98,6 +98,9 @@ function show(item){
 function sync(){
  const pending=items.some(i=>['ready','failed','cancelled'].includes(i.state));
  $('convert').disabled=!ready||busy||!pending;$('reset').disabled=busy||!items.length;$('cancel').disabled=!busy;
+ const bulk=$('recover-failed'),recoverable=items.filter(canRecoverFile).length;
+ if(bulk){bulk.hidden=recoverable===0;bulk.disabled=!ready||busy||recoverable===0;
+  bulk.textContent='실패 파일 '+recoverable+'개만 복구';}
  for(const id of ['source','pdf-font','pdf-engine'])$(id).disabled=busy;
  $('print-prepare').disabled=!ready||busy||!active||!isHwp(active.file)||active.state==='invalid';$('print-save').disabled=busy||!printJob;
  $('total-count').textContent=items.length;$('done-count').textContent=items.filter(i=>i.state==='done').length;
@@ -265,29 +268,40 @@ for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{e.p
 $('drop').addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer?.files||[])));
 $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.';sync();});
 $('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');sync();});
+$('recover-failed').addEventListener('click',()=>{
+ if(busy||!ready||!items.some(canRecoverFile))return;
+ requestedFileRecovery=null;requestedBulkRecovery=true;
+ $('convert').click();
+});
 $('convert').addEventListener('click',async()=>{
  if(busy||!ready)return;
  const requested=requestedFileRecovery;requestedFileRecovery=null;
- const plan=planConversion(items,$('pdf-engine').value,requested);
+ const bulkRequested=requestedBulkRecovery;requestedBulkRecovery=false;
+ const plan=bulkRequested?planBulkRecovery(items):planConversion(items,$('pdf-engine').value,requested);
  const {pending,engine}=plan;
+ const recoverySpecs=new Map((plan.targets||[]).map(spec=>[spec.item,spec]));
  if(!pending.length)return;
  conversionClock.start(pending.length);
  const fontFiles=Array.from($('pdf-font').files||[]);
- if(plan.recovery)status(engine==='hybrid-filter'
+ if(plan.bulk)status('실패한 문서 '+pending.length+'개만 명시적으로 복구합니다. SVG 필터 오류는 해당 쪽만 이미지로, 스트림 오류나 혼합 재실패는 전체 이미지로 출력됩니다. 성공 파일과 일반 대기 파일은 제외됩니다.');
+ else if(plan.recovery)status(engine==='hybrid-filter'
   ?'선택한 문서 1개만 혼합 PDF로 다시 변환합니다. 미지원 필터 쪽만 이미지로 처리하며 나머지 쪽은 벡터로 유지합니다.'
   :'선택한 문서 1개만 호환 이미지 PDF로 다시 변환합니다. 모든 쪽의 글자 검색은 불가능합니다.');
- if(engine==='compat-raster')fontStatus('호환 이미지 PDF는 페이지를 그림으로 출력하므로 PC 글꼴의 PDF 임베딩 절차를 사용하지 않습니다.');
- let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&engine!=='compat-raster'&&pending.some(i=>isHwp(i.file)))fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
+ if(!plan.bulk&&engine==='compat-raster')fontStatus('호환 이미지 PDF는 페이지를 그림으로 출력하므로 PC 글꼴의 PDF 임베딩 절차를 사용하지 않습니다.');
+ const needsFonts=pending.some(item=>isHwp(item.file)&&
+  (recoverySpecs.get(item)?.engine||engine)!=='compat-raster');
+ let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&needsFonts)fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();refreshBrowserLifecycle();let completed=0;
  try{
   let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');if(access.status==='ready')verifiedPcFontData=localFonts;
    fontStatus(access.status==='ready'?'PC 글꼴 '+localFonts.length+'개에 접근 확인 · 실제 PDF 사용 여부는 변환 결과를 확인하세요.':fontAccessNotice);}
   await runBatch(pending,async(file,item)=>{
    item._proDiagStage='load';
-   item.lastEngine=engine;
+   const spec=recoverySpecs.get(item),itemEngine=spec?.engine||engine;
+   item.lastEngine=itemEngine;
    item._proStartedMs=performance.now();
    item._lastDiagPhase='parse';item._lastDiagSentMs=item._proStartedMs;
-   emitProEvent('convert_start',{feature:proFeature(file),stage:engine==='compat-raster'?'compat_raster':engine==='hybrid-filter'?'svg_vector':'none'});
+   emitProEvent('convert_start',{feature:proFeature(file),stage:itemEngine==='compat-raster'?'compat_raster':itemEngine==='hybrid-filter'?'svg_vector':'none'});
    emitProEvent('convert_progress',{feature:proFeature(file),stage:'parse',duration_ms:0});
    const result=await convertToPdf(file,info=>{
     const phases=new Set(['svg_build','svg_normalize','image_gif','image_png',
@@ -338,12 +352,14 @@ $('convert').addEventListener('click',async()=>{
     const elapsedStatus=Number.isSafeInteger(info.elapsedMs)&&info.elapsedMs>=1000
      ?' · 단계 소요 '+(info.elapsedMs/1000).toFixed(1)+'초':'';
     status(file.name+' · '+message+byteStatus+elapsedStatus+' · '+info.page+'/'+info.total+'쪽 · '+(completed+1)+'/'+pending.length+'개');
-   },signal,{fontFiles,engine,localFonts});
+   },signal,{fontFiles,engine:itemEngine,localFonts});
    if(fontAccessNotice&&isHwp(file))result.warnings=[...(result.warnings||[]),fontAccessNotice];
-   if(plan.recovery&&item===requested)result.warnings=[...(result.warnings||[]),
-    plan.engine==='hybrid-filter'
-     ?'기본 벡터 변환 오류('+plan.cause+') 후 이 문서만 혼합 PDF로 복구했습니다. 이미지 출력 쪽을 원본과 비교하세요.'
-     :'벡터·혼합 변환 오류('+plan.cause+') 후 이 문서만 전체 이미지 PDF로 복구했습니다. 모든 페이지를 원본과 비교하세요.'];
+   if((plan.recovery&&item===requested)||spec){
+    const cause=spec?.cause||plan.cause;
+    result.warnings=[...(result.warnings||[]),itemEngine==='hybrid-filter'
+     ?'기본 벡터 변환 오류('+cause+') 후 이 문서만 혼합 PDF로 복구했습니다. 이미지 출력 쪽을 원본과 비교하세요.'
+     :'벡터·혼합 변환 오류('+cause+') 후 이 문서만 전체 이미지 PDF로 복구했습니다. 모든 페이지를 원본과 비교하세요.'];
+   }
    return result;
   },signal,item=>{
    if(item.state==='working'){
