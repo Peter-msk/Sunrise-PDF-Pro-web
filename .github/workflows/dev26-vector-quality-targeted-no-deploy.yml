@@ -1,5 +1,5 @@
 name: DEV26 SVG complex table and vector PDF QA (NO DEPLOY)
-# rerun: Node-only official PDF.js legacy parser for non-Chromium tests
+# final rerun: matching legacy PDF.js main and worker supports current Chromium without new Map API
 on:
   push:
     branches:
