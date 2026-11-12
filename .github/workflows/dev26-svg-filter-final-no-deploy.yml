@@ -1,0 +1,37 @@
+name: DEV26 SVG filter final exact-matrix regression (NO DEPLOY)
+on:
+  push:
+    branches:
+      - dev/dev26-final-integrated-source-20261112
+    paths:
+      - .github/workflows/dev26-svg-filter-final-no-deploy.yml
+permissions:
+  contents: read
+jobs:
+  targeted:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - run: npm --prefix browser-local ci --no-audit --no-fund --ignore-scripts
+      - name: Exact SVG matrix, original grayscale, hybrid safety regressions
+        run: |
+          set -euo pipefail
+          node --test browser-local/tests/r66-svg-filter-vector-safe.mjs browser-local/tests/r66-hybrid-svg-filter.mjs browser-local/tests/r66-hybrid-vector-integration.mjs browser-local/tests/r66-hwp-svg-preprocess.mjs browser-local/tests/svg-security.mjs
+      - name: Source/WASM/Vite/Worker build check, no deploy
+        run: |
+          set -euo pipefail
+          npm --prefix browser-local run check:source
+          npm --prefix browser-local run build
+          npm --prefix browser-local run verify:dist
+          node scripts/verify-browser-build.mjs
+          node scripts/test-worker-assets.mjs
+      - name: Build completed without publishing
+        run: echo DEV26_SVG_FILTER_FINAL_QA_NO_DEPLOY_PASS
