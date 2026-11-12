@@ -9,6 +9,7 @@ import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
 import {canRecoverFile,planConversion,recoveryEngine} from './conversion-recovery.mjs';
 import {requestLocalFontAccess} from './local-fonts.js';
+import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
 import {settleInstalledFonts,localFontCapability} from './local-font-policy.mjs';
 const USE_PC_FONTS_BY_DEFAULT=true;
 // Permission-granted FontData stays in this tab's memory only. A 'font-check'
@@ -58,7 +59,7 @@ $('font-check')?.addEventListener('click',async()=>{
 });
 function clearPrint(){if(printJob){printJob.dispose();printJob=null;}}
 function clearArchive(){if(archiveUrl)URL.revokeObjectURL(archiveUrl);archiveUrl=null;$('download-all').hidden=true;$('download-all').removeAttribute('href');}
-function release(item){if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
+function release(item){item._fontAuditController?.abort();if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
 function show(item){
  active=item;clearPrint();
  for(const row of $('file-list').children)row.classList.toggle('is-active',row.dataset.id===String(item?.id));
@@ -70,7 +71,9 @@ function show(item){
  $('pages').textContent=r.pages+'쪽 · '+mode;
  const title=document.createElement('strong');title.textContent='출력 확인 · '+mode;
  const detail=document.createElement('div');
- detail.textContent=[...(r.substituteFamilies?.length?['대체 글꼴: '+r.substituteFamilies.join(', ')]:[]),...(r.warnings||[]),r.renderMode==='professional'?'HWP/HWPX 전체 페이지를 이미지로 바꾸지 않았습니다. 표·글상자·머리말·꼬리말은 페이지를 넘기며 확인하세요.':''].filter(Boolean).join(' ');
+ detail.textContent=[...(r.substituteFamilies?.length?['대체 글꼴: '+r.substituteFamilies.join(', ')]:[]),
+  ...(r.warnings||[]),...(item.fontAuditMessage?[item.fontAuditMessage]:[]),
+  r.renderMode==='professional'?'HWP/HWPX 전체 페이지를 이미지로 바꾸지 않았습니다. 표·글상자·머리말·꼬리말은 페이지를 넘기며 확인하세요.':''].filter(Boolean).join(' ');
  $('quality-detail').replaceChildren(title,detail);viewer.open(item.result.pdf);sync();
 }
 function sync(){
@@ -95,11 +98,53 @@ function draw(){
   if(item.error){message+=' · '+item.error;meta.classList.add('error');if(isHwp(item.file)&&/SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT/.test(item.error))message+=' · 아래 출력 및 글꼴 옵션에서 호환 방식 선택 후 다시 변환할 수 있습니다(이미지 PDF, 글자 검색 불가).';}
   if(item.result?.substituteFamilies?.length)message+=' · 대체 글꼴: '+item.result.substituteFamilies.join(', ');
   if(item.result?.warnings?.length)message+=' · '+item.result.warnings.join(' ');
+  if(item.fontAuditMessage)message+=' · '+item.fontAuditMessage;
   if(['done','failed','cancelled'].includes(item.state)&&Number.isFinite(item._proDurationMs))message+=' · 처리시간 '+formatDuration(item._proDurationMs);
   meta.textContent=message;body.append(name,meta);
   const actions=document.createElement('div');actions.className='file-actions';
   if(item.state==='done'){
    const preview=document.createElement('button');preview.className='secondary';preview.type='button';preview.textContent='PDF 검토';preview.disabled=busy;preview.addEventListener('click',()=>show(item));actions.append(preview);
+   if(isHwp(item.file)&&['professional','mixed'].includes(item.result?.renderMode)){
+    const fontAudit=document.createElement('button');
+    fontAudit.type='button';fontAudit.className='secondary font-audit';
+    fontAudit.textContent=item._fontAuditBusy?'글꼴 검사 중':'PDF 글꼴 확인';
+    fontAudit.title='완성된 PDF의 페이지별 글꼴 리소스와 실제 내장 FontFile을 로컬에서 검사합니다. 원본 조판 동일성은 별도 검증이 필요합니다.';
+    fontAudit.disabled=busy||!!item._fontAuditBusy;
+    fontAudit.addEventListener('click',async()=>{
+     if(busy||item._fontAuditBusy||!items.includes(item))return;
+     item._fontAuditBusy=true;
+     item._fontAuditController=new AbortController();
+     const signal=item._fontAuditController.signal;
+     const sourcePdf=item.result.pdf;
+     draw();
+     try{
+      const audit=await inspectPdfFontEmbedding(sourcePdf,{signal});
+      if(signal.aborted||!items.includes(item)||item.result.pdf!==sourcePdf)return;
+      const verified=compareSelectedAndEmbedded(item.result.fontSelections?.local||[],audit);
+      const embedded=audit.fonts.filter(x=>x.embedded);
+      const confirmed=verified.filter(x=>x.embedded);
+      const unconfirmed=verified.filter(x=>!x.embedded);
+      const actualNames=embedded.slice(0,8).map(x=>x.baseName).join(', ');
+      item.fontAuditMessage='PDF 글꼴 리소스 '+audit.fonts.length+'종 중 글꼴 프로그램 내장 '+
+       embedded.length+'종 · PC 글꼴 선택 '+verified.length+'종 중 PDF 임베딩 이름 확인 '+
+       confirmed.length+'종'+(unconfirmed.length?' · 확인 불가: '+
+       unconfirmed.slice(0,5).map(x=>x.family).join(', '):'')+
+       (actualNames?' · PDF 내부 글꼴: '+actualNames:'')+
+       ' · 페이지 글꼴 리소스 검사이며 실제 모든 글자·원본 줄바꿈의 동일성은 보증하지 않습니다.';
+      status('선택한 PDF의 글꼴 프로그램 확인 완료. 결과는 해당 문서의 출력 확인에서 확인하세요.');
+     }catch(error){
+      if(!signal.aborted&&items.includes(item)){
+       item.fontAuditMessage='PDF 글꼴 확인을 완료하지 못했습니다 ('+
+        String(error?.message||error)+'). 출력 자체의 성공 판정과는 별개입니다.';
+       status('PDF 글꼴 분석 실패: '+String(error?.message||error));
+      }
+     }finally{
+      item._fontAuditBusy=false;item._fontAuditController=null;
+      if(items.includes(item)){draw();if(active===item)show(item);}
+     }
+    });
+    actions.append(fontAudit);
+   }
    const link=document.createElement('a');link.className='download';link.href=item.pdfUrl;link.download=names[index];link.textContent='다운로드';actions.append(link);
   }else if(item.state!=='invalid'){
    const select=document.createElement('button');select.className='secondary';select.type='button';select.textContent='선택';select.disabled=busy;select.addEventListener('click',()=>{show(item);status(item.file.name+' 문서를 선택했습니다.');});actions.append(select);
