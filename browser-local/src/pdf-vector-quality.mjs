@@ -58,7 +58,7 @@ export function summarizeVectorPreservation(result){
  * establish pixel equivalence to original HWP or correctness of all fonts.
  */
 export async function inspectPdfVectorQuality(pdfBlob,converted,{
- signal,maxBytes=96*1024*1024,loadPdfJs=()=>import('pdfjs-dist/build/pdf.mjs'),
+ signal,maxBytes=96*1024*1024,loadPdfJs=()=>import('pdfjs-dist/legacy/build/pdf.mjs'),
  workerSrc=null,maxPageOperators=750_000
 }={}){
  if(signal?.aborted)throw abortError();
