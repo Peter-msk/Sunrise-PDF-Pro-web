@@ -1,5 +1,5 @@
 name: DEV26 PC font PDF embedding audit QA (NO DEPLOY)
-# rerun: corrected legacy fake PostScript metadata after real SFNT fix
+# final rerun: exact PDF font matching + HWP source font comparison UI
 on:
   push:
     branches:
