@@ -1,0 +1,62 @@
+--- a/browser-local/src/svg-embedded-raster-budget.mjs
++++ b/browser-local/src/svg-embedded-raster-budget.mjs
+@@ -85,6 +85,8 @@
+   maxPixels=MAX_RASTER_PIXELS,
+   maxPageEmbeddedSourceBytes=MAX_PAGE_EMBEDDED_SOURCE_BYTES,
+   imageTimeoutMs=IMAGE_OPERATION_TIMEOUT_MS,
++  // Injectable clock keeps deadline invariants testable without host CPU timing.
++  now=Date.now,
+   // Per-image watchdogs alone may accumulate into minutes for one page.
+   // Bound the whole PNG-normalization phase, not PDF/SVG/WASM rendering.
+   pageTimeoutMs=180_000
+@@ -93,10 +95,10 @@
+   if(!Number.isFinite(imageTimeoutMs)||imageTimeoutMs<=0||
+      !Number.isFinite(pageTimeoutMs)||pageTimeoutMs<=0)
+     throw Error('PNG_IMAGE_TIMEOUT_INVALID');
+-  const pageDeadline=Date.now()+pageTimeoutMs;
++  const pageDeadline=now()+pageTimeoutMs;
+   const pageImageStep=(start,code,onLate)=>{
+     cancelled(signal);
+-    const remaining=pageDeadline-Date.now();
++    const remaining=pageDeadline-now();
+     if(remaining<=0)throw Error('PNG_EMBEDDED_PAGE_TIMEOUT');
+     const ms=Math.max(1,Math.min(imageTimeoutMs,Math.ceil(remaining)));
+     return waitForImageOperation(start(),signal,ms,
+@@ -111,7 +113,7 @@
+   let changed=false;
+   for(const image of images){
+     cancelled(signal);
+-    if(Date.now()>=pageDeadline)throw Error('PNG_EMBEDDED_PAGE_TIMEOUT');
++    if(now()>=pageDeadline)throw Error('PNG_EMBEDDED_PAGE_TIMEOUT');
+     const refs=Array.from(image.attributes).filter(a=>(a.localName||a.name.split(':').at(-1))==='href');
+     if(refs.length!==1)continue; // external/ambiguous references remain for security rejection
+     const raw=refs[0].value.trim().replace(/\s+/g,'');
+--- a/browser-local/tests/r66-page-deadline.mjs
++++ b/browser-local/tests/r66-page-deadline.mjs
+@@ -28,18 +28,20 @@
+ });
+ 
+ test('R66 cumulative per-page deadline is not N x per-image timeout',async()=>{
+- let decoded=0;
++ // Controlled logical work time proves that five PNGs cannot each obtain a
++ // fresh per-image budget. Wall-clock elapsed time is not a valid assertion in
++ // contended CI runners: a 55ms timer may be delivered hundreds of ms late.
++ let decoded=0,logicalMs=0;
+  const opts=fixture(5,{imageTimeoutMs:120,pageTimeoutMs:55,
++   now:()=>logicalMs,
+    decode:async(_blob,options)=>{
+-     decoded++;
+-     await new Promise(resolve=>setTimeout(resolve,22));
++     decoded++;logicalMs+=22;
+      return {width:options.resizeWidth,height:options.resizeHeight,close(){}};
+    }});
+- const started=Date.now();
+  await assert.rejects(normalizeEmbeddedPngSvg('<svg/>',undefined,opts),
+    /PNG_EMBEDDED_PAGE_TIMEOUT/);
+- assert.ok(Date.now()-started<200,'one page must not wait N x timeout');
+- assert.ok(decoded<=3,'do not start more image tasks after the page deadline');
++ assert.equal(decoded,3,'the shared deadline must stop the fourth image');
++ assert.equal(logicalMs,66,'the shared deadline must consume cumulative decode work');
+ });
+ 
+ test('R66 pending decoder inherits page deadline and closes late bitmap',async()=>{

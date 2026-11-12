@@ -14,6 +14,7 @@ HOTFIX='.release/DEV26_REAL_FAILURES_HOTFIX.patch'
 RECOVERY='.release/DEV26_RECURRENT_FAILURE_RECOVERY.patch'
 HYBRID='.release/DEV26_SVG_FILTER_HYBRID_OPTION.patch'
 PCFONT='.release/DEV26_PC_FONT_FIDELITY.patch'
+DEADLINE='.release/DEV26_PAGE_DEADLINE_DETERMINISTIC_FIX.patch'
 
 test "$(git hash-object "$PATCH")" = 'd8e7b953237f2930965ec7a41b3ab2470273c3da'
 echo "5821e41d655f5d87b11fcf2b4b8b7bfdec8be0f3fd5f33292211dfb7e7592d96  $PATCH" | sha256sum -c -
@@ -22,6 +23,7 @@ echo "e1d085013ab1bb78baf0a6bda5e1cffa0f38571b3a3a32e26b4de9edc2de82b3  $HOTFIX"
 echo "f5318ecd4834570c03985770981130fc7cbfbdb4da2f26709724833928c940ce  $RECOVERY" | sha256sum -c -
 echo "829530e22703943b981cc2066b12b45e30aaa38d2c29a5b79161b1ef41d3ddd5  $HYBRID" | sha256sum -c -
 echo "c8ab608b572a8eb437a4bc01cae0218e76073569470ee24c837099ed8069d9fa  $PCFONT" | sha256sum -c -
+echo "b2544907351a5363d0fc3597d8d3b23966011dd39e6ac403427ea02e55af7eed  $DEADLINE" | sha256sum -c -
 
 if git cat-file -e "$BASE^{commit}" 2>/dev/null; then
   git merge-base --is-ancestor "$BASE" HEAD
@@ -41,11 +43,14 @@ git apply --check "$HYBRID"
 git apply "$HYBRID"
 git apply --check "$PCFONT"
 git apply "$PCFONT"
+git apply --check "$DEADLINE"
+git apply "$DEADLINE"
 git diff --check
 
 test -f browser-local/tests/r66-real-failure-retry.mjs
 test -f browser-local/tests/r66-hybrid-vector-integration.mjs
 test -f browser-local/tests/r66-local-font-fidelity.mjs
+test -f browser-local/tests/r66-page-deadline.mjs
 node --version
 npm run build
 npm --prefix browser-local run verify:dist
@@ -53,4 +58,4 @@ node scripts/verify-browser-build.mjs
 node scripts/test-worker-assets.mjs
 test -s browser-local/dist/rhwp_bg.wasm
 sha256sum browser-local/dist/rhwp_bg.wasm
-printf '%s\n' 'DEV26 LOCAL FONT FIDELITY + HYBRID BUILD & FULL TEST PASS'
+printf '%s\n' 'DEV26 FONT + HYBRID + DETERMINISTIC DEADLINE RELEASE GATE PASS'
