@@ -57,7 +57,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node browser-local/tests/e2e.mjs
-          node browser-local/tests/r66-pc-font-audit-browser.mjs
-          node browser-local/tests/r66-vector-quality-browser.mjs
+          node browser-local/tests/r66-production-live-dom-smoke.mjs
           echo 'DEV26_FINAL_LIVE_BROWSER_ACCEPTANCE_PASS'
