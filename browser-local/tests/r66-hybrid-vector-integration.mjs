@@ -62,3 +62,60 @@ test('filter-only hybrid never rasterizes unrelated unsupported SVG feature',asy
   assert.equal(stats.imagePages,0);
  }finally{cleanup();}
 });
+
+
+test('PDFKit dispose failure never masks the primary stream timeout or publishes partial output',async()=>{
+ const cleanup=mockDOM();
+ try{
+  let closed=0,aborted=0;
+  class PDFDocument{
+   addPage(){return this;}
+   end(){} // Simulate a writer whose final end event never fires.
+   destroy(){closed++;throw Error('PDFKIT_DESTROY_FAILURE');}
+  }
+  const loader=async()=>({
+   PDFDocument,Helvetica:{},registerStdFonts:()=>{},
+   SVGtoPDF:()=>{},
+   toBlob:(_pdf,signal)=>new Promise((_resolve,reject)=>{
+    signal.addEventListener('abort',()=>{
+     aborted++;reject(new DOMException('stopped','AbortError'));
+    },{once:true});
+   })
+  });
+  await assert.rejects(tryProfessionalDocument({
+   renderPageSvgWithProfile:()=>good
+  },1,{
+   checkedSvg:async input=>({svg:input,width:816,height:1056}),
+   rasterPage:async()=>{throw Error('NO_RASTER');},
+   loadLibraries:loader,finalizeTimeoutMs:20
+  }),/PDF_STREAM_TIMEOUT/);
+  assert.equal(closed,1,'faulty writer must still be disposed');
+  assert.equal(aborted,1,'collector must be aborted on timeout');
+ }finally{cleanup();}
+});
+
+test('PDFKit dispose failure cannot mask a rejected SVG before PDF publication',async()=>{
+ const cleanup=mockDOM();
+ try{
+  let closed=0;
+  class PDFDocument{
+   addPage(){return this;}
+   end(){}
+   destroy(){closed++;throw Error('PDFKIT_DESTROY_FAILURE');}
+  }
+  const loader=async()=>({
+   PDFDocument,Helvetica:{},registerStdFonts:()=>{},SVGtoPDF:()=>{},
+   toBlob:(_pdf,signal)=>new Promise((_resolve,reject)=>{
+    signal.addEventListener('abort',()=>reject(new DOMException('stopped','AbortError')),{once:true});
+   })
+  });
+  await assert.rejects(tryProfessionalDocument({
+   renderPageSvgWithProfile:()=>good
+  },1,{
+   checkedSvg:async()=>{throw Error('SVG_FILTER_EFFECT_UNSUPPORTED');},
+   rasterPage:async()=>{throw Error('NO_RASTER');},
+   loadLibraries:loader
+  }),/SVG_FILTER_EFFECT_UNSUPPORTED/);
+  assert.equal(closed,1);
+ }finally{cleanup();}
+});
