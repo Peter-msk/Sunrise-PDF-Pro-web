@@ -40,3 +40,16 @@ export function planConversion(items,selectedEngine,requestedRecovery=null) {
  return {pending:items.filter(item=>['ready','failed','cancelled'].includes(item.state)),
   engine:selectedEngine,recovery:false,cause:null};
 }
+
+/** An explicit user click may recover several failed HWP/HWPX files at once.
+ * No ready/cancelled/done file is included; each failure keeps its own least-
+ * destructive engine choice. Never change the default professional engine.
+ */
+export function planBulkRecovery(items) {
+ if(!Array.isArray(items))throw Error('CONVERSION_QUEUE_INVALID');
+ const targets=items.filter(canRecoverFile).map(item=>({
+  item,engine:recoveryEngine(item),cause:recoveryCode(item.error)
+ }));
+ return {pending:targets.map(target=>target.item),engine:null,
+  recovery:targets.length>0,bulk:true,targets};
+}
