@@ -1,5 +1,5 @@
 name: DEV26 SVG complex table and vector PDF QA (NO DEPLOY)
-# final rerun: matching legacy PDF.js main and worker supports current Chromium without new Map API
+# final full rerun: explicitly allowlisted legacy worker served through local Cloudflare assets
 on:
   push:
     branches:
