@@ -72,6 +72,20 @@ test('loaded font retains real PostScript identity for PDF and source-font compa
  assert.equal(loaded.faces[0].postscriptName,postscript);
  assert.equal(loaded.faces[0].bold,false);
 });
+test('single-face PC TTF never receives a TTC selector, and mismatched PostScript names are rejected',async()=>{
+ const seen=[];
+ const parser={create(_bytes,...extra){
+  seen.push(extra);
+  return {familyName:'Nanum Gothic',fullName:'Nanum Gothic',
+   postscriptName:postscript,subfamilyName:'Regular',characterSet:[0xac00,65]};
+ }};
+ const file=new File([regular],'local-font.ttf');
+ const correct=await loadPdfFonts([file],parser,undefined,{postscriptName:postscript});
+ assert.equal(correct.faces[0].postscriptName,postscript);
+ assert.deepEqual(seen,[[]],'non-TTC must never receive fontkit collection selector');
+ await assert.rejects(loadPdfFonts([file],parser,undefined,
+  {postscriptName:'WrongDifferentFace'}),/PC_FONT_SINGLE_FACE_MISMATCH/);
+});
 test('TTC exact PDF face never masquerades as same browser FontFace for measurement',async()=>{
  let created=0,loaded=0;
  class FakeFace{
