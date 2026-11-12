@@ -33,11 +33,11 @@
 ## 3. 코드 및 검증
 
 - `browser-local/src/svg-safe-grayscale.mjs`: CSS 완전 회색조 추가, 색상 행렬/함수별 identity 판정, 오염 가능한 그룹·영역/알파·외곽선/복합 효과 배제, URL·href 참조 정밀 검사.
-- `browser-local/tests/r66-svg-filter-vector-safe.mjs`: 유형·실패·보안·취소·실제 PDFKit PDF 유효성을 포함한 **22개** 신규 결정적 회귀 케이스.
+- `browser-local/tests/r66-svg-filter-vector-safe.mjs`: 유형·실패·보안·취소·실제 PDFKit PDF 유효성을 포함한 **23개** 신규 결정적 회귀 케이스.
 - `browser-local/package.json`: 정규 `npm test` 실행에 신규 회귀 파일 등록.
 - GitHub Actions 원샷 QA:
   <https://github.com/Peter-msk/Sunrise-PDF-Pro-web/actions/runs/43209997465>.
-  결과 **52/52 PASS, FAIL 0, SKIP 0**; Vite/WASM, 소스 검사 및 Worker 정적 파일 검사 PASS.
+  1차 결과 **52/52 PASS, FAIL 0, SKIP 0**. 최종 정밀감사에서 근사 항등/16진수 SVG 수치 방지 회귀 1개를 추가해 별도 검증한다; Vite/WASM, 소스 검사 및 Worker 정적 파일 검사 PASS.
 - 신규 검증 중 PDFKit으로 작성한 PDF가 PDF 파서에 열리고, 벡터 콘텐츠에서 불필요한 이미지 XObject가 발생하지 않는지 점검.
 - 기존 명시적 `hybrid-filter`와 `compat-raster`를 자동 수행하지 않으며, 그 UI/엔진·텔레메트리 설정과 Worker/관리자 소스는 건드리지 않았다.
 
