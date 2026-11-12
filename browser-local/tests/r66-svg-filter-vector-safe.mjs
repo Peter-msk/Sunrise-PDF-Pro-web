@@ -5,6 +5,9 @@ import {JSDOM} from 'jsdom';
 import {normalizeSvgGrayscale,identifyIdentitySvgFilter} from '../src/svg-safe-grayscale.mjs';
 import {preflightProfessionalSvg} from '../src/svg-professional.js';
 import {parseSafeSvg} from '../src/svg-security.js';
+import PDFKit from '../node_modules/pdfkit/js/pdfkit.standalone.js';
+import SVGtoPDF from 'svg-to-pdfkit';
+import {PDFDocument as PdfLibDocument} from 'pdf-lib';
 
 const svg=body=>'<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80">'+body+'</svg>';
 const rect=(extra='')=>'<rect x="10" y="10" width="80" height="50" fill="#ff0000" '+extra+'/>';
@@ -143,4 +146,26 @@ test('active event handlers remain rejected at the downstream SVG trust boundary
 test('already aborted conversion never publishes a partial rewrite',()=>dom(async()=>{
  const signal=new AbortController();signal.abort();
  await assert.rejects(normalizeSvgGrayscale(svg(rect('filter="saturate(0)"')),signal.signal),e=>e.name==='AbortError');
+}));
+
+test('actual PDFKit output retains vector fill and valid page geometry after identity removal',()=>dom(async()=>{
+ const input=svg(def(color('saturate','values="1"'))+rect('filter="url(#effect)"'));
+ const out=await normalize(input);
+ vector(out);
+ const pdf=new PDFKit({autoFirstPage:false,margin:0,compress:false});
+ const chunks=[],done=new Promise((resolve,reject)=>{
+  pdf.on('data',data=>chunks.push(data));pdf.on('end',resolve);pdf.on('error',reject);
+ });
+ pdf.addPage({size:[90,60],margin:0});
+ const warnings=[];
+ SVGtoPDF(pdf,out.svg,0,0,{width:90,height:60,assumePt:false,
+  warningCallback:message=>warnings.push(String(message))});
+ pdf.end();
+ await done;
+ assert.deepEqual(warnings,[]);
+ const bytes=Buffer.concat(chunks);
+ const inspected=await PdfLibDocument.load(bytes);
+ assert.equal(inspected.getPageCount(),1);
+ assert.doesNotMatch(bytes.toString('latin1'),/\/Subtype\s*\/Image\b/);
+ assert.match(bytes.toString('latin1'),/^%PDF-/);
 }));
