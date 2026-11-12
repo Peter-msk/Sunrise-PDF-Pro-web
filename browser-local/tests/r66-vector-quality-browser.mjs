@@ -39,6 +39,7 @@ try{
  const result=await page.locator('#file-list').innerText();
  assert.match(result,/PDF 구조 검증 통과/);
  assert.match(result,/페이지 기준 벡터 보존/);
+ assert.match(result,/추출 글자/);
  assert.match(result,/벡터/);
  assert.match(result,/그림|이미지/);
  assert.doesNotMatch(result,/완료하지 못했습니다/);
