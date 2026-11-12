@@ -42,19 +42,19 @@ jobs:
           mkdir -p r29-browser-fixtures
           curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
           curl -fLSs --retry 3 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
-      - name: Local-only Vite browser test server
+      - name: Local-only Cloudflare Worker with telemetry endpoint (NO DEPLOY)
         run: |
           set -euo pipefail
-          (cd browser-local && node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4173 --strictPort >/tmp/dev26-pdf-stream-vite.log 2>&1 &)
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 >/tmp/dev26-pdf-stream-worker.log 2>&1 &
           for i in $(seq 1 90); do
-            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            if curl -fsS http://127.0.0.1:8787/local/health >/dev/null; then exit 0; fi
             sleep 1
           done
-          cat /tmp/dev26-pdf-stream-vite.log
+          cat /tmp/dev26-pdf-stream-worker.log
           exit 1
       - name: Real Chromium HWP/HWPX individual PDF plus ZIP E2E
         env:
-          SUNRISE_TEST_URL: http://127.0.0.1:4173/
+          SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
         run: node browser-local/tests/e2e.mjs
       - name: No deployment performed
         run: echo DEV26_PDF_STREAM_ROOT_DIAGNOSTICS_NO_DEPLOY_PASS
