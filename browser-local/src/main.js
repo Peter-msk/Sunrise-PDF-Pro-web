@@ -260,22 +260,28 @@ function draw(){
     $('convert').click();
    });
    actions.append(recover);
-   // The native browser print renderer is independent of svg-to-pdfkit.
-   // A direct user click is required. It does not mutate the failed-file PDF.
-   if(recoveryCode(item.error)==='SVG_FILTER_EFFECT_UNSUPPORTED'){
+  }
+   // Chrome/Edge printing can recover a failed vector PDF caused by a
+   // missing glyph or unsupported SVG effect. This is always user-triggered;
+   // no inferred font replacement, raster downgrade, or success status.
+   const nativePrintableError=item.state==='failed'&&isHwp(item.file)&&
+    (recoveryCode(item.error)==='SVG_FILTER_EFFECT_UNSUPPORTED'||
+     /\bFONT_GLYPH_MISSING\b/.test(item.error||''));
+   if(nativePrintableError){
     const native=document.createElement('button');
     native.type='button';native.className='secondary native-print-recovery';
     native.textContent='브라우저 PDF 인쇄 준비';
-    native.title='이 파일만 Chrome/Edge의 SVG 인쇄 경로로 준비합니다. 인쇄 대화상자에서 PDF로 저장을 직접 선택하세요. 일부 효과는 이미지화되거나 글꼴·배치가 달라질 수 있으니 원본과 대조하세요.';
+    native.title='Chrome/Edge 인쇄 방식으로 준비합니다. 글꼴 부족 시 다른 글꼴로 보일 수 있고 일부 SVG 효과는 이미지화될 수 있습니다. PDF 저장 후 모든 페이지의 글꼴·표·그림을 원본과 반드시 대조하세요.';
     native.disabled=busy||!ready;
     native.addEventListener('click',()=>{
-     if(busy||!ready||!items.includes(item)||!canRecoverFile(item))return;
+     if(busy||!ready||!items.includes(item)||item.state!=='failed'||!isHwp(item.file)||
+      !(recoveryCode(item.error)==='SVG_FILTER_EFFECT_UNSUPPORTED'||
+        /\bFONT_GLYPH_MISSING\b/.test(item.error||'')))return;
      show(item);
      $('print-prepare').click();
     });
     actions.append(native);
    }
-  }
   if(printJob&&active===item&&!busy){
    const print=document.createElement('button');
    print.type='button';print.className='secondary native-print-save';
