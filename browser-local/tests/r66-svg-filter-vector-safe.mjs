@@ -196,3 +196,60 @@ test('near-identity and hexadecimal SVG matrix entries never drop a real effect'
   await assert.rejects(normalize(input),/SVG_FILTER_EFFECT_UNSUPPORTED/,values);
  }
 }));
+
+
+test('DEV27 full grayscale plus zero-effect CSS chain remains vector and accurately desaturated',()=>dom(async()=>{
+ const cases=[
+  'grayscale(100%) brightness(1)',
+  'contrast(100%) saturate(0%)',
+  'opacity(1) grayscale() invert(0)',
+  'saturate(100%) brightness(1) grayscale(1) sepia(0)',
+  'grayscale(1) hue-rotate(0deg) contrast(1)'
+ ];
+ for(const chain of cases){
+  const out=await normalize(svg(rect('filter="'+chain+'"')));
+  vector(out);
+  assert.match(out.svg,/fill="#363636"/,chain);
+  assert.equal(out.filtersApplied,1,chain);
+  assert.equal(out.imagesChanged,0,chain);
+ }
+}));
+
+test('DEV27 effective colour/shadow effects remain fail-closed despite adjacent identities',()=>dom(async()=>{
+ const unsafe=[
+  'grayscale(1) blur(1px)',
+  'brightness(1) grayscale(1) opacity(0.9)',
+  'grayscale(1) drop-shadow(0px 1px 1px black)',
+  'grayscale(1) sepia(1)',
+  'grayscale(1) saturate(0.5)',
+  'grayscale(1) grayscale(1)',
+  'url(#external) grayscale(1)',
+  'grayscale(1) brightness(1) brightness(1) brightness(1) brightness(1) brightness(1) brightness(1) brightness(1) brightness(1)'
+ ];
+ for(const filter of unsafe){
+  await assert.rejects(normalize(svg(rect('filter="'+filter+'"'))),error=>
+   error.message==='SVG_FILTER_EFFECT_UNSUPPORTED'&&error.filterCategory==='css-or-external',filter);
+ }
+}));
+
+test('DEV27 filter diagnostics are finite local-only categories without original SVG text',()=>dom(async()=>{
+ const defs=[
+  ['<feGaussianBlur stdDeviation="3"/>','blur'],
+  ['<feBlend in="SourceGraphic" in2="BackgroundImage"/>','blend'],
+  ['<feComposite operator="arithmetic" k1="1"/>','composite'],
+  ['<feDisplacementMap scale="2"/>','displacement'],
+  ['<feColorMatrix type="saturate" values="0.5"/>','other-primitive'],
+  ['<feGaussianBlur stdDeviation="1"/><feGaussianBlur stdDeviation="2"/>','multi-primitive']
+ ];
+ for(const [fx,category] of defs){
+  await assert.rejects(normalize(svg(def(fx)+rect('filter="url(#effect)"'))),error=>
+   error.message==='SVG_FILTER_EFFECT_UNSUPPORTED'&&
+   error.filterCategory===category&&
+   !String(error).includes('effect')&&!String(error).includes('stdDeviation'),category);
+ }
+ await assert.rejects(normalize(svg(rect('filter="url(#unavailable)"'))),error=>
+  error.filterCategory==='missing-definition'&&error.message==='SVG_FILTER_EFFECT_UNSUPPORTED');
+ await assert.rejects(normalize(svg(def(color('matrix','values="'+matrix+'"'))+
+  '<g filter="url(#effect)">'+rect()+'</g>')),error=>
+  error.filterCategory==='unsafe-identity-target');
+}));
