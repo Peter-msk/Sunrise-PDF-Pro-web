@@ -1,0 +1,48 @@
+name: DEV27 external HWP converters public UI and sample smoke (NO DEPLOY)
+on:
+  push:
+    branches:
+      - dev/dev27-p0-baseline-audit-20261113
+    paths:
+      - .github/workflows/dev27-competitor-public-probe.yml
+permissions:
+  contents: read
+concurrency:
+  group: dev27-competitor-one-shot
+  cancel-in-progress: true
+jobs:
+  public-sites:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Validate one-shot public probing script
+        run: node --check browser-local/tests/dev27-competitor-public-probe.mjs
+      - name: Install pinned existing test dependencies
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Install Chromium
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Fetch publicly released non-user test samples
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Inspect only public UI; limit to one local-file conversion per site
+        run: node browser-local/tests/dev27-competitor-public-probe.mjs
+      - name: Preserve reduced public UI/probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev27-public-competitor-ui-evidence
+          path: competitor-public-evidence/COMPETITOR_PUBLIC_BROWSER_PROBE.json
+          if-no-files-found: warn
+          retention-days: 7
