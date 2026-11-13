@@ -1,5 +1,5 @@
 name: DEV27 one-public-HWP PDF structural parity (NO DEPLOY)
-# Retry uses download-event-before-file-selection for third-party auto-export.
+# Scoped rerun: PDF.js releases resources through loadingTask.destroy(), not PDFDocumentProxy.destroy().
 on:
   push:
     branches:
