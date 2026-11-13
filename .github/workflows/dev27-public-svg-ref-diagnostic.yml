@@ -1,5 +1,5 @@
 name: DEV27 public HWPX SVG reference failure classification (NO DEPLOY)
-# Rerun bounded nested SVG diagnostic after test-only regex syntax correction.
+# Diagnose whether public HWPX embedded SVG base64 grammar matches the existing strict validator.
 on:
   push:
     branches:
