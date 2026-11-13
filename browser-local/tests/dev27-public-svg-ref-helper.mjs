@@ -9,7 +9,14 @@ const MAX_PAGES=40;
 function kind(value){
  const v=String(value||'').trim();
  if(v.startsWith('#'))return 'local-ref';
- if(/^data:image\/svg\+xml[;,]/i.test(v))return 'data-svg';
+ if(/^data:image\/svg\+xml[;,]/i.test(v)){
+  const comma=v.indexOf(',');
+  const head=comma>=0?v.slice(0,comma).toLowerCase():'missing-comma';
+  if(head==='data:image/svg+xml;base64')return 'data-svg-base64-exact';
+  if(head.includes(';base64'))return 'data-svg-base64-with-parameters';
+  if(head.includes(';utf8')||head.includes('charset='))return 'data-svg-utf8-or-encoded';
+  return 'data-svg-other-encoding';
+ }
  if(/^data:image\/png[;,]/i.test(v))return 'data-png';
  if(/^data:image\/jpeg[;,]/i.test(v))return 'data-jpeg';
  if(/^data:image\/gif[;,]/i.test(v))return 'data-gif';
