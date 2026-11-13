@@ -81,7 +81,7 @@ try{
    }else{
     await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('변환 준비 완료'),
        null,{timeout:90000});
-    await page.locator('#source').setInputFiles({name:'genuine.hwp',
+    await page.locator('#source').setInputFiles({name:'genuine.'+fixtureExt,
      mimeType:'application/octet-stream',buffer:specimen});
     await page.locator('#convert').click();
     await page.waitForFunction(()=>{
