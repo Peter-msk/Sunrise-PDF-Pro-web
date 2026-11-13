@@ -1,0 +1,59 @@
+name: DEV27 HWPX same public file NextOffice vs Sunrise (NO DEPLOY)
+on:
+  push:
+    branches:
+      - dev/dev27-p0-baseline-audit-20261113
+    paths:
+      - .github/workflows/dev27-public-hwpx-parity.yml
+permissions:
+  contents: read
+concurrency:
+  group: dev27-public-hwpx-one-shot
+  cancel-in-progress: true
+jobs:
+  hwpx-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Verify targeted reusable parity harness
+        run: node --check browser-local/tests/dev27-public-parity.mjs
+      - name: Install pinned test dependencies
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Chromium only
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Fetch public HWPX only
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Start isolated Sunrise local Vite, no Worker deployment
+        run: |
+          set -euo pipefail
+          npm --prefix browser-local run dev -- --port 4174 >/tmp/dev27-hwpx-vite.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dev27-hwpx-vite.log
+          exit 1
+      - name: Compare actual HWPX PDF structure; public sample only
+        env:
+          DEV27_PUBLIC_FIXTURE_EXT: hwpx
+        run: node browser-local/tests/dev27-public-parity.mjs
+      - name: Preserve reduced HWPX structure metrics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev27-public-hwpx-parity
+          path: competitor-public-evidence/DEV27_PUBLIC_HWPX_PDF_PARITY.json
+          if-no-files-found: warn
+          retention-days: 7
