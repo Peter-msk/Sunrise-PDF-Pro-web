@@ -108,6 +108,6 @@ test('DEV27 identical aliases still reject scripts and external URLs inside nest
   const payload=data(wrap(dangerous));
   const src=wrap('<image xmlns:xlink="http://www.w3.org/1999/xlink" '+
    'x="20" y="20" width="80" height="60" href="'+payload+'" xlink:href="'+payload+'"/>');
-  assert.throws(()=>parseDocumentSvg(src),/허용되지 않는/);
+  assert.throws(()=>parseDocumentSvg(src),/허용되지 않/);
  }
 });
