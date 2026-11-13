@@ -60,7 +60,15 @@ export function parseDocumentSvg(source,parser=new DOMParser()){
   if(!styles.ok)throw Error('SVG 그림 스타일을 보존할 수 없습니다 ('+styles.reason+').');
   for(const image of Array.from(root.querySelectorAll('image'))){
    const refs=Array.from(image.attributes).filter(a=>(a.localName||a.name.split(':').at(-1))==='href');
-   const match=refs.length===1?DATA.exec(refs[0].value.trim()):null;
+   // Some HWPX SVG drawings supply both SVG2 href and legacy xlink:href.
+   // Expand only if these two namespaced aliases are byte-for-byte identical.
+   // Conflicting sources still pass into parseSafeSvg and fail closed.
+   const XLINK='http://www.w3.org/1999/xlink';
+   const sameAlias=refs.length===2&&refs[0].value.trim()===refs[1].value.trim()&&
+    refs.some(a=>a.namespaceURI===XLINK)&&refs.some(a=>a.namespaceURI===null);
+   const sourceRef=refs.length===1?refs[0].value.trim():
+    sameAlias?refs[0].value.trim():null;
+   const match=sourceRef?DATA.exec(sourceRef):null;
    if(!match)continue; // All other references go through the existing trust boundary.
    for(let ancestor=image;ancestor;ancestor=ancestor.parentElement){
     if(/^(hidden|collapse)$/.test(ancestor.getAttribute('visibility')||'')||
