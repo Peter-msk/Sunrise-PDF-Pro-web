@@ -1,5 +1,5 @@
 name: DEV27 real HWP HWPX native print recovery UI (NO DEPLOY)
-# Real Chromium UI, real published HWP/HWPX fixtures, injected PDFKit error only.
+# Real Chromium UI, public HWP/HWPX; rerun with exact filename assertions to avoid prefix collision.
 on:
   push:
     branches:
