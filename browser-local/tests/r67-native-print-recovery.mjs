@@ -27,6 +27,8 @@ test('SVG failure exposes opt-in browser print prepare then separate print/save 
  const src=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const print=readFileSync(new URL('../src/native-print.js',import.meta.url),'utf8');
  assert.match(src,/recoveryCode\(item\.error\)==='SVG_FILTER_EFFECT_UNSUPPORTED'/);
+ assert.match(src,/\\bFONT_GLYPH_MISSING\\b/);
+ assert.match(src,/item\.state==='failed'&&isHwp\(item\.file\)/);
  assert.match(src,/native\.className='secondary native-print-recovery'/);
  assert.match(src,/show\(item\);\s*\$\('print-prepare'\)\.click\(\)/);
  assert.match(src,/if\(printJob&&active===item&&!busy\)/);
