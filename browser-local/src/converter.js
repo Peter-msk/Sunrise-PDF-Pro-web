@@ -215,8 +215,24 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
          :async s=>({svg:s,filtersApplied:0,imagesChanged:0}),
        checkedSvg,{hybrid:options.engine==='hybrid-filter'});}
      catch(error){
-      if(String(error?.message||error)==='SVG_FILTER_EFFECT_UNSUPPORTED')
-       throw Error((meta.page||1)+'쪽에서 미지원 SVG 필터가 발견됐습니다 (SVG_FILTER_EFFECT_UNSUPPORTED). 혼합 출력 또는 이미지 PDF를 명시적으로 선택하세요.');
+      if(String(error?.message||error)==='SVG_FILTER_EFFECT_UNSUPPORTED'){
+       // A local-only, fixed-category diagnostic. Do not report SVG markup,
+       // CSS values, filter IDs or source text to Cloudflare telemetry.
+       const names={
+        'unsafe-identity-target':'합성·불투명도·클리핑 안전성',
+        'css-or-external':'미지원 CSS 또는 외부 필터 참조',
+        'missing-definition':'필터 정의 없음',
+        'multi-primitive':'복합 필터 체인',
+        'blur':'흐림 또는 그림자',
+        'blend':'색상 혼합',
+        'composite':'합성',
+        'displacement':'위치 변형',
+        'other-primitive':'기타 SVG 필터 효과'
+       };
+       const category=Object.hasOwn(names,error?.filterCategory)
+         ?names[error.filterCategory]:'미확인 효과';
+       throw Error((meta.page||1)+'쪽에서 미지원 SVG 필터가 발견됐습니다 (SVG_FILTER_EFFECT_UNSUPPORTED; 분류: '+category+'). 혼합 출력 또는 이미지 PDF를 명시적으로 선택하세요.');
+      }
       throw error;
      }
      if(normalized.stats.filtersApplied)svgFilterStats.push(normalized.stats);
