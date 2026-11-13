@@ -69,7 +69,8 @@ try{
  const printFrame=page.locator('iframe[title="Sunrise PDF PRO 벡터 PDF 인쇄용 문서"]');
  for(const [idx,ext] of fixtureExts.entries()){
   const filename='genuine.'+ext;
-  const row=page.locator('.file-row').filter({hasText:filename});
+  const row=page.locator('.file-row').nth(idx);
+  assert.equal(await row.locator('.file-name').innerText(),filename);
   await row.locator('.native-print-recovery').click();
   await page.waitForFunction(()=>{
    const status=document.getElementById('status')?.textContent||'';
@@ -100,7 +101,8 @@ try{
    assert.equal(await page.locator('#failed-count').innerText(),'2');
   });
   if(idx===0){
-   const second=page.locator('.file-row').filter({hasText:'genuine.hwpx'});
+   const second=page.locator('.file-row').nth(1);
+   assert.equal(await second.locator('.file-name').innerText(),'genuine.hwpx');
    await second.getByRole('button',{name:'선택',exact:true}).click();
    await step('switching from HWP to HWPX destroys stale HWP print frame',async()=>{
     assert.equal(await printFrame.count(),0);
