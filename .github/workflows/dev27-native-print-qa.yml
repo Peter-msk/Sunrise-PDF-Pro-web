@@ -1,4 +1,5 @@
 name: DEV27 native browser PDF print for failed SVG (NO DEPLOY)
+# Recheck with display:block matching production native-print iframe's SVG layout.
 on:
   push:
     branches:
