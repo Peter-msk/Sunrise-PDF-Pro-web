@@ -85,3 +85,29 @@ test('real PDF keeps two differently colored embedded SVG pictures as vectors wi
   assert.deepEqual(pixel(50,23),[255,255,255]);assert.deepEqual(pixel(50,77),[255,255,255]);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('DEV27 identical href and xlink:href aliases inline one SVG picture without rasterizing',()=>{
+ const payload=data(picture('#cc0000'));
+ const embedded=wrap('<image xmlns:xlink="http://www.w3.org/1999/xlink" '+
+  'x="20" y="20" width="80" height="60" href="'+payload+'" xlink:href="'+payload+'"/>');
+ const result=parseDocumentSvg(embedded);
+ assert.equal(result.querySelectorAll('image').length,0);
+ assert.ok(result.querySelector('g>svg>svg>rect'));
+ assert.equal(preflightProfessionalSvg({svg:xml(result),width:240,height:120}).ok,true);
+});
+
+test('DEV27 conflicting href/xlink:href pictures remain rejected, never choose one silently',()=>{
+ const one=data(picture('#cc0000')),other=data(picture('#00cc00'));
+ const src=wrap('<image xmlns:xlink="http://www.w3.org/1999/xlink" '+
+  'x="20" y="20" width="80" height="60" href="'+one+'" xlink:href="'+other+'"/>');
+ assert.throws(()=>parseDocumentSvg(src),/외부 자원 참조/);
+});
+
+test('DEV27 identical aliases still reject scripts and external URLs inside nested SVG',()=>{
+ for(const dangerous of ['<script/>','<image href="https://example.test/remote.png"/>']){
+  const payload=data(wrap(dangerous));
+  const src=wrap('<image xmlns:xlink="http://www.w3.org/1999/xlink" '+
+   'x="20" y="20" width="80" height="60" href="'+payload+'" xlink:href="'+payload+'"/>');
+  assert.throws(()=>parseDocumentSvg(src),/허용되지 않/);
+ }
+});

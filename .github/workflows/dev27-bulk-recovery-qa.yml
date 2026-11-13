@@ -1,0 +1,30 @@
+name: DEV27 P0 failed-only SVG recovery targeted QA (NO DEPLOY)
+# Targeted retry after updating the prior single-file source-contract assertion.
+on:
+  push:
+    branches:
+      - dev/dev27-p0-baseline-audit-20261113
+    paths:
+      - .github/workflows/dev27-bulk-recovery-qa.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dev27-bulk-recovery-targeted-qa
+  cancel-in-progress: true
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: JavaScript syntax (changed files only)
+        run: |
+          node --check browser-local/src/conversion-recovery.mjs
+          node --check browser-local/src/main.js
+          node --check browser-local/tests/r67-bulk-recovery.mjs
+      - name: Existing recovery contract + 25-item batch targeted tests
+        run: node --test browser-local/tests/r66-real-failure-retry.mjs browser-local/tests/r67-bulk-recovery.mjs

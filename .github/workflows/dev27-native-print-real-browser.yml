@@ -1,0 +1,63 @@
+name: DEV27 real HWP HWPX native print recovery UI (NO DEPLOY)
+# Final scoped recheck: preserve same-file frame, remove stale row button, and open options before select.
+on:
+  push:
+    branches:
+      - dev/dev27-p0-baseline-audit-20261113
+    paths:
+      - .github/workflows/dev27-native-print-real-browser.yml
+permissions:
+  contents: read
+concurrency:
+  group: dev27-native-print-real-browser
+  cancel-in-progress: true
+jobs:
+  focused-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Syntax targeted changes
+        run: |
+          node --check browser-local/src/main.js
+          node --check browser-local/tests/dev27-native-print-real-browser.mjs
+      - name: Install pinned local dependencies
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Chromium for real UI
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Fetch both publicly versioned HWP and HWPX fixtures
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Start isolated dev server with local rhwp WASM
+        run: |
+          set -euo pipefail
+          npm --prefix browser-local run dev -- --port 4174 >/tmp/dev27-native-print-ui.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dev27-native-print-ui.log
+          exit 1
+      - name: Real UI recovery from faulted professional into actual native SVG print frame
+        env:
+          SUNRISE_RECOVERY_UI_URL: http://127.0.0.1:4174/
+        run: node browser-local/tests/dev27-native-print-real-browser.mjs
+      - name: Preserve redacted QA evidence on pass or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev27-native-print-real-browser
+          path: r29-browser-real-evidence/DEV27_NATIVE_PRINT_REAL_BROWSER.json
+          if-no-files-found: warn
+          retention-days: 7

@@ -1,0 +1,32 @@
+name: DEV27 identical SVG href xlink aliases targeted QA (NO DEPLOY)
+# Rerun after matching both existing Korean security error variants in assertions.
+on:
+  push:
+    branches:
+      - dev/dev27-p0-baseline-audit-20261113
+    paths:
+      - .github/workflows/dev27-svg-dual-href-qa.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Modified SVG security parser and regression syntax
+        run: |
+          node --check browser-local/src/svg-embedded.js
+          node --check browser-local/tests/svg-embedded.mjs
+      - name: Existing dependency lock
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Embedded SVG vector output, conflict and active-content refusal
+        run: node --test browser-local/tests/svg-embedded.mjs

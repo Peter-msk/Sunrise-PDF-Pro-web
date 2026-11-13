@@ -1,0 +1,37 @@
+name: DEV27 native browser PDF print for failed SVG (NO DEPLOY)
+# Recheck with display:block matching production native-print iframe's SVG layout.
+on:
+  push:
+    branches:
+      - dev/dev27-p0-baseline-audit-20261113
+    paths:
+      - .github/workflows/dev27-native-print-qa.yml
+permissions:
+  contents: read
+concurrency:
+  group: dev27-native-print-targeted
+  cancel-in-progress: true
+jobs:
+  browser-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Syntax of modified UI and proof tests
+        run: |
+          node --check browser-local/src/main.js
+          node --check browser-local/tests/r67-native-print-recovery.mjs
+      - name: Pinned browser-local dependencies
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Chromium headless (native PDF output)
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Narrow native-print and existing one-file recovery contracts
+        run: node --test browser-local/tests/r67-native-print-recovery.mjs browser-local/tests/r66-real-failure-retry.mjs browser-local/tests/r67-bulk-recovery.mjs

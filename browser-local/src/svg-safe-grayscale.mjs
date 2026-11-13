@@ -22,7 +22,7 @@ const PIXELS_PER_TICK=131_072;
 const LOCAL_FILTER=/^url\(\s*['"]?#([A-Za-z_][\w.-]*)['"]?\s*\)$/;
 // CSS grayscale() defaults to 100%; saturate(0) is the same fully desaturated
 // sRGB matrix. Do not broaden this to partial saturation or hue rotation.
-const CSS_GRAY=/^(?:grayscale\(\s*(?:1(?:\.0+)?|100%)?\s*\)|saturate\(\s*(?:0(?:\.0+)?|0%)\s*\))$/i;
+const CSS_FULL_GRAY_TOKEN=/\s*(?:grayscale\(\s*(?:1(?:\.0+)?|100%)?\s*\)|saturate\(\s*(?:0(?:\.0+)?|0%)\s*\))\s*/giy;
 // Only a strict list of provably no-op CSS filter functions can be removed.
 // Each function is checked independently; no urls, variables or mixed effects.
 const CSS_IDENTITY_TOKEN=/\s*(?:grayscale\(\s*(?:0(?:\.0+)?|0%)\s*\)|saturate\(\s*(?:1(?:\.0+)?|100%)?\s*\)|brightness\(\s*(?:1(?:\.0+)?|100%)?\s*\)|contrast\(\s*(?:1(?:\.0+)?|100%)?\s*\)|opacity\(\s*(?:1(?:\.0+)?|100%)?\s*\)|invert\(\s*(?:0(?:\.0+)?|0%)\s*\)|sepia\(\s*(?:0(?:\.0+)?|0%)\s*\)|hue-rotate\(\s*(?:0(?:\.0+)?(?:deg|rad|turn)?)?\s*\))\s*/giy;
@@ -36,11 +36,50 @@ function isCssIdentityFilter(value){
  }
  return n>0;
 }
+/** A full grayscale effect may be surrounded by provably identity CSS functions.
+ * One real effect and at most seven independent identities. Never erase blur,
+ * shadows, partial opacity, colour changes, URL filters or unknown functions.
+ */
+function isSafeCssGrayscaleSequence(value){
+ let at=0,functions=0,grays=0;
+ while(at<value.length){
+  CSS_FULL_GRAY_TOKEN.lastIndex=at;
+  const gray=CSS_FULL_GRAY_TOKEN.exec(value);
+  if(gray&&gray.index===at){
+   grays++;at=CSS_FULL_GRAY_TOKEN.lastIndex;
+  }else{
+   CSS_IDENTITY_TOKEN.lastIndex=at;
+   const noop=CSS_IDENTITY_TOKEN.exec(value);
+   if(!noop||noop.index!==at)return false;
+   at=CSS_IDENTITY_TOKEN.lastIndex;
+  }
+  if(++functions>8||grays>1)return false;
+ }
+ return grays===1;
+}
 const EMBEDDED_IMAGE=/^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/i;
 const NAMED=Object.freeze({black:'#000000',white:'#ffffff',red:'#ff0000',blue:'#0000ff',green:'#008000',lime:'#00ff00',yellow:'#ffff00',navy:'#000080',gray:'#808080',grey:'#808080',silver:'#c0c0c0',maroon:'#800000',purple:'#800080',orange:'#ffa500',teal:'#008080',cyan:'#00ffff',aqua:'#00ffff',magenta:'#ff00ff',fuchsia:'#ff00ff',transparent:'#00000000'});
 const DRAWABLE=new Set(['g','svg','rect','path','line','polyline','polygon','circle','ellipse','text','tspan','image','linearGradient','radialGradient','stop','defs','title','desc','clipPath','mask']);
 const COMPLEX=new Set(['pattern','use','foreignObject','filter','feColorMatrix','feGaussianBlur','feBlend','feComposite','feOffset','feFlood','feMerge','feImage','feMorphology','feDisplacementMap']);
 function fail(reason){throw Error(reason);}
+const FILTER_KIND=new Set(['unsafe-identity-target','css-or-external','missing-definition',
+ 'multi-primitive','blur','blend','composite','displacement','other-primitive']);
+/** The category is a fixed vocabulary: no SVG markup, IDs, text or URLs. */
+function unsupportedFilter(category){
+ const error=Error('SVG_FILTER_EFFECT_UNSUPPORTED');
+ error.filterCategory=FILTER_KIND.has(category)?category:'other-primitive';
+ throw error;
+}
+function unsupportedDefinition(def){
+ if(!def||def.localName!=='filter')return 'missing-definition';
+ if(def.children.length!==1)return 'multi-primitive';
+ const primitive=def.children[0].localName;
+ if(['feGaussianBlur','feDropShadow'].includes(primitive))return 'blur';
+ if(primitive==='feBlend')return 'blend';
+ if(primitive==='feComposite')return 'composite';
+ if(primitive==='feDisplacementMap')return 'displacement';
+ return 'other-primitive';
+}
 function checkAbort(signal){if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');}
 function num(s){const n=Number(s);return Number.isFinite(n)?n:NaN;}
 function toByte(n){return Math.max(0,Math.min(255,Math.round(n)));}
@@ -440,16 +479,16 @@ export async function normalizeSvgGrayscale(svg,signal,{
   const noop= isCssIdentityFilter(descriptor.value)||
    (reference&&identifyIdentitySvgFilter(definitions.get(reference[1])));
   if(noop){
-   if(!isSafeIdentityTarget(el))fail('SVG_FILTER_EFFECT_UNSUPPORTED');
+   if(!isSafeIdentityTarget(el))unsupportedFilter('unsafe-identity-target');
    setNoFilter(el,descriptor);filtersApplied++;continue;
   }
   let mode;
-  if(CSS_GRAY.test(descriptor.value))mode='sRGB';
+  if(isSafeCssGrayscaleSequence(descriptor.value))mode='sRGB';
   else{
    const match=LOCAL_FILTER.exec(descriptor.value);
-   if(!match)fail('SVG_FILTER_EFFECT_UNSUPPORTED');
+   if(!match)unsupportedFilter('css-or-external');
    const def=definitions.get(match[1]);const spec=identifyGrayFilter(def);
-   if(!spec)fail('SVG_FILTER_EFFECT_UNSUPPORTED');
+   if(!spec)unsupportedFilter(unsupportedDefinition(def));
    mode=spec.mode;
   }
   // Paint inherited from outside the filtered object remains coloured.
