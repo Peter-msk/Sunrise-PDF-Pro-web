@@ -87,3 +87,23 @@ NextOffice 입력: 공개 예제 `re-01-hangul-only-hancom.hwp`, **8,704 B**, SH
 - 모든 프로덕션 병합, Cloudflare Worker 배포, D1 쓰기는 별도 승인까지 중지.
 
 **상태: 공개 샘플 양측 실제 PDF 검증 PASS / native SVG alternative QA 20/20 PASS / real user 25-document remediation NOT YET PROVEN / NO PRODUCTION DEPLOY.**
+
+## 7. 독립 공개 HWPX 실기검증 — 기존 PASS HWP는 재실행하지 않음
+
+공개 `edwardkim/rhwp@v0.8.7`의 `tac-host-spacing.hwpx`를 NextOffice와 Sunrise DEV27에 각각 **한 번씩** 변환했다. 두 사이트 모두 실제 PDF 다운로드 및 PDF.js·pdf-lib 파싱 PASS. 테스트에서 외부 파일 업로드 요청 차단 건수 0.
+
+| 검사 항목 | NextOffice | Sunrise DEV27 |
+|---|---:|---:|
+| HTTP | 200 | 200 |
+| 변환된 PDF | 유효 | 유효 |
+| PDF 페이지 | 1 | 1 |
+| PDF 바이트 | 5,432 | 8,354 |
+| 추출 가능 텍스트 | 18자 | 18자 |
+| 텍스트 항목 | 2 | 2 |
+| 이미지 그리기 명령 | 0 | 0 |
+| Producer | pdf-lib | pdf-lib |
+| Creator | NextOffice | PDFKit |
+
+- GitHub Actions 검증: https://github.com/Peter-msk/Sunrise-PDF-Pro-web/actions/runs/43427515512
+- 문서의 의미·페이지 배치·글꼴이 한컴 정식 출력과 동일한지까지 입증하지 않음. 1쪽 공개 샘플만 테스트했다.
+- **HWP와 HWPX 모두 양측에서 변환·실제 PDF 검증 성공.** 이 결과는 복잡한 SVG 필터가 포함된 사용자 25개 원본의 성공을 보장하지 않는다.
