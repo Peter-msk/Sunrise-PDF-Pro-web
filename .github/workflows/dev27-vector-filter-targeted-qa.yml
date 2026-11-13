@@ -1,0 +1,36 @@
+name: DEV27 SVG vector filter narrow regression (NO DEPLOY)
+on:
+  push:
+    branches:
+      - dev/dev27-p0-baseline-audit-20261113
+    paths:
+      - .github/workflows/dev27-vector-filter-targeted-qa.yml
+permissions:
+  contents: read
+concurrency:
+  group: dev27-vector-filter-targeted
+  cancel-in-progress: true
+jobs:
+  targeted:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Changed module syntax and safe-only source contract
+        run: |
+          node --check browser-local/src/svg-safe-grayscale.mjs
+          node --check browser-local/src/converter.js
+          node --check browser-local/tests/r66-svg-filter-vector-safe.mjs
+      - name: Install pinned existing browser-local dependencies only
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Regression for SVG filter vector semantics, hybrid and PDF output
+        run: |
+          node --test browser-local/tests/r66-svg-filter-vector-safe.mjs browser-local/tests/r66-hybrid-svg-filter.mjs browser-local/tests/r66-hybrid-vector-integration.mjs browser-local/tests/r66-complex-vector-quality.mjs
