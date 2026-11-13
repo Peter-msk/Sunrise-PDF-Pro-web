@@ -1,0 +1,74 @@
+name: DEV27 production actual-browser post-deploy acceptance (NO DEPLOY)
+on:
+  push:
+    branches:
+      - release/dev27-production-postdeploy-smoke-20261114
+    paths:
+      - .github/workflows/dev27-production-postdeploy-smoke.yml
+permissions:
+  contents: read
+jobs:
+  live-browser-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      SUNRISE_TEST_URL: https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Assert public health, bundled release UI, and pinned WASM delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://sunrise-pdf-pro-web.ko-pg.workers.dev'
+          curl -fLSs --retry 3 --retry-delay 2 --max-time 35 "$base/local/health" -o /tmp/dev27-live-health.json
+          node --input-type=module -e "import {readFileSync} from 'node:fs';const h=JSON.parse(readFileSync('/tmp/dev27-live-health.json','utf8'));if(h.rhwp_version!=='0.8.7'||h.wasm_sha256!=='54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989'||h.wasm_bytes!==11821756||h.document_upload!==false||h.default_output!=='professional')throw Error('LIVE_HEALTH_CONTRACT_MISMATCH');console.log('DEV27_LIVE_HEALTH_PASS',h.rhwp_version,h.wasm_bytes,h.default_output);"
+          curl -fLSs --retry 3 --retry-delay 2 --max-time 35 "$base/local/" -o /tmp/dev27-live-ui.html
+          grep -Fq 'id="recover-failed"' /tmp/dev27-live-ui.html
+          curl -fLSs --retry 3 --retry-delay 2 --max-time 35 "$base/local/assets/local-bundle.js" -o /tmp/dev27-live-bundle.js
+          grep -Fq 'native-print-recovery' /tmp/dev27-live-bundle.js
+          grep -Fq 'FONT_GLYPH_MISSING' /tmp/dev27-live-bundle.js
+          curl -fLSs --retry 3 --retry-delay 2 --max-time 35 -I "$base/local/rhwp_bg.wasm" -o /tmp/dev27-live-wasm-head.txt
+          grep -qi 'content-type: application/wasm' /tmp/dev27-live-wasm-head.txt
+          echo DEV27_LIVE_RELEASE_UI_AND_WASM_PASS
+      - name: Install pinned local browser test dependencies
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Chromium
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Fetch publicly released HWP and HWPX acceptance fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 3 --max-time 35 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 3 --max-time 35 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+          curl -fLSs --retry 3 --max-time 35 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/basic/issue2007_nested_cell_pagination_42065.hwp' -o r29-browser-fixtures/complex.hwp
+          curl -fLSs --retry 3 --max-time 35 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/SO-SUEOP.hwpx' -o r29-browser-fixtures/complex.hwpx
+      - name: LIVE real HWP and HWPX professional PDF and ZIP download
+        run: node browser-local/tests/e2e.mjs
+      - name: LIVE explicitly selected hybrid HWP and HWPX conversion
+        run: node browser-local/tests/hybrid-real-browser.mjs
+      - name: LIVE 17-page HWP and 46-page HWPX explicit missing-glyph print recovery
+        env:
+          DEV27_PUBLIC_FIXTURE_SET: complex
+        run: node browser-local/tests/dev27-print-pdf-parity-public.mjs
+      - name: Save only public fixture PDF structural reports and HTTP health
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev27-production-postdeploy-evidence
+          path: |
+            /tmp/dev27-live-health.json
+            r29-browser-real-evidence/R40_BROWSER_LOCAL_E2E.json
+            r29-browser-real-evidence/DEV26_HYBRID_BROWSER_E2E.json
+            r29-browser-real-evidence/DEV27_PRINT_PDF_PARITY_PUBLIC_complex.json
+          if-no-files-found: warn
+          retention-days: 10
