@@ -58,10 +58,24 @@ export async function classifyPublicSvgReferences(bytes){
    for(const image of parsed.querySelectorAll('image')){
     const href=image.getAttribute('href')||image.getAttribute('xlink:href')||'';
     const m=/^data:image\/svg\+xml;base64,([a-z0-9+/\s]+={0,2})$/i.exec(href);
-    if(!m||m[1].length>1_000_000)continue;
+    if(!m){
+     if(/^data:image\/svg\+xml;base64,/i.test(href))
+      kinds.set('embedded:base64-payload-grammar-rejected',
+       (kinds.get('embedded:base64-payload-grammar-rejected')||0)+1);
+     continue;
+    }
+    if(m[1].length>1_000_000){
+     kinds.set('embedded:base64-payload-over-budget',(kinds.get('embedded:base64-payload-over-budget')||0)+1);
+     continue;
+    }
     try{
      const bytes=Uint8Array.from(atob(m[1].replace(/\s+/g,'')),x=>x.charCodeAt(0));
      const inner=new DOMParser().parseFromString(new TextDecoder('utf-8',{fatal:true}).decode(bytes),'image/svg+xml');
+     kinds.set('embedded:decoded-safely',(kinds.get('embedded:decoded-safely')||0)+1);
+     for(const child of inner.querySelectorAll('*')){
+      const type='embedded:element/'+child.localName;
+      kinds.set(type,(kinds.get(type)||0)+1);
+     }
      for(const element of inner.querySelectorAll('*')){
       for(const attr of element.attributes){
        const name=attr.localName||attr.name;
