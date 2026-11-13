@@ -1,5 +1,5 @@
 name: DEV27 real HWP HWPX native print recovery UI (NO DEPLOY)
-# Real Chromium UI, public HWP/HWPX; rerun with exact filename assertions to avoid prefix collision.
+# Rerun with sandboxed iframe contentDocument assertions for actual prepared SVG.
 on:
   push:
     branches:
