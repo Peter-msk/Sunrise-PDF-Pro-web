@@ -7,7 +7,7 @@ import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
-import {canRecoverFile,planConversion,planBulkRecovery,recoveryEngine} from './conversion-recovery.mjs';
+import {canRecoverFile,planConversion,planBulkRecovery,recoveryEngine,recoveryCode} from './conversion-recovery.mjs';
 import {requestLocalFontAccess} from './local-fonts.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
 import {summarizeVectorPreservation,inspectPdfVectorQuality} from './pdf-vector-quality.mjs';
@@ -252,6 +252,29 @@ function draw(){
     $('convert').click();
    });
    actions.append(recover);
+   // The native browser print renderer is independent of svg-to-pdfkit.
+   // A direct user click is required. It does not mutate the failed-file PDF.
+   if(recoveryCode(item.error)==='SVG_FILTER_EFFECT_UNSUPPORTED'){
+    const native=document.createElement('button');
+    native.type='button';native.className='secondary native-print-recovery';
+    native.textContent='브라우저 PDF 인쇄 준비';
+    native.title='이 파일만 Chrome/Edge의 SVG 인쇄 경로로 준비합니다. 인쇄 대화상자에서 PDF로 저장을 직접 선택하세요. 일부 효과는 이미지화되거나 글꼴·배치가 달라질 수 있으니 원본과 대조하세요.';
+    native.disabled=busy||!ready;
+    native.addEventListener('click',()=>{
+     if(busy||!ready||!items.includes(item)||!canRecoverFile(item))return;
+     show(item);
+     $('print-prepare').click();
+    });
+    actions.append(native);
+   }
+  }
+  if(printJob&&active===item&&!busy){
+   const print=document.createElement('button');
+   print.type='button';print.className='secondary native-print-save';
+   print.textContent='브라우저 PDF로 저장';
+   print.title='브라우저 인쇄창에서 PDF 저장 대상을 직접 선택하세요. 저장 성공 여부를 앱이 자동으로 판단하지 않습니다.';
+   print.addEventListener('click',()=>{$('print-save').click();});
+   actions.append(print);
   }
   const remove=document.createElement('button');remove.className='secondary';remove.type='button';remove.textContent='삭제';remove.setAttribute('aria-label',item.file.name+' 목록에서 삭제');remove.disabled=busy;remove.addEventListener('click',()=>{release(item);items=items.filter(i=>i!==item);clearArchive();if(active===item)show(items.find(i=>i.state==='done')||items[0]||null);draw();status('목록을 변경했습니다.');});actions.append(remove);
   li.append(icon,body,actions);list.append(li);
@@ -403,7 +426,7 @@ $('print-prepare').addEventListener('click',async()=>{
  if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;
  let fontsRequest=null,printFontNotice='';try{if(USE_PC_FONTS_BY_DEFAULT)fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){printFontNotice='PC 글꼴 API를 사용할 수 없어 내장 글꼴로 인쇄합니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();refreshBrowserLifecycle();
- try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;if(access.status==='ready')verifiedPcFontData=localFonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('인쇄 준비 완료. PDF로 인쇄/저장을 누른 뒤 PDF 저장 대상을 선택하세요.'+(printFontNotice?' · '+printFontNotice:''));}
+ try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;if(access.status==='ready')verifiedPcFontData=localFonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('브라우저 인쇄 준비 완료. 해당 문서의 브라우저 PDF로 저장 버튼을 눌러 PDF 저장 대상을 직접 선택하세요. 필터·글꼴·배치를 원본과 대조해야 하며 앱의 실패 상태는 자동으로 성공 처리되지 않습니다.'+(printFontNotice?' · '+printFontNotice:''));}
  catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+String(error?.message||error));}
  finally{busy=false;controller=null;draw();}
 });
