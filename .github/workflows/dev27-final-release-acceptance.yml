@@ -1,4 +1,5 @@
 name: DEV27 final release acceptance (NO DEPLOY)
+# Rerun: updated obsolete global-engine font permission assertion for DEV27 per-item recovery.
 on:
   push:
     branches:
