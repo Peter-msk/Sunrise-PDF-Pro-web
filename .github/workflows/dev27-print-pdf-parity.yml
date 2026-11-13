@@ -1,0 +1,60 @@
+name: DEV27 real HWP HWPX Chromium PDF output parity (NO DEPLOY)
+on:
+  push:
+    branches:
+      - dev/dev27-p0-baseline-audit-20261113
+    paths:
+      - .github/workflows/dev27-print-pdf-parity.yml
+permissions:
+  contents: read
+concurrency:
+  group: dev27-print-pdf-parity
+  cancel-in-progress: true
+jobs:
+  focused-print:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Source syntax only
+        run: node --check browser-local/tests/dev27-print-pdf-parity-public.mjs
+      - name: Pinned browser-local dependencies
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Chromium
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Download two public upstream fixtures (no private documents)
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+          curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+      - name: Isolated local Vite server without production Worker
+        run: |
+          set -euo pipefail
+          npm --prefix browser-local run dev -- --port 4174 >/tmp/dev27-print-parity-vite.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dev27-print-parity-vite.log
+          exit 1
+      - name: Actual professional PDF vs real SVG print-frame Chromium PDF
+        env:
+          SUNRISE_TEST_URL: http://127.0.0.1:4174/
+        run: node browser-local/tests/dev27-print-pdf-parity-public.mjs
+      - name: Save structural metrics only, never original content or PDF bytes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev27-public-print-pdf-parity
+          path: r29-browser-real-evidence/DEV27_PRINT_PDF_PARITY_PUBLIC.json
+          if-no-files-found: warn
+          retention-days: 7
