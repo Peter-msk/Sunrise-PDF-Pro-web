@@ -33,7 +33,7 @@ try{
    if(e.data?.probe==='DEV27_NATIVE_PRINT_GESTURE')window.__dev27PrintCalls++;
   });
   window.print=()=>{
-   if(window.parent!==window)window.parent.postMessage({probe:'DEV27_NATIVE_PRINT_GESTURE'},window.location.origin);
+   if(window.parent!==window)window.parent.postMessage({probe:'DEV27_NATIVE_PRINT_GESTURE'},'*');
   };
  });
  let moduleIntercepts=0;
