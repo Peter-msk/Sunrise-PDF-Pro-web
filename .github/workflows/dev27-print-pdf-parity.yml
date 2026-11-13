@@ -1,5 +1,5 @@
 name: DEV27 real HWP HWPX Chromium PDF output parity (NO DEPLOY)
-# Targeted added text equality, 0.5pt geometry and complex document regression.
+# Retry: record complex professional failures while testing independent native print recovery.
 on:
   push:
     branches:
