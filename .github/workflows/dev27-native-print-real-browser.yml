@@ -1,5 +1,5 @@
 name: DEV27 real HWP HWPX native print recovery UI (NO DEPLOY)
-# Rerun with sandboxed iframe contentDocument assertions for actual prepared SVG.
+# Final scoped recheck: preserve same-file frame, remove stale row button, and open options before select.
 on:
   push:
     branches:
