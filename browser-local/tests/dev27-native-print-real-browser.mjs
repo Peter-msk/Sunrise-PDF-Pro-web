@@ -108,9 +108,11 @@ try{
     assert.equal(await printFrame.count(),0);
     assert.equal(await page.locator('#print-save').isEnabled(),false);
     assert.equal(await second.locator('.native-print-save').count(),0);
+    assert.equal(await page.locator('.native-print-save').count(),0,'stale HWP save button must also disappear');
    });
   }
  }
+ await page.locator('details.advanced > summary').first().click();
  await page.locator('#pdf-engine').selectOption('hybrid-filter');
  await step('engine change invalidates stale printed SVG, keeps conversion status',async()=>{
   assert.equal(await printFrame.count(),0);
