@@ -1,0 +1,57 @@
+name: DEV27 one-public-HWP PDF structural parity (NO DEPLOY)
+on:
+  push:
+    branches:
+      - dev/dev27-p0-baseline-audit-20261113
+    paths:
+      - .github/workflows/dev27-public-pdf-parity.yml
+permissions:
+  contents: read
+concurrency:
+  group: dev27-public-pdf-parity
+  cancel-in-progress: true
+jobs:
+  public-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Validate targeted source
+        run: node --check browser-local/tests/dev27-public-parity.mjs
+      - name: Install existing pinned dependencies
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Install Chromium for isolated PDF output validation
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Fetch the same publicly released HWP for both providers
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --max-time 25 --retry 2 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
+      - name: Start local Sunrise DEV27 browser app, never deploy Worker
+        run: |
+          set -euo pipefail
+          npm --prefix browser-local run dev -- --port 4174 >/tmp/dev27-local-vite.log 2>&1 &
+          for i in $(seq 1 50); do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dev27-local-vite.log
+          exit 1
+      - name: Audit actual PDF structures with public fixtures
+        run: node browser-local/tests/dev27-public-parity.mjs
+      - name: Save only structural metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev27-public-pdf-parity
+          path: competitor-public-evidence/DEV27_PUBLIC_HWP_PDF_PARITY.json
+          if-no-files-found: warn
+          retention-days: 7
