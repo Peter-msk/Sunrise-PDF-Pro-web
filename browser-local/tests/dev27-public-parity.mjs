@@ -28,7 +28,7 @@ async function audit(bytes){
       OPS.paintJpegXObject,OPS.paintImageXObjectRepeat].includes(x)).length;
    page.cleanup();
   }
- }finally{await parsed.destroy();}
+ }finally{await task.destroy();}
  return {bytes:bytes.length,pdfHeader:bytes.subarray(0,5).toString('ascii'),
   pageCount:pdf.getPageCount(),producer:(pdf.getProducer()||'unknown').slice(0,110),
   creator:(pdf.getCreator()||'unknown').slice(0,110),textItems,extractableCharacters:chars,imagePaints:imageOps};
