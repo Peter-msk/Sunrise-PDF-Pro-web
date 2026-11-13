@@ -41,7 +41,7 @@ test('Chromium print handles complex SVG blur and retains unrelated searchable t
  try{
   const page=await browser.newPage();
   await page.setContent('<!doctype html><html><head><meta charset="utf-8">'+
-   '<style>@page{size:600px 420px;margin:0}body{margin:0}</style></head><body>'+
+   '<style>@page{size:600px 420px;margin:0}html,body{margin:0;padding:0}svg{display:block}</style></head><body>'+
    '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="420">'+
    '<defs><filter id="blur"><feGaussianBlur stdDeviation="4"/></filter></defs>'+
    '<rect x="100" y="90" width="220" height="100" fill="#f00" filter="url(#blur)"/>'+
