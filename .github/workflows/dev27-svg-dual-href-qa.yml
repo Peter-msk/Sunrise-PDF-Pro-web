@@ -1,4 +1,5 @@
 name: DEV27 identical SVG href xlink aliases targeted QA (NO DEPLOY)
+# Rerun after matching both existing Korean security error variants in assertions.
 on:
   push:
     branches:
