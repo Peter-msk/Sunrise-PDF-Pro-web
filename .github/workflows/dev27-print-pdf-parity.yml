@@ -1,4 +1,5 @@
 name: DEV27 real HWP HWPX Chromium PDF output parity (NO DEPLOY)
+# Targeted added text equality, 0.5pt geometry and complex document regression.
 on:
   push:
     branches:
@@ -13,7 +14,7 @@ concurrency:
 jobs:
   focused-print:
     runs-on: ubuntu-24.04
-    timeout-minutes: 14
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,6 +37,8 @@ jobs:
           mkdir -p r29-browser-fixtures
           curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/re-01-hangul-only-hancom.hwp' -o r29-browser-fixtures/genuine.hwp
           curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
+          curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/basic/issue2007_nested_cell_pagination_42065.hwp' -o r29-browser-fixtures/complex.hwp
+          curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/SO-SUEOP.hwpx' -o r29-browser-fixtures/complex.hwpx
       - name: Isolated local Vite server without production Worker
         run: |
           set -euo pipefail
@@ -49,12 +52,14 @@ jobs:
       - name: Actual professional PDF vs real SVG print-frame Chromium PDF
         env:
           SUNRISE_TEST_URL: http://127.0.0.1:4174/
-        run: node browser-local/tests/dev27-print-pdf-parity-public.mjs
+        run: |
+          node browser-local/tests/dev27-print-pdf-parity-public.mjs
+          DEV27_PUBLIC_FIXTURE_SET=complex node browser-local/tests/dev27-print-pdf-parity-public.mjs
       - name: Save structural metrics only, never original content or PDF bytes
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dev27-public-print-pdf-parity
-          path: r29-browser-real-evidence/DEV27_PRINT_PDF_PARITY_PUBLIC.json
+          path: r29-browser-real-evidence/DEV27_PRINT_PDF_PARITY_PUBLIC_*.json
           if-no-files-found: warn
           retention-days: 7
