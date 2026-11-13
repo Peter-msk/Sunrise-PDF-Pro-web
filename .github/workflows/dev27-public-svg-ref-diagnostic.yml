@@ -1,5 +1,5 @@
 name: DEV27 public HWPX SVG reference failure classification (NO DEPLOY)
-# Deepen public-fixture classification into bounded nested SVG pictures without saving markup.
+# Rerun bounded nested SVG diagnostic after test-only regex syntax correction.
 on:
   push:
     branches:
