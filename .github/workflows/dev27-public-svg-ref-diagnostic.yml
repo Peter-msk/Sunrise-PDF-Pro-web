@@ -1,4 +1,5 @@
 name: DEV27 public HWPX SVG reference failure classification (NO DEPLOY)
+# Rerun distinguishes safe base64 SVG data from parameterized or encoded SVG URIs.
 on:
   push:
     branches:
