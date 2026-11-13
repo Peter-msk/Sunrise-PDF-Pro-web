@@ -77,7 +77,9 @@ test('explicit PC font status and compatibility raster must not request irreleva
  const src=new URL('../src/',import.meta.url);
  const main=readFileSync(new URL('main.js',src),'utf8');
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- assert.match(main,/engine!=='compat-raster'&&pending\.some/);
+ assert.match(main,/const needsFonts=pending\.some\(item=>isHwp\(item\.file\)/);
+ assert.match(main,/\(recoverySpecs\.get\(item\)\?\.engine\|\|engine\)!=='compat-raster'/);
+ assert.match(main,/if\(USE_PC_FONTS_BY_DEFAULT&&needsFonts\)/);
  assert.match(main,/font-check'\)\?\.addEventListener\('click'/);
  assert.match(main,/fontStatus\(access\.status==='ready'/);
  assert.match(html,/id="font-check"/);
