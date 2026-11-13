@@ -52,6 +52,13 @@ jobs:
           curl -fLSs --retry 3 --max-time 35 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/tac-host-spacing.hwpx' -o r29-browser-fixtures/genuine.hwpx
           curl -fLSs --retry 3 --max-time 35 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/basic/issue2007_nested_cell_pagination_42065.hwp' -o r29-browser-fixtures/complex.hwp
           curl -fLSs --retry 3 --max-time 35 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/SO-SUEOP.hwpx' -o r29-browser-fixtures/complex.hwpx
+      - name: Use DOMContentLoaded for public network-polled pages (QA runner only)
+        run: |
+          set -euo pipefail
+          for file in browser-local/tests/e2e.mjs browser-local/tests/hybrid-real-browser.mjs browser-local/tests/dev27-print-pdf-parity-public.mjs; do
+            sed -i "s/waitUntil:'networkidle'/waitUntil:'domcontentloaded'/g" "$file"
+            node --check "$file"
+          done
       - name: LIVE real HWP and HWPX professional PDF and ZIP download
         run: node browser-local/tests/e2e.mjs
       - name: LIVE explicitly selected hybrid HWP and HWPX conversion
