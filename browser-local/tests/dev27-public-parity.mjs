@@ -9,9 +9,10 @@ import {PDFDocument as LibPdf} from 'pdf-lib';
 import {getDocument,OPS} from 'pdfjs-dist/legacy/build/pdf.mjs';
 const out='competitor-public-evidence';
 mkdirSync(out,{recursive:true});
-const specimen=readFileSync('r29-browser-fixtures/genuine.hwp');
+const fixtureExt=process.env.DEV27_PUBLIC_FIXTURE_EXT==='hwpx'?'hwpx':'hwp';
+const specimen=readFileSync('r29-browser-fixtures/genuine.'+fixtureExt);
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
-const report={scope:'Public released HWP only; structure metrics no document content',checkedAt:new Date().toISOString(),sources:{}};
+const report={scope:'Public released '+fixtureExt.toUpperCase()+' only; structure metrics no document content',fixtureFormat:fixtureExt,checkedAt:new Date().toISOString(),sources:{}};
 async function audit(bytes){
  const pdf=await LibPdf.load(bytes);
  const task=getDocument({data:new Uint8Array(bytes),useSystemFonts:true,disableFontFace:true});
@@ -72,7 +73,7 @@ try{
     // Arm the download event before choosing the fixture; never click a disabled button.
     const pending=page.waitForEvent('download',{timeout:25000});
     await page.locator('input[type=file]').first().setInputFiles({
-     name:'genuine.hwp',mimeType:'application/octet-stream',buffer:specimen});
+     name:'genuine.'+fixtureExt,mimeType:'application/octet-stream',buffer:specimen});
     const btn=page.getByRole('button',{name:/convert to pdf/i});
     if(await btn.count()&&await btn.first().isEnabled())await btn.first().click();
     const bytes=await downloadToBytes(page,null,pending);
@@ -104,5 +105,5 @@ try{
   }
  }
 }finally{await browser.close();}
-writeFileSync(out+'/DEV27_PUBLIC_HWP_PDF_PARITY.json',JSON.stringify(report,null,2));
+writeFileSync(out+'/DEV27_PUBLIC_'+fixtureExt.toUpperCase()+'_PDF_PARITY.json',JSON.stringify(report,null,2));
 if(Object.values(report.sources).some(x=>x.status!=='PASS'))process.exitCode=1;
