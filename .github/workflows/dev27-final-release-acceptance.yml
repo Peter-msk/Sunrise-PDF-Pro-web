@@ -1,5 +1,5 @@
 name: DEV27 final release acceptance (NO DEPLOY)
-# Final gate: test fault-injected source-only boundary in Vite; test real PDF bundles in Worker.
+# Final gate: include missing-glyph explicit print button for real public 17/46-page documents.
 on:
   push:
     branches:
@@ -30,8 +30,10 @@ jobs:
           cache-dependency-path: browser-local/package-lock.json
       - name: Full pinned tests, actual build, verified WASM and Worker assets
         run: npm run build
-      - name: Source contract after build
-        run: npm --prefix browser-local run check:source
+      - name: Source contract and explicit native-print error recovery policy
+        run: |
+          npm --prefix browser-local run check:source
+          node --test browser-local/tests/r67-native-print-recovery.mjs
       - name: Wrangler v4 dry-run without production mutation
         run: npx --yes wrangler@4 deploy --dry-run --outdir /tmp/sunrise-dev27-final-dry-run
       - name: Chromium for actual HWP and HWPX browser PDF E2E
