@@ -135,7 +135,7 @@ try{
  console.error('DEV27_PRINT_PDF_PARITY_FAILED',result.error);
  process.exitCode=1;
 }finally{
- writeFileSync(resolve(evidenceDir,'DEV27_PRINT_PDF_PARITY_PUBLIC.json'),
+ writeFileSync(resolve(evidenceDir,'DEV27_PRINT_PDF_PARITY_PUBLIC_'+fixturePrefix+'.json'),
     JSON.stringify(result,null,2));
  await browser.close();
 }
