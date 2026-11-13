@@ -33,10 +33,10 @@ async function audit(bytes){
   pageCount:pdf.getPageCount(),producer:(pdf.getProducer()||'unknown').slice(0,110),
   creator:(pdf.getCreator()||'unknown').slice(0,110),textItems,extractableCharacters:chars,imagePaints:imageOps};
 }
-async function downloadToBytes(page,link){
- const pending=page.waitForEvent('download',{timeout:60000});
- await link.click();
- const download=await pending;
+async function downloadToBytes(page,link=null,pending=null){
+ const next=pending||page.waitForEvent('download',{timeout:60000});
+ if(link)await link.click();
+ const download=await next;
  const chunks=[];
  for await(const chunk of await download.createReadStream())chunks.push(chunk);
  const bytes=Buffer.concat(chunks);
@@ -68,11 +68,14 @@ try{
    const nav=await page.goto(c.url,{waitUntil:'domcontentloaded',timeout:35000});
    item.http=nav?.status()||0;
    if(c.id==='nextoffice'){
+    // NextOffice may start the conversion/download directly on file selection.
+    // Arm the download event before choosing the fixture; never click a disabled button.
+    const pending=page.waitForEvent('download',{timeout:25000});
     await page.locator('input[type=file]').first().setInputFiles({
      name:'genuine.hwp',mimeType:'application/octet-stream',buffer:specimen});
     const btn=page.getByRole('button',{name:/convert to pdf/i});
-    await btn.first().waitFor({state:'visible'});
-    const bytes=await downloadToBytes(page,btn.first());
+    if(await btn.count()&&await btn.first().isEnabled())await btn.first().click();
+    const bytes=await downloadToBytes(page,null,pending);
     item.pdf=await audit(bytes);
    }else{
     await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('변환 준비 완료'),
