@@ -53,6 +53,36 @@ export async function classifyPublicSvgReferences(bytes){
      }
     }
    }
+   // Decode only the two bounded public-fixture nested SVG images for
+   // classification; do not export markup, text, URLs or binary.
+   for(const image of parsed.querySelectorAll('image')){
+    const href=image.getAttribute('href')||image.getAttribute('xlink:href')||'';
+    const m=/^data:image\\/svg\\+xml;base64,([a-z0-9+/\\s]+={0,2})$/i.exec(href);
+    if(!m||m[1].length>1_000_000)continue;
+    try{
+     const bytes=Uint8Array.from(atob(m[1].replace(/\\s+/g,'')),x=>x.charCodeAt(0));
+     const inner=new DOMParser().parseFromString(new TextDecoder('utf-8',{fatal:true}).decode(bytes),'image/svg+xml');
+     for(const element of inner.querySelectorAll('*')){
+      for(const attr of element.attributes){
+       const name=attr.localName||attr.name;
+       if(name==='href'||name==='src'){
+        const type='embedded:'+element.localName+'/'+name+'/'+kind(attr.value);
+        kinds.set(type,(kinds.get(type)||0)+1);
+       }
+       for(const match of attr.value.matchAll(/url\\s*\\(\\s*['"]?([^'")]+)['"]?\\s*\\)/gi)){
+        const type='embedded:'+element.localName+'/'+name+'/css-'+kind(match[1]);
+        kinds.set(type,(kinds.get(type)||0)+1);
+       }
+      }
+      if(element.localName==='style')for(const match of (element.textContent||'').matchAll(/url\\s*\\(\\s*['"]?([^'")]+)['"]?\\s*\\)/gi)){
+       const type='embedded:style/css-'+kind(match[1]);
+       kinds.set(type,(kinds.get(type)||0)+1);
+      }
+     }
+    }catch{
+     kinds.set('embedded:parse-failure',(kinds.get('embedded:parse-failure')||0)+1);
+    }
+   }
    for(const [key,value] of kinds)result.refKinds[key]=(result.refKinds[key]||0)+value;
    try{
     const clean=await normalizeGifSvg(raw);
