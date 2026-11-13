@@ -1,5 +1,5 @@
 name: DEV27 final release acceptance (NO DEPLOY)
-# Rerun: updated obsolete global-engine font permission assertion for DEV27 per-item recovery.
+# Final gate: test fault-injected source-only boundary in Vite; test real PDF bundles in Worker.
 on:
   push:
     branches:
@@ -62,9 +62,19 @@ jobs:
         env:
           SUNRISE_TEST_URL: http://127.0.0.1:8787/local/
         run: node browser-local/tests/hybrid-real-browser.mjs
-      - name: Existing native SVG print recovery browser UI against built Worker
+      - name: Launch Vite for deterministic boundary fault injection
+        run: |
+          set -euo pipefail
+          npm --prefix browser-local run dev -- --port 4174 >/tmp/dev27-fault-vite.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dev27-fault-vite.log
+          exit 1
+      - name: Existing native SVG print recovery UI with intentional failure on Vite source boundary
         env:
-          SUNRISE_RECOVERY_UI_URL: http://127.0.0.1:8787/local/
+          SUNRISE_RECOVERY_UI_URL: http://127.0.0.1:4174/
         run: node browser-local/tests/dev27-native-print-real-browser.mjs
       - name: Complex public 17-page HWP and 46-page HWPX real print PDF path
         env:
