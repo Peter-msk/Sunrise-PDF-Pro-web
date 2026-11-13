@@ -75,7 +75,12 @@ $('font-check')?.addEventListener('click',async()=>{
   fontStatus('PC 글꼴 조회를 시작하지 못했습니다: '+String(error?.message||error));
  }finally{button.disabled=false;}
 });
-function clearPrint(){if(printJob){printJob.dispose();printJob=null;}}
+function clearPrint(){
+ if(printJob){printJob.dispose();printJob=null;}
+ // A file switch can happen without draw(): remove any stale row-level save
+ // action before it could misleadingly invoke a disposed print job.
+ for(const button of $('file-list').querySelectorAll('.native-print-save'))button.remove();
+}
 function clearArchive(){if(archiveUrl)URL.revokeObjectURL(archiveUrl);archiveUrl=null;$('download-all').hidden=true;$('download-all').removeAttribute('href');}
 function release(item){item._fontAuditController?.abort();item._qualityAuditController?.abort();if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
 function show(item){
