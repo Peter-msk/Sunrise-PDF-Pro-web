@@ -1,0 +1,58 @@
+name: DEV27 public HWPX SVG reference failure classification (NO DEPLOY)
+on:
+  push:
+    branches:
+      - dev/dev27-p0-baseline-audit-20261113
+    paths:
+      - .github/workflows/dev27-public-svg-ref-diagnostic.yml
+permissions:
+  contents: read
+concurrency:
+  group: dev27-public-svg-ref-diagnostic
+  cancel-in-progress: true
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Only changed syntax
+        run: |
+          node --check browser-local/tests/dev27-public-svg-ref-helper.mjs
+          node --check browser-local/tests/dev27-public-svg-ref-diagnostic-browser.mjs
+      - name: Existing dependencies
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Chromium
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Download public HWPX only
+        run: |
+          set -euo pipefail
+          mkdir -p r29-browser-fixtures
+          curl -fLSs --retry 2 --max-time 25 'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/samples/SO-SUEOP.hwpx' -o r29-browser-fixtures/complex.hwpx
+      - name: Local Vite only
+        run: |
+          npm --prefix browser-local run dev -- --port 4174 >/tmp/dev27-svg-ref.log 2>&1 &
+          for i in $(seq 1 80); do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dev27-svg-ref.log
+          exit 1
+      - name: Public SVG reference classification, no raw values
+        run: node browser-local/tests/dev27-public-svg-ref-diagnostic-browser.mjs
+      - name: Store classification counts only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev27-public-svg-reference-summary
+          path: r29-browser-real-evidence/DEV27_PUBLIC_SVG_REF_DIAGNOSTIC.json
+          if-no-files-found: warn
+          retention-days: 7
