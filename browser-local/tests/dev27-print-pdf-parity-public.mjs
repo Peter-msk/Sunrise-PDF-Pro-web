@@ -87,7 +87,13 @@ try{
    // Preserve the actual error; never label the original conversion success.
    r.professionalError=(await page.locator('#file-list').innerText()).slice(0,500);
   }
-  await page.locator('#print-prepare').evaluate(button=>button.click());
+  if(fixturePrefix==='complex'&&r.professionalError?.includes('FONT_GLYPH_MISSING')){
+   const printRecovery=page.locator('#file-list .native-print-recovery');
+   assert.equal(await printRecovery.count(),1,'missing-glyph failure must offer explicit print recovery');
+   await printRecovery.click();
+  }else{
+   await page.locator('#print-prepare').evaluate(button=>button.click());
+  }
   await page.waitForFunction(()=>{
    const msg=document.querySelector('#status')?.textContent||'';
    return msg.includes('브라우저 인쇄 준비 완료')||msg.includes('인쇄 준비 실패');
