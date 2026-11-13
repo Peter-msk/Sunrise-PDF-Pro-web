@@ -1,4 +1,5 @@
 name: DEV27 one-public-HWP PDF structural parity (NO DEPLOY)
+# Retry uses download-event-before-file-selection for third-party auto-export.
 on:
   push:
     branches:
