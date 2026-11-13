@@ -83,8 +83,8 @@ try{
   await step(ext.toUpperCase()+' actual WASM SVG→safe iframe print preparation',async()=>{
    assert.equal(await page.locator('#viewer-file').innerText(),filename);
    assert.equal(await printFrame.count(),1);
-   assert.ok(await printFrame.locator('svg').count()>0,'print frame must have checked SVG');
-   assert.equal(await printFrame.locator('script,foreignObject').count(),0);
+   assert.ok(await printFrame.evaluate(frame=>frame.contentDocument?.querySelectorAll('svg').length||0)>0,'print frame must have checked SVG');
+   assert.equal(await printFrame.evaluate(frame=>frame.contentDocument?.querySelectorAll('script,foreignObject').length||0),0);
    assert.equal(await row.locator('.native-print-save').count(),1);
    assert.equal(await page.locator('#print-save').isEnabled(),true);
    assert.equal(await page.locator('#failed-count').innerText(),'2');
