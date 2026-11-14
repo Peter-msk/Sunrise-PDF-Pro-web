@@ -1,4 +1,5 @@
 name: DEV28 final observed-conversion-errors candidate QA (NO DEPLOY)
+# Final candidate includes distinct package/parse/layout error stages; no production deployment.
 on:
   push:
     branches:
