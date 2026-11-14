@@ -3,6 +3,9 @@
 export function safeConversionProgress(observer=()=>{}){
  return info=>{
   try{observer(info);}
-  catch(error){console.warn('CONVERSION_PROGRESS_OBSERVER_FAILED',error?.name||'Error');}
+  catch(error){
+   const kind=/^(?:Error|TypeError|RangeError|ReferenceError|SyntaxError|AbortError|TimeoutError)$/.test(error?.name)?error.name:'Error';
+   console.warn('CONVERSION_PROGRESS_OBSERVER_FAILED',kind);
+  }
  };
 }
