@@ -23,6 +23,16 @@ test('25-file test shape: count successes, failures and waiting without pretendi
  for(const forbidden of ['confidential','PRIVATE','sensitive','원본 본문'])
   assert.equal(json.includes(forbidden),false);
 });
+test('251-page legitimate HWP retains exact page evidence instead of being silently null',()=>{
+ const report=buildLocalBatchQaReport([
+  item('long_private_document.hwpx','done',{
+   lastEngine:'hybrid-filter',result:{pages:251,vectorPages:250,rasterPages:1}
+  })
+ ]);
+ assert.deepEqual([report.files[0].pages,report.files[0].vector_pages,report.files[0].raster_pages],[251,250,1]);
+ assert.equal(JSON.stringify(report).includes('long_private_document'),false);
+});
+
 test('unknown error and metadata collapse to fixed vocabulary without names or text',()=>{
  const report=buildLocalBatchQaReport([
   item('소득세_민감.xlsx','failed',{error:'지출 원장 내역: unknown details',lastEngine:'unknown',_proDiagStage:'random-stage'}),
