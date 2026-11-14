@@ -49,6 +49,16 @@ export function inspectEngineContract(root){
   // converter.js (e.g. in a new format dispatcher). Inspect all active browser
   // modules, not only the original three files. The web bundle may fetch its
   // own pinned WASM and OFL fonts, but must never execute local applications.
+  // Mobile browsers commonly lack Local Font Access. A missing self-hosted
+  // fallback face must stop a build, not fail only at the user's document.
+  for(const font of [
+   'NanumMyeongjo-Regular.ttf','NanumMyeongjo-Bold.ttf',
+   'NanumGothic-Regular.ttf','NanumGothic-Bold.ttf',
+   'SunriseSymbols.otf','SunriseMarks.ttf'
+  ]){
+   if(!existsSync(resolve(root,'browser-local/public/fonts',font)))
+    issues.push('MISSING_MOBILE_BUNDLED_FONT:'+font);
+  }
   const runtime=resolve(root,'browser-local/src');
   let browserModules=0;
   if(existsSync(runtime)){
