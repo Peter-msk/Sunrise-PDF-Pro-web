@@ -21,6 +21,15 @@ test('25 structurally complete documents are still VISUAL_REVIEW_REQUIRED',()=>{
  assert.equal(result.visual_review_required,true);
  assert.doesNotMatch(JSON.stringify(result),/PRIVATE_ORIGINAL/);
 });
+test('realistic 251-page document passes structural check, still requires visual review',()=>{
+ const report=baseline();
+ report.files[0].pages=251;report.files[0].vector_pages=250;report.files[0].raster_pages=1;
+ const result=reviewLocal25FileReport(report);
+ assert.equal(result.status,'VISUAL_REVIEW_REQUIRED');
+ assert.equal(result.image_pages,1);
+ assert.equal(result.visual_review_required,true);
+});
+
 test('25 items with 8 failed and 4 ready never count as accepted',()=>{
  const report=baseline();
  for(let i=13;i<21;i++){
