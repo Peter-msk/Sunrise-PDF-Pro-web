@@ -108,6 +108,9 @@ function sync(){
  $('qa-export').disabled=!items.length;
  const pending=items.some(i=>['ready','failed','cancelled'].includes(i.state));
  $('convert').disabled=!ready||busy||!pending;$('reset').disabled=busy||!items.length;$('cancel').disabled=!busy;
+ const hybridPending=items.some(i=>isHwp(i.file)&&['ready','failed','cancelled'].includes(i.state));
+ $('convert-hybrid').hidden=!hybridPending;
+ $('convert-hybrid').disabled=!ready||busy||!hybridPending;
  const bulk=$('recover-failed'),recoverable=items.filter(canRecoverFile).length;
  if(bulk){bulk.hidden=recoverable===0;bulk.disabled=!ready||busy||recoverable===0;
   bulk.textContent='실패 파일 '+recoverable+'개만 복구';
@@ -342,6 +345,19 @@ $('qa-export').addEventListener('click',()=>{
  }catch(error){
   status('실기 검증 보고서 생성 실패: '+String(error?.message||error));
  }
+});
+// A visible one-click opt-in avoids forcing users to run every incompatible
+// HWP once in professional mode and only then discover the hidden setting.
+// No default or background downgrade: the explicit button selection is the
+// sole authority to choose hybrid-filter for a whole pending batch.
+$('convert-hybrid').addEventListener('click',()=>{
+ if(busy||!ready||!items.some(i=>isHwp(i.file)&&
+  ['ready','failed','cancelled'].includes(i.state)))return;
+ requestedFileRecovery=null;requestedFileRetry=null;requestedBulkRecovery=false;
+ $('pdf-engine').value='hybrid-filter';
+ $('pdf-engine').dispatchEvent(new Event('change'));
+ status('사용자가 혼합 출력을 선택했습니다. 미지원 필터가 있는 페이지만 이미지로 출력합니다. 해당 쪽의 텍스트 검색은 불가능합니다.');
+ $('convert').click();
 });
 $('recover-failed').addEventListener('click',()=>{
  if(busy||!ready||!items.some(canRecoverFile))return;
