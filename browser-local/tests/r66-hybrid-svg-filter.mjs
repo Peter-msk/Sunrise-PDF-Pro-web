@@ -44,7 +44,10 @@ test('DEV33 visible bulk hybrid is explicit and never changes professional defau
  assert.match(js,/\$\('convert-hybrid'\)\.addEventListener\('click'/);
  assert.match(js,/const hybridPending=items\.some\(/);
  assert.match(js,/requestedFileRecovery=null;requestedFileRetry=null;requestedBulkRecovery=false;/);
- assert.match(js,/\$\('pdf-engine'\)\.value='hybrid-filter';/);
+ assert.match(js,/requestedBatchEngine='hybrid-filter';/);
+ assert.match(js,/const selectedEngine=requestedBatchEngine\|\|\$\('pdf-engine'\)\.value;/);
+ assert.match(js,/requestedBatchEngine=null;/);
+ assert.doesNotMatch(js,/\$\('pdf-engine'\)\.value\s*=\s*'hybrid-filter'/);
  assert.match(js,/\$\('convert'\)\.click\(\);/);
  // Main default selected option remains professional, no automatic conversion
  // result may change the batch-wide engine or modify completed PDFs.
