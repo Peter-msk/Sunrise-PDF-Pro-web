@@ -4,6 +4,8 @@ import {readFileSync} from 'node:fs';
 import {localFontCapability,settleInstalledFonts} from '../src/local-font-policy.mjs';
 import {resolveFont,familyKey} from '../src/pdf-fonts.js';
 import {inspectEngineContract} from '../scripts/verify-engine-contract.mjs';
+import {buildLocalBatchQaReport} from '../src/local-batch-qa.mjs';
+import {reviewLocal25FileReport} from '../src/local-qa-release-gate.mjs';
 import {fileURLToPath} from 'node:url';
 
 test('mobile browser with no OS font API is still eligible for self-hosted WASM PDF conversion',async()=>{
@@ -76,4 +78,29 @@ test('all active browser modules forbid Hancom COM/subprocess runtime imports',(
  const root=fileURLToPath(new URL('../..',import.meta.url));
  const result=inspectEngineContract(root);
  assert.equal(result.ok,true,result.issues.join(','));
+});
+
+
+test('DEV35 font quality evidence is numeric and safe for sensitive 25-file reports',()=>{
+ const privateFamily='민감보고서 내부 글꼴 HY소망',privateFile='미공개 사업계획서.hwpx';
+ const items=Array.from({length:25},(_,i)=>({
+  file:{name:privateFile},state:'done',lastEngine:'professional',
+  result:{pages:2,vectorPages:2,rasterPages:0,
+   substituteFamilies:i===0?[privateFamily+' → Nanum Gothic']:[],
+   fontUsage:{bundled:i===0?1:0,local:0,selected:0},
+   sourceFontInventory:{missing:i===0?[privateFamily]:[]}}
+ }));
+ const report=buildLocalBatchQaReport(items);
+ const j=JSON.stringify(report);
+ assert.equal(j.includes(privateFamily),false);
+ assert.equal(j.includes(privateFile),false);
+ assert.equal(report.files[0].substituted_font_families,1);
+ assert.equal(report.files[0].bundled_font_faces,1);
+ assert.equal(report.files[0].unmatched_pc_font_families,1);
+ const audited=reviewLocal25FileReport(report);
+ assert.equal(audited.status,'VISUAL_REVIEW_REQUIRED');
+ assert.deepEqual([
+  audited.substituted_font_files,audited.bundled_font_files,audited.unmatched_pc_font_files
+ ],[1,1,1]);
+ assert.equal(audited.visual_review_required,true);
 });
