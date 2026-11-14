@@ -21,7 +21,7 @@ const $=id=>document.getElementById(id);
 const conversionClock=createConversionClock();
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
-let requestedFileRecovery=null,requestedBulkRecovery=false,requestedFileRetry=null;
+let requestedFileRecovery=null,requestedBulkRecovery=false,requestedFileRetry=null,requestedBatchEngine=null;
 const status=value=>{$('status').textContent=value;};
 const fontStatus=value=>{const node=$('pc-font-status');if(node)node.textContent=value;};
 // Permission is requested only in a real click. Enumeration is NOT proof a
@@ -354,8 +354,7 @@ $('convert-hybrid').addEventListener('click',()=>{
  if(busy||!ready||!items.some(i=>isHwp(i.file)&&
   ['ready','failed','cancelled'].includes(i.state)))return;
  requestedFileRecovery=null;requestedFileRetry=null;requestedBulkRecovery=false;
- $('pdf-engine').value='hybrid-filter';
- $('pdf-engine').dispatchEvent(new Event('change'));
+ requestedBatchEngine='hybrid-filter';
  status('사용자가 혼합 출력을 선택했습니다. 미지원 필터가 있는 페이지만 이미지로 출력합니다. 해당 쪽의 텍스트 검색은 불가능합니다.');
  $('convert').click();
 });
@@ -369,8 +368,12 @@ $('convert').addEventListener('click',async()=>{
  const requested=requestedFileRecovery;requestedFileRecovery=null;
  const oneFileRetry=requestedFileRetry;requestedFileRetry=null;
  const bulkRequested=requestedBulkRecovery;requestedBulkRecovery=false;
- let plan=bulkRequested?planBulkRecovery(items):planConversion(items,$('pdf-engine').value,requested);
- if(oneFileRetry&&!bulkRequested&&!requested)plan=planSingleRetry(items,$('pdf-engine').value,oneFileRetry);
+ // A one-click hybrid choice is consumed by this one operation only. Keep
+ // the visible professional default and subsequent conversions unchanged.
+ const selectedEngine=requestedBatchEngine||$('pdf-engine').value;
+ requestedBatchEngine=null;
+ let plan=bulkRequested?planBulkRecovery(items):planConversion(items,selectedEngine,requested);
+ if(oneFileRetry&&!bulkRequested&&!requested)plan=planSingleRetry(items,selectedEngine,oneFileRetry);
  const {pending,engine}=plan;
  const recoverySpecs=new Map((plan.targets||[]).map(spec=>[spec.item,spec]));
  if(!pending.length)return;
