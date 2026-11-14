@@ -34,3 +34,19 @@ test('only explicit hybrid uses per-page raster policy and keeps default vector 
  assert.match(ui,/<option value="hybrid-filter">/);
  assert.match(ui,/쪽만 이미지/);
 });
+
+test('DEV33 visible bulk hybrid is explicit and never changes professional default',()=>{
+ const js=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ assert.match(html,/<option value="professional" selected>/);
+ assert.match(html,/id="convert-hybrid"[^>]*hidden disabled/);
+ assert.match(html,/필터 혼합 PDF로 시작/);
+ assert.match(js,/\$\('convert-hybrid'\)\.addEventListener\('click'/);
+ assert.match(js,/const hybridPending=items\.some\(/);
+ assert.match(js,/requestedFileRecovery=null;requestedFileRetry=null;requestedBulkRecovery=false;/);
+ assert.match(js,/\$\('pdf-engine'\)\.value='hybrid-filter';/);
+ assert.match(js,/\$\('convert'\)\.click\(\);/);
+ // Main default selected option remains professional, no automatic conversion
+ // result may change the batch-wide engine or modify completed PDFs.
+ assert.doesNotMatch(js,/pdf-engine'\)\.value='compat-raster';/);
+});
