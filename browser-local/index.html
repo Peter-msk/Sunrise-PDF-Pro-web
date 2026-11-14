@@ -53,6 +53,24 @@ button,.download{font-size:14px;min-height:44px}.caption,.counter{font-size:13px
 .conversion-clock-hint{display:block;font-size:11px;color:#5c718a;margin-top:7px}
 @media(max-width:760px){.conversion-clock-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
+<style id="dev30-native-ux-safety">
+/* normalize.css principle: retain native controls while avoiding mobile
+   font-size adjustment and browser-dependent form font inheritance. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button,input,select,textarea{font-family:inherit}
+/* Accessible queue focus: the per-file retry remains visible via keyboard. */
+.files .file-row:focus-within{outline:2px solid #2779d9;outline-offset:-2px}
+.files .file-retry{border:1px solid #a7c6e8;background:#eef6ff;color:#194f82;font-weight:800}
+.files .file-retry:hover:not(:disabled){background:#ddebff}
+/* Animate.css accessibility principle without an animation dependency. */
+@media (prefers-reduced-motion:no-preference){
+ button,.download{transition:background-color .14s ease}
+ .files .file-row{transition:background-color .16s ease,border-color .16s ease}
+}
+@media (prefers-reduced-motion:reduce){
+ button,.download,.files .file-row{transition:none!important;animation:none!important}
+}
+</style>
 </head><body>
 <header class="topbar"><div class="top-inner"><div class="brand"><div class="mark">S</div><div><b>SUNRISE</b><small>PDF PRO · WEB</small></div></div><div class="privacy">문서 서버 전송 없음</div></div></header>
 <main><div class="heading"><div><div class="eyebrow">DOCUMENT TO PDF</div><h1>문서·이미지 PDF 변환</h1><p>한글·엑셀·이미지를 한 번에 선택하고, 각각의 PDF로 저장하세요.</p></div><div class="guide" aria-label="PDF 변환 사용 방법"><span><b>01</b> 문서 선택</span><span><b>02</b> PDF 변환</span><span><b>03</b> 미리보기·다운로드</span></div></div>
