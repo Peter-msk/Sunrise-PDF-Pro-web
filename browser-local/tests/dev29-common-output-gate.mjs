@@ -81,3 +81,11 @@ test('all supported format dispatches share one release gate and one guarded obs
  assert.equal((source.match(/assertConvertedPdfResult\(result,signal\)/g)||[]).length,1);
  assert.equal((source.match(/safeConversionProgress\(onProgress\)/g)||[]).length,1);
 });
+
+test('custom observer errors cannot smuggle a document name into diagnostics',()=>{
+ const entries=[],orig=console.warn;console.warn=(...args)=>entries.push(args);
+ try{const progress=safeConversionProgress(()=>{throw {name:'private_파일명.xlsx',message:'secret'};});
+  assert.doesNotThrow(()=>progress({stage:'pdf'}));
+  assert.deepEqual(entries,[['CONVERSION_PROGRESS_OBSERVER_FAILED','Error']]);
+ }finally{console.warn=orig;}
+});
