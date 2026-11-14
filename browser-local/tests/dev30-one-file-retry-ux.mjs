@@ -59,6 +59,7 @@ test('fixed error guidance never copies arbitrary source content',()=>{
   ['XLSX_ENGINE_UNAVAILABLE','모듈 로드'],
   ['FILE_READ_IDLE_TIMEOUT','파일 읽기 실패'],
   ['FONT_GLYPH_MISSING','원본 서체'],
+  ['SVG_FILTER_EFFECT_UNSUPPORTED','SVG 그림 효과'],
   ['PDF_OUTPUT_TRAILER_INCOMPLETE','완전성 검사']
  ];
  for(const [code,phrase] of cases){
@@ -82,7 +83,10 @@ test('source UI guards a single retry by explicit click and active list membersh
  const ui=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.match(ui,/requestedFileRetry=item/);
  assert.match(ui,/items\.includes\(item\)/);
- assert.match(ui,/planSingleRetry\(items,\$\('pdf-engine'\)\.value,oneFileRetry\)/);
+ assert.match(ui,/planSingleRetry\(items,selectedEngine,oneFileRetry\)/);
+ assert.match(ui,/const selectedEngine=requestedBatchEngine\|\|\$\('pdf-engine'\)\.value;/);
+ assert.match(ui,/requestedBatchEngine=null;/);
+ assert.doesNotMatch(ui,/\$\('pdf-engine'\)\.value\s*=\s*'hybrid-filter'/);
  assert.match(ui,/requestedFileRetry=null/);
  assert.match(ui,/singleRetry/);
  assert.match(ui,/이 파일만 다시 시도/);
