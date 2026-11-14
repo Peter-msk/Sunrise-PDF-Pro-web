@@ -43,7 +43,9 @@ function extension(file){
  const value=m?.[1].toLowerCase();
  return EXTENSIONS.has(value)?value:'other';
 }
-function safeCount(n){return Number.isSafeInteger(n)&&n>=0&&n<=120?n:null;}
+// Reporting must not erase page counts for legitimate 121+ page HWP/HWPX files.
+export const LOCAL_QA_MAX_PAGES=100_000;
+function safeCount(n){return Number.isSafeInteger(n)&&n>=0&&n<=LOCAL_QA_MAX_PAGES?n:null;}
 function safeDuration(n){return Number.isFinite(n)&&n>=0&&n<=86400000?Math.round(n):null;}
 export function localQaErrorCode(error){
  const value=String(error||'');
