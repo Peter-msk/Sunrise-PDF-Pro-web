@@ -124,8 +124,26 @@ export async function convertSpreadsheet(file,onProgress,signal,kind){
   throw Error('XLS_INPUT_BYTES_LIMIT');
  const data=await readDocumentBuffer(file,signal,p=>onProgress({stage:'load',...p}));cancelled(signal);
  if(kind==='xls'&&data.byteLength>48*1024*1024)throw Error('XLS_INPUT_BYTES_LIMIT');
- if(kind==='xlsx')inspectXlsxPackage(data);cancelled(signal);
- const XLSX=await import('xlsx');const book=XLSX.read(data,{type:'array',cellStyles:true,cellNF:true,cellText:true,cellFormula:true});cancelled(signal);
+ if(kind==='xlsx'){
+  onProgress({stage:'load',detail:'xlsx_package',loaded:data.byteLength,total:data.byteLength});
+  inspectXlsxPackage(data);
+ }
+ cancelled(signal);
+ let XLSX;
+ try{XLSX=await import('xlsx');}
+ catch(error){
+  if(error?.name==='AbortError'||signal?.aborted)throw error;
+  throw Error('XLSX_ENGINE_UNAVAILABLE: 브라우저의 스프레드시트 처리 모듈을 불러오지 못했습니다. 페이지를 새로고침하고 다시 시도하세요.');
+ }
+ cancelled(signal);
+ if(kind==='xlsx')onProgress({stage:'load',detail:'xlsx_parse',loaded:data.byteLength,total:data.byteLength});
+ let book;
+ try{book=XLSX.read(data,{type:'array',cellStyles:true,cellNF:true,cellText:true,cellFormula:true});}
+ catch(error){
+  if(error?.name==='AbortError'||signal?.aborted)throw error;
+  throw Error('XLSX_PARSE_FAILED: 통합문서 구조를 해석하지 못했습니다. 파일 암호화·손상 여부를 확인하고 Excel에서 일반 XLSX로 다시 저장한 후 재시도하세요.');
+ }
+ cancelled(signal);
  if(!book.SheetNames?.length)throw Error('통합문서에 시트가 없습니다.');
  const {default:fontkit}=await import('@pdf-lib/fontkit');
  const bundled=await loadBundledFonts(fontkit,signal),face=bundled.faces.find(f=>f.genericFamily==='sans'&&!f.bold&&!f.italic);
@@ -135,6 +153,7 @@ export async function convertSpreadsheet(file,onProgress,signal,kind){
  const pdf=await PDFDocument.create();pdf.registerFontkit(fontkit);const font=await pdf.embedFont(face.bytes,{subset:false});
  const release=await installMeasureFonts({faces:[{...face,cssAliases:[]}]},signal);
  try{
+  if(kind==='xlsx')onProgress({stage:'load',detail:'xlsx_layout',loaded:data.byteLength,total:data.byteLength});
   const plan=[];let hidden=0;
   for(let index=0;index<book.SheetNames.length;index++){
    cancelled(signal);if(book.Workbook?.Sheets?.[index]?.Hidden){hidden++;continue;}

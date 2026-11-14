@@ -7,7 +7,7 @@ import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
-import {canRecoverFile,planConversion,planBulkRecovery,recoveryEngine,recoveryCode} from './conversion-recovery.mjs';
+import {canRecoverFile,planConversion,planBulkRecovery,planSingleRetry,localFailureAdvice,recoveryEngine,recoveryCode} from './conversion-recovery.mjs';
 import {requestLocalFontAccess} from './local-fonts.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
 import {summarizeVectorPreservation,inspectPdfVectorQuality} from './pdf-vector-quality.mjs';
@@ -20,7 +20,7 @@ const $=id=>document.getElementById(id);
 const conversionClock=createConversionClock();
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
-let requestedFileRecovery=null,requestedBulkRecovery=false;
+let requestedFileRecovery=null,requestedBulkRecovery=false,requestedFileRetry=null;
 const status=value=>{$('status').textContent=value;};
 const fontStatus=value=>{const node=$('pc-font-status');if(node)node.textContent=value;};
 // Permission is requested only in a real click. Enumeration is NOT proof a
@@ -108,7 +108,8 @@ function sync(){
  $('convert').disabled=!ready||busy||!pending;$('reset').disabled=busy||!items.length;$('cancel').disabled=!busy;
  const bulk=$('recover-failed'),recoverable=items.filter(canRecoverFile).length;
  if(bulk){bulk.hidden=recoverable===0;bulk.disabled=!ready||busy||recoverable===0;
-  bulk.textContent='실패 파일 '+recoverable+'개만 복구';}
+  bulk.textContent='실패 파일 '+recoverable+'개만 복구';
+  bulk.title='사용자가 직접 누를 때만 실패 파일을 다시 변환합니다. 글꼴 누락·PDF 스트림 오류는 문서 전체가 이미지 PDF로 저장되어 글자 검색이 불가능합니다. SVG 필터 오류는 먼저 해당 쪽만 이미지로 복구합니다.';}
  for(const id of ['source','pdf-font','pdf-engine'])$(id).disabled=busy;
  $('print-prepare').disabled=!ready||busy||!active||!isHwp(active.file)||active.state==='invalid';$('print-save').disabled=busy||!printJob;
  $('total-count').textContent=items.length;$('done-count').textContent=items.filter(i=>i.state==='done').length;
@@ -125,7 +126,7 @@ function draw(){
   const body=document.createElement('div'),name=document.createElement('div'),meta=document.createElement('div');name.className='file-name';name.textContent=item.file.name;meta.className='file-meta';
   const labels={ready:'변환 대기',working:'변환 중',done:'변환 완료',failed:'변환 실패',invalid:'지원하지 않는 파일',cancelled:'취소됨 · 다시 변환 가능'};
   let message=labels[item.state]||'';
-  if(item.error){message+=' · '+item.error;meta.classList.add('error');if(isHwp(item.file)&&/SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT/.test(item.error))message+=' · 아래 출력 및 글꼴 옵션에서 호환 방식 선택 후 다시 변환할 수 있습니다(이미지 PDF, 글자 검색 불가).';}
+  if(item.error){message+=' · '+item.error;meta.classList.add('error');const guidance=localFailureAdvice(item.error);if(guidance)message+=' · 점검 안내: '+guidance;if(isHwp(item.file)&&/SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT|FONT_GLYPH_MISSING/.test(item.error))message+=' · 아래 출력 및 글꼴 옵션에서 호환 방식 선택 후 다시 변환할 수 있습니다(이미지 PDF, 글자 검색 불가).';}
   if(item.result?.substituteFamilies?.length)message+=' · 대체 글꼴: '+item.result.substituteFamilies.join(', ');
   if(item.result?.warnings?.length)message+=' · '+item.result.warnings.join(' ');
   if(item.fontAuditMessage)message+=' · '+item.fontAuditMessage;
@@ -256,11 +257,27 @@ function draw(){
    recover.disabled=busy;
    recover.addEventListener('click',()=>{
     if(busy||!ready||!canRecoverFile(item))return;
-    requestedFileRecovery=item;
+    requestedFileRetry=null;requestedFileRecovery=item;
     $('convert').click();
    });
    actions.append(recover);
   }
+   // Generic one-file retry preserves the user's output choice. Specialized
+   // HWP recovery remains the only action that changes output quality.
+   if(['failed','cancelled'].includes(item.state)&&inputKind(item.file)&&!canRecoverFile(item)){
+    const retry=document.createElement('button');
+    retry.type='button';retry.className='secondary file-retry';
+    retry.textContent='이 파일만 다시 시도';
+    retry.title='현재 출력 설정으로 이 파일만 다시 변환합니다. 이미 완료된 PDF와 다른 실패·대기 파일은 유지합니다.';
+    retry.setAttribute('aria-label',item.file.name+' 파일만 다시 변환');
+    retry.disabled=busy||!ready;
+    retry.addEventListener('click',()=>{
+     if(busy||!ready||!items.includes(item)||!['failed','cancelled'].includes(item.state)||!inputKind(item.file))return;
+     requestedFileRecovery=null;requestedBulkRecovery=false;requestedFileRetry=item;
+     $('convert').click();
+    });
+    actions.append(retry);
+   }
    // Chrome/Edge printing can recover a failed vector PDF caused by a
    // missing glyph or unsupported SVG effect. This is always user-triggered;
    // no inferred font replacement, raster downgrade, or success status.
@@ -307,20 +324,23 @@ $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from
 $('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');draw();});
 $('recover-failed').addEventListener('click',()=>{
  if(busy||!ready||!items.some(canRecoverFile))return;
- requestedFileRecovery=null;requestedBulkRecovery=true;
+ requestedFileRetry=null;requestedFileRecovery=null;requestedBulkRecovery=true;
  $('convert').click();
 });
 $('convert').addEventListener('click',async()=>{
  if(busy||!ready)return;
  const requested=requestedFileRecovery;requestedFileRecovery=null;
+ const oneFileRetry=requestedFileRetry;requestedFileRetry=null;
  const bulkRequested=requestedBulkRecovery;requestedBulkRecovery=false;
- const plan=bulkRequested?planBulkRecovery(items):planConversion(items,$('pdf-engine').value,requested);
+ let plan=bulkRequested?planBulkRecovery(items):planConversion(items,$('pdf-engine').value,requested);
+ if(oneFileRetry&&!bulkRequested&&!requested)plan=planSingleRetry(items,$('pdf-engine').value,oneFileRetry);
  const {pending,engine}=plan;
  const recoverySpecs=new Map((plan.targets||[]).map(spec=>[spec.item,spec]));
  if(!pending.length)return;
  conversionClock.start(pending.length);
  const fontFiles=Array.from($('pdf-font').files||[]);
- if(plan.bulk)status('실패한 문서 '+pending.length+'개만 명시적으로 복구합니다. SVG 필터 오류는 해당 쪽만 이미지로, 스트림 오류나 혼합 재실패는 전체 이미지로 출력됩니다. 성공 파일과 일반 대기 파일은 제외됩니다.');
+ if(plan.bulk)status('실패한 문서 '+pending.length+'개만 명시적으로 복구합니다. SVG 필터 오류는 해당 쪽만 이미지로, 글꼴 누락·스트림 오류 또는 혼합 재실패는 전체 이미지 PDF로 출력되어 글자 검색이 불가능합니다. 성공 파일과 대기 파일은 제외됩니다.');
+ else if(plan.singleRetry)status('선택한 문서 1개만 동일한 출력 설정으로 다시 변환합니다. 완료 파일과 다른 실패·대기 파일은 유지합니다.');
  else if(plan.recovery)status(engine==='hybrid-filter'
   ?'선택한 문서 1개만 혼합 PDF로 다시 변환합니다. 미지원 필터 쪽만 이미지로 처리하며 나머지 쪽은 벡터로 유지합니다.'
   :'선택한 문서 1개만 호환 이미지 PDF로 다시 변환합니다. 모든 쪽의 글자 검색은 불가능합니다.');
@@ -344,7 +364,7 @@ $('convert').addEventListener('click',async()=>{
     const phases=new Set(['svg_build','svg_normalize','image_gif','image_png',
      'image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done',
      'pdf_finalize','pdf_write','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save']);
-    item._proDiagStage=info.stage==='load'?'load':
+    item._proDiagStage=info.stage==='load'?(['xlsx_package','xlsx_parse','xlsx_layout'].includes(info.detail)?info.detail:'load'):
      info.stage==='fonts'?(info.detail==='read'?'font_read':info.detail==='bundled'?'font_bundle':
       info.detail==='measure'?'font_measure':info.detail==='scan'?'font_scan':'fonts'):
      phases.has(info.detail)?info.detail:'render';
@@ -380,7 +400,7 @@ $('convert').addEventListener('click',async()=>{
      pdf_finalize:'PDF 최종 저장 준비',pdf_write:'페이지 PDF 작성 중',pdf_stream:'PDF 바이트 생성 중',
      pdf_done:'PDF 바이트 생성 완료',compat_raster:'호환 이미지 페이지 생성',compat_page_done:'호환 이미지 페이지 완료',compat_save:'호환 PDF 저장 중'
     };
-    const message=info.stage==='load'?'문서 읽는 중':
+    const message=info.stage==='load'?(info.detail==='xlsx_package'?'XLSX 압축 구조 안전 검사':info.detail==='xlsx_parse'?'XLSX 시트 해석':info.detail==='xlsx_layout'?'XLSX 인쇄 레이아웃 검사':'문서 읽는 중'):
      info.stage==='fonts'?fontStatus:
      stepLabels[info.detail]||'페이지 변환';
     const byteStatus=(info.detail==='pdf_stream'||info.detail==='pdf_write')&&Number.isSafeInteger(info.bytes)
@@ -452,7 +472,7 @@ $('cancel').addEventListener('click',()=>{
  status('취소 요청됨 · 현재 작업이 제어를 반환하면 중단합니다. 이미 완료된 PDF는 유지됩니다.');
  $('cancel').disabled=true;
 });
-$('reset').addEventListener('click',()=>{requestedFileRecovery=null;conversionClock.reset();for(const item of items)release(item);items=[];clearPrint();clearArchive();$('progress').value=0;show(null);draw();status('새 문서를 선택해 주세요.');});
+$('reset').addEventListener('click',()=>{requestedFileRecovery=null;requestedFileRetry=null;requestedBulkRecovery=false;conversionClock.reset();for(const item of items)release(item);items=[];clearPrint();clearArchive();$('progress').value=0;show(null);draw();status('새 문서를 선택해 주세요.');});
 viewer.open(null);
 status(document.wasDiscarded
  ?'브라우저가 이전 탭을 메모리에서 폐기했습니다. 미완료 변환은 복원할 수 없습니다. 원본 파일을 다시 선택해 변환하세요.'
