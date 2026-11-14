@@ -26,7 +26,8 @@
 | Peter-msk/Sunrise_PDF-PRO | 공개 저장소는 README/latest.json 위주 | Windows 제품 릴리스 메타데이터 | 웹 WASM 대체 아님 |
 | edwardkim/rhwp | 0.9.0 개발계열: PageLayerTree, Canvas/CanvasKit, native Skia PDF | 향후 파서·레이아웃 업데이트 및 검증 자료 | 브라우저 WASM PDF 직접 출력 API가 존재하는지 별도 확인 전 무조건 업데이트 금지 |
 | sanguneo/rhwptopdf | 구형 rhwp fork + Rust/svg2pdf/pdf-writer WASM, local 브라우저 전용 | 브라우저 내 PDF bytes 생성과 객체별 래스터의 가능성 | 유력 PoC, 단 parser 옛 버전/텍스트 glyph outline의 검색성 상실 |
-| typst/svg2pdf | SVG 필터 객체만 raster, 기타 SVG 벡터; Rust SVG→PDF | 지원되지 않는 효과 처리 시 전체 페이지 손실을 방지 | 최우선 엔진 대안 PoC. WASM 빌드·폰트·보안·검색성 입증 필요 |
+| typst/svg2pdf | SVG 필터 객체만 raster, 기타 SVG 벡터; Rust SVG→PDF | 기존 개념 참고 | **유지보수 종료**: upstream에서 krilla-svg 전환 권고. 신규 도입 금지 |
+| LaurenzV/krilla (krilla-svg) | 지원되지 않는 SVG 필터 그룹만 resvg 이미지화, 타 객체는 벡터·선택가능 텍스트 출력 경로 | 기존 텍스트 검색성·필터 충실도 개선 후보 | **새 PoC 우선**. 한국어, WASM, 메모리, 보안 검증 전 도입 금지 |
 | alafr/SVG-to-PDFKit | 현재 사용하는 SVG-to-PDFKit 계열 | 기존 문제 재현, fontCallback, 렌더 warnings | 기본 유지; 임의 필터 무시 금지 |
 | yWorks/svg2pdf.js | jsPDF를 이용한 브라우저 SVG→PDF, 제한적인 SVG 지원 | 이중 후보 비교 및 브라우저 PDF 벡터 경로 | 복합 SVG 충실도 검증 전 교체 불가 |
 | canvg/canvg | SVG→Canvas 렌더(픽셀화) | 이미지 호환 출력의 비교 기준 | 벡터 전문 출력 대체 아님 |
@@ -40,7 +41,8 @@
 공개 소스:
 - https://github.com/edwardkim/rhwp
 - https://github.com/sanguneo/rhwptopdf
-- https://github.com/typst/svg2pdf
+- https://github.com/typst/svg2pdf (upstream 유지보수 종료)
+- https://github.com/LaurenzV/krilla
 - https://github.com/alafr/SVG-to-PDFKit
 - https://github.com/yWorks/svg2pdf.js
 - https://github.com/canvg/canvg
@@ -54,9 +56,9 @@
 ## 3. 근본 원인과 개선 전략
 1. 기본 professional은 실제 비영(非零) SVG filter를 PDFKit에서 충실히 재현하지 못하며
    의도적으로 실패한다. 검증 성공과 실제 문서 성공을 동일하게 표기하지 않는다.
-2. Rust svg2pdf는 필터가 붙은 객체만 래스터화하고 나머지를 벡터로 남기는 구조를 제공한다.
-   다만 svg2pdf는 Rust 라이브러리이며 직접 JS 전환이 불가능하므로, 원본 파일을
-   업로드하지 않는 검증용 WASM 번들 구성·글꼴·ToUnicode 확인을 선행한다.
+2. 유지보수 중인 후속 krilla-svg는 필터가 붙은 그룹만 resvg로 래스터화하고 나머지는
+   PDF 텍스트·벡터로 남기는 구조를 제공한다. 기본 embed_text=true이나 사용자 한글의
+   검색·복사 보존은 아직 미검증. WASM 번들·폰트·보안·메모리 PoC를 선행한다.
 3. rhwptopdf는 브라우저 전용 실행을 증명하지만 업스트림 파서 세대가 다르고
    텍스트를 경로로 변환해 검색/복사 조건을 충족하지 않는다. 곧바로 핵심 엔진 교체 금지.
 4. RHWP 0.9.0 PDF native/Skia는 CLI/natively 문서화됐고, 브라우저 WASM 직접 PDF
@@ -73,7 +75,7 @@
 - 기존 SVG 필터 테스트에 반례(0 vs 비0/SourceAlpha/자체 필터 영역/그룹/투명도)를 추가한다.
 
 ## 5. 후속 PoC 채택 게이트
-A. 현재 렌더러가 생성한 SVG를 변경 없이 Rust/svg2pdf WASM 입력에 제공 가능한가?
+A. 현재 렌더러 SVG를 유지보수 중인 krilla-svg 기반 격리 WASM PoC에 제공 가능한가?
 B. 외부 URL, 스크립트, CSS, 대용량 메모리 및 CPU 제약과 SVG 보안 경계가 유지되는가?
 C. 필터 객체만 raster되는가, 나머지 한국어 텍스트가 선택·검색·복사 가능한가?
 D. PDF 구조 완전성, 25개 HWP/HWPX 쪽수 및 원본 배치와 100% 대응하는가?
