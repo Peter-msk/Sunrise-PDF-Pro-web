@@ -1,20 +1,44 @@
-# Sunrise PDF PRO — local browser converter
+# Sunrise PDF PRO(Web) — 브라우저 자체 HWP/HWPX → PDF 변환
 
-- Official upstream: [edwardkim/rhwp](https://github.com/edwardkim/rhwp), MIT License, tag v0.8.7.
-- Direct dependency: `@rhwp/core@0.8.7` WASM for **local HWP/HWPX parsing and SVG page rendering**.
-- `pdf-lib@1.17.1` assembles locally rasterized page images into a downloadable PDF. No network conversion API or server upload.
-- Original HWP/HWPX files never leave the browser. WASM/JS are static site assets.
-- Limitations: **rasterized image PDF** (text not searchable/selectable), font differences and SVG rendering limitations; maximum 20 MiB and 120 pages. It is not the native `rhwp export-pdf` CLI and should not be called text-preserving/vector PDF.
+## 필수 제품 계약
+
+**한컴오피스/한글/한COM/Windows COM은 PDF 변환의 설치·실행 전제조건이 아니다.** Android·iOS·Windows·macOS 등의 지원되는 브라우저 안에서, 사이트가 제공하는 RHWP WASM과 JavaScript PDF 출력 엔진으로 문서 처리를 수행한다. 브라우저 성능·메모리·지원 API의 차이 때문에 모든 기기에서 모든 원본이 성공한다고 보장하는 것은 아니다.
+
+실제 HWP/HWPX 변환 경로:
+`@rhwp/core@0.8.7` WebAssembly → `HwpDocument` 페이지 파싱/인쇄용 SVG 생성 → 안전 검사·필터 정규화 → `svg-to-pdfkit@0.1.8` + `pdfkit@0.20.2` PDF 생성. 사용자가 명시적으로 선택하는 혼합 출력은 미지원 SVG 필터가 있는 **해당 쪽만** 이미지화하고 나머지 쪽 벡터·텍스트 보존을 우선한다. 호환 이미지 출력은 사용자 선택 시에만 실행한다. PDF.js와 pdf-lib는 출력 검토·후처리 및 PDF 완전성 검증에 사용한다.
+
+원본 HWP/HWPX·설치 글꼴 바이트·선택한 TTF/OTF 글꼴은 외부 변환 서버로 업로드하지 않는다. 애플리케이션 JS/WASM과 기본 글꼴은 사이트의 정적 자산에서 불러오며, 집계형 진단 이벤트가 있더라도 원본 바이트/글꼴을 포함하지 않아야 한다.
+
+## 글꼴 사용 순서 (PC/모바일 모두)
+
+1. **사용자가 직접 선택한 원본 TTF/OTF**: 해당 기기에서 서체를 보유한 경우 가장 정확한 경로.
+2. **해당 기기에 실제 설치된 글꼴**: Local Font Access API가 제공되는 안전한 브라우저 환경에서, 사용자가 브라우저 권한을 허용했을 때만 요청한다. 일치하는 패밀리·굵기·기울임·글리프를 확인해 선택한다. 글꼴 확인은 OS 설치 한글 프로그램을 실행하는 행위가 아니다.
+3. **사이트 내장 OFL 글꼴**: 모바일에서 설치 글꼴 API가 없거나 권한을 거부한 경우에도 사용할 수 있다. 현재 나눔명조·나눔고딕·기호 글꼴로 대체하며, **원본 서체와 폭·행간·줄바꿈·표 위치가 달라질 수 있다.** 파일이 만들어졌다고 원본과 동일하다고 단정하지 않는다.
+
+모바일에서는 PC에 설치된 서체를 원격으로 직접 읽을 수 없다. 반드시 원본 서체가 필요하면 라이선스를 준수해 모바일 기기에 보관한 TTF/OTF를 직접 선택해야 한다. 폰트 파일 접근의 실패는 HWP/HWPX 파싱 또는 PDF 엔진을 차단하지 않는다.
+
+## 알려진 한계
+
+- HWP/HWPX 당 현재 **최대 120쪽** (메모리/안전 운영 정책). 파일 바이트 크기에는 단순 20MiB 상한을 두지 않지만 실제 기기 RAM에 따라 실패할 수 있다.
+- 비영 SVG 흐림·그림자 등의 복합 필터는 기존 PDFKit 벡터 경로에서 보장되지 않는다. 의도적 전문 출력 실패 또는 사용자가 선택한 혼합/호환 출력으로 취급한다.
+- 벡터 PDF의 실제 글꼴 임베딩, PDF 검색·복사, 한국어 줄바꿈, 표·도형 배치는 원본과 별도로 검증한다. 이미지화된 쪽은 검색·복사가 불가하다.
+- XLS/XLSX의 원본 복잡한 서식·차트는 전부 재현되지 않는다.
+
+## 로컬 개발 및 회귀
 
 ```bash
 cd browser-local
-npm install
+npm ci
+npm run check:source
+npm run check:engine
+npm run test:local
 npm run build
-npm run preview
+npm run verify:dist
+npm run qa:review -- "/path/to/Sunrise_PDF_PRO_Web_QA_*.json"
 ```
 
-`npm run build` copies the exact package WASM into `public/` and builds the JS. `dist/` contains standalone static HTML, JS and WASM. These files can be hosted as Cloudflare Workers Static Assets **without a paid API or Linux container**. First verify the GitHub Actions real-browser HWP/HWPX PDF test; only then switch the public Worker UI.
+`check:engine`은 active browser module 전체에 한컴 COM·OS 자식 프로세스 호출이 추가되지 않았는지 차단한다. `dev35-browser-only-hancom-free.mjs`는 모바일의 Local Font Access 부재, 권한 거부, 정확한 글꼴 우선 사용, 웹 자체 엔진의 존재를 검사한다. 이 검사들은 프로그램의 **실기 25개 문서 수락시험을 대체하지 않는다.**
 
-Source provenance: include upstream under `vendor/rhwp-upstream` as a pinned Git submodule. MIT license copied to `THIRD_PARTY_RHWP_LICENSE.txt`; copyright retained.
+신규 엔진 후보 krilla-svg는 별도 실험 대상이며, 검증 없는 변경과 운영 자동 배포를 금지한다. GitHub Actions 중지 상태를 유지한다.
 
-**Security:** the engine generates SVG from untrusted documents. The implementation rejects active elements, external resources and scripts. Browser CSP limits network, no backend upload path. Input documents are never sent off device, but native SVG/font layout may vary by system.
+제3자 라이선스·귀속 표기는 프로젝트 루트의 별도 라이선스/NOTICE를 확인한다.
