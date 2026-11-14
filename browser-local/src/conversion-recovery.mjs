@@ -1,3 +1,5 @@
+import {inputKind} from './input-types.js';
+
 /**
  * Recover known, repeatable professional HWP failures without downgrading
  * any other document. The user's per-file click is the explicit consent to
@@ -52,4 +54,15 @@ export function planBulkRecovery(items) {
  }));
  return {pending:targets.map(target=>target.item),engine:null,
   recovery:targets.length>0,bulk:true,targets};
+}
+
+/** Retry a single failed/cancelled supported document without changing the
+ * selected engine, retrying other failures, or downgrading output quality.
+ * This only creates a plan after a direct per-file user action. */
+export function planSingleRetry(items,selectedEngine,target){
+ if(!Array.isArray(items))throw Error('CONVERSION_QUEUE_INVALID');
+ const permitted=items.includes(target)&&['failed','cancelled'].includes(target?.state)&&
+  !!inputKind(target?.file);
+ return {pending:permitted?[target]:[],engine:selectedEngine,recovery:false,cause:null,
+  singleRetry:permitted};
 }
