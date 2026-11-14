@@ -45,7 +45,7 @@ test('invalid inputs reject and known classification remains bounded',()=>{
  assert.equal(localQaErrorCode('PDF_STREAM_TIMEOUT (NO_FINAL_BYTES)'),'PDF_STREAM_TIMEOUT');
  assert.equal(localQaErrorCode(''),null);
 });
-test('UI integration allows download only by user click without external upload',()=>{
+test('UI integration allows download only by user click without external upload',async()=>{
  const {readFileSync}=await import('node:fs');
  const ui=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
