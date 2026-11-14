@@ -32,8 +32,8 @@ function xrefWindow(source,offset,total){
  return sample;
 }
 
-function verifyXrefAt(source,offset,total){
- const sourceText=DECODER.decode(xrefWindow(source,offset,total));
+function verifyXrefWindow(bytes){
+ const sourceText=DECODER.decode(bytes);
  if(/^xref[ \t]*(?:\r\n|\n|\r)[0-9]+[ \t]+[0-9]+[ \t]*(?:\r\n|\n|\r)/.test(sourceText))return 'table';
  // A PDF 1.5+ cross-reference stream starts with an indirect object header;
  // its dictionary must declare /Type /XRef before the binary 'stream' token.
@@ -46,6 +46,56 @@ function verifyXrefAt(source,offset,total){
      /\/W\s*\[/.test(beforeStream))return 'stream';
  }
  throw Error('PDF_OUTPUT_XREF_TARGET_INVALID');
+}
+function verifyXrefAt(source,offset,total){
+ return verifyXrefWindow(xrefWindow(source,offset,total));
+}
+
+function pdfEnvelope(header,tail,size){
+ if(size<40||header.length!==8||!/^%PDF-(?:1\.[0-7]|2\.0)$/.test(DECODER.decode(header)))
+  throw Error('PDF_OUTPUT_HEADER_INVALID');
+ const suffix=DECODER.decode(tail);
+ const match=/(?:^|[\r\n])startxref[ \t]*[\r\n]+([0-9]+)[ \t]*[\r\n]+%%EOF[ \t\r\n]*$/.exec(suffix);
+ if(!match)throw Error('PDF_OUTPUT_TRAILER_INCOMPLETE');
+ const pointer=Number(match[1]);
+ if(!Number.isSafeInteger(pointer)||pointer<8||pointer>=size-20)
+  throw Error('PDF_OUTPUT_XREF_OFFSET_INVALID');
+ return pointer;
+}
+
+/** Check a Blob's PDF envelope using only bounded sparse reads (<= 8 KiB),
+ * avoiding an additional whole-file buffer after a large HWP/XLSX render.
+ * This is a structural gate, not a substitute for parsing page content. */
+export async function assertCompletePdfBlob(blob,signal,maxBytes=MAX_BYTES){
+ if(!(blob instanceof Blob))throw Error('PDF_OUTPUT_BLOB_REQUIRED');
+ if(!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>MAX_BYTES)
+  throw Error('PDF_OUTPUT_BUDGET_INVALID');
+ if(blob.size>maxBytes)throw Error('PDF_OUTPUT_BYTES_LIMIT');
+ const cancel=()=>{if(signal?.aborted)
+  throw new DOMException('PDF 검증이 취소되었습니다.','AbortError');};
+ cancel();
+ const head=new Uint8Array(await blob.slice(0,8).arrayBuffer());
+ cancel();
+ const tail=new Uint8Array(await blob.slice(-TAIL_BYTES).arrayBuffer());
+ cancel();
+ const pointer=pdfEnvelope(head,tail,blob.size);
+ const window=new Uint8Array(await blob.slice(pointer,Math.min(blob.size,pointer+XREF_LOOKAHEAD)).arrayBuffer());
+ cancel();
+ verifyXrefWindow(window);
+ return blob;
+}
+
+/** Format-neutral success gate. All converters must return a structurally
+ * complete PDF Blob and self-consistent page/byte counts before UI marks done.
+ * This does not claim text fidelity or that all declared pages are rendered. */
+export async function assertConvertedPdfResult(result,signal){
+ if(!Number.isSafeInteger(result?.pages)||result.pages<1||result.pages>120)
+  throw Error('PDF_RESULT_PAGE_COUNT_INVALID');
+ if(!(result?.pdf instanceof Blob))throw Error('PDF_OUTPUT_BLOB_REQUIRED');
+ if(!Number.isSafeInteger(result.bytes)||result.bytes!==result.pdf.size)
+  throw Error('PDF_RESULT_BYTES_MISMATCH');
+ await assertCompletePdfBlob(result.pdf,signal);
+ return result;
 }
 
 export function createPdfOutputGuard(maxBytes=MAX_BYTES){
@@ -77,14 +127,7 @@ export function createPdfOutputGuard(maxBytes=MAX_BYTES){
  function finish(source){
   if(finished)throw Error('PDF_OUTPUT_ALREADY_FINISHED');
   finished=true;
-  if(size<40||leading!==8||!/^%PDF-(?:1\.[0-7]|2\.0)$/.test(DECODER.decode(first)))
-   throw Error('PDF_OUTPUT_HEADER_INVALID');
-  const suffix=DECODER.decode(tail.subarray(0,trailing));
-  const match=/(?:^|[\r\n])startxref[ \t]*[\r\n]+([0-9]+)[ \t]*[\r\n]+%%EOF[ \t\r\n]*$/.exec(suffix);
-  if(!match)throw Error('PDF_OUTPUT_TRAILER_INCOMPLETE');
-  const pointer=Number(match[1]);
-  if(!Number.isSafeInteger(pointer)||pointer<8||pointer>=size-20)
-   throw Error('PDF_OUTPUT_XREF_OFFSET_INVALID');
+  const pointer=pdfEnvelope(first.subarray(0,leading),tail.subarray(0,trailing),size);
   const xrefKind=verifyXrefAt(source,pointer,size);
   return {bytes:size,xrefOffset:pointer,xrefKind};
  }
