@@ -17,7 +17,7 @@ export function classifyProError(error){
  const code=typeof error?.code==='string'?error.code:'';
  if(/^[A-Z][A-Z0-9_]{2,63}$/.test(code))return code;
  // Extract ONLY stable machine error tokens, never the surrounding free-text message.
- const match=String(error?.message||error||'').match(/\b(?:SVG|PDF|HWP|HWPX|PNG|GIF|FONT|WASM)_[A-Z0-9_]{3,55}\b/);
+ const match=String(error?.message||error||'').match(/\b(?:SVG|PDF|HWPX|HWP|XLSX|XLS|FILE|ZIP|PNG|GIF|FONT|PC_FONT|CSS_FONT|WASM)_[A-Z0-9_]{3,55}\b/);
  return match?match[0]:'CONVERSION_FAILED';
 }
 export function emitProEvent(kind,{feature='ui',stage='none',error_code='NONE',duration_ms=0}={}){
