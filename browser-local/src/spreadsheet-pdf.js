@@ -153,6 +153,7 @@ export async function convertSpreadsheet(file,onProgress,signal,kind){
  const pdf=await PDFDocument.create();pdf.registerFontkit(fontkit);const font=await pdf.embedFont(face.bytes,{subset:false});
  const release=await installMeasureFonts({faces:[{...face,cssAliases:[]}]},signal);
  try{
+  if(kind==='xlsx')onProgress({stage:'load',detail:'xlsx_layout',loaded:data.byteLength,total:data.byteLength});
   const plan=[];let hidden=0;
   for(let index=0;index<book.SheetNames.length;index++){
    cancelled(signal);if(book.Workbook?.Sheets?.[index]?.Hidden){hidden++;continue;}
