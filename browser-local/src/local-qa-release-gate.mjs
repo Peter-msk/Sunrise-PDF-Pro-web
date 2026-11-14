@@ -4,12 +4,13 @@
  * so page geometry, fonts, searchability and visual parity remain unverified.
  * No network, filename or document-byte access.
  */
+import {LOCAL_QA_MAX_PAGES} from './local-batch-qa.mjs';
 export const QA_BATCH_SIZE=25;
 const FORMAT=new Set(['hwp','hwpx','xls','xlsx','jpg','jpeg','png']);
 const ENGINES=new Set(['professional','hybrid-filter','compat-raster']);
 const STATES=['ready','working','done','failed','cancelled','invalid'];
 const reportSchema='sunrise-pdf-pro-web-local-qa/v1';
-const count=n=>Number.isSafeInteger(n)&&n>=0&&n<=120;
+const count=n=>Number.isSafeInteger(n)&&n>=0&&n<=LOCAL_QA_MAX_PAGES;
 const mark=(issues,code,index=null)=>issues.push({code,...(index===null?{}:{index})});
 
 /**
@@ -43,7 +44,7 @@ export function reviewLocal25FileReport(report,{expectedFiles=QA_BATCH_SIZE}={})
    mark(issues,'QA_FILE_NOT_COMPLETED',index);
    continue;
   }
-  if(!Number.isSafeInteger(f.pages)||f.pages<1||f.pages>120){
+  if(!Number.isSafeInteger(f.pages)||f.pages<1||f.pages>LOCAL_QA_MAX_PAGES){
    mark(issues,'QA_PAGES_INVALID',index);continue;
   }
   if(f.error_code!==null||f.filter_category!==null)
