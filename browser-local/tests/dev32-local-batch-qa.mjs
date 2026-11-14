@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildLocalBatchQaReport,localQaErrorCode} from '../src/local-batch-qa.mjs';
+import {buildLocalBatchQaReport,localQaErrorCode,localQaFilterCategory} from '../src/local-batch-qa.mjs';
 
 const item=(name,state,extra={})=>({file:{name,size:1234},state,...extra});
 test('25-file test shape: count successes, failures and waiting without pretending to re-run files',()=>{
@@ -55,4 +55,11 @@ test('UI integration allows download only by user click without external upload'
  assert.match(ui,/URL\.createObjectURL\(new Blob\(/);
  assert.match(ui,/URL\.revokeObjectURL/);
  assert.doesNotMatch(ui,/emitProEvent\('qa_/);
+});
+
+test('SVG filter failure class stays in a closed and privacy-safe vocabulary',()=>{
+ assert.equal(localQaFilterCategory('SVG_FILTER_EFFECT_UNSUPPORTED; 분류: 흐림 또는 그림자).'),'blur');
+ assert.equal(localQaFilterCategory('SVG_FILTER_EFFECT_UNSUPPORTED; 분류: 복합 필터 체인).'),'multi-primitive');
+ assert.equal(localQaFilterCategory('SVG_FILTER_EFFECT_UNSUPPORTED; 분류: PRIVATE CLIENT).'),'unspecified');
+ assert.equal(localQaFilterCategory('PDF_STREAM_TIMEOUT'),null);
 });
