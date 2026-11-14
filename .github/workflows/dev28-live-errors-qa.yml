@@ -1,0 +1,36 @@
+name: DEV28 live XLSX browser smoke and selected recovery QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/dev28-live-conversion-errors-20261114
+    paths:
+      - .github/workflows/dev28-live-errors-qa.yml
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Install pinned deps without mutating production
+        run: npm ci --prefix browser-local --ignore-scripts --no-audit --no-fund
+      - name: Verify simple source/test syntax
+        run: |
+          node --check browser-local/src/pro-telemetry.js
+          node --check browser-local/src/conversion-recovery.mjs
+          node --check browser-local/tests/dev28-live-xlsx-smoke.mjs
+      - name: Install Chromium
+        run: npx --prefix browser-local playwright install --with-deps chromium
+      - name: Synthetic XLSX file real production site to PDF download
+        run: node browser-local/tests/dev28-live-xlsx-smoke.mjs
+      - name: Recovery and XLSX ZIP safety targeted unit regressions
+        run: node --test browser-local/tests/r66-real-failure-retry.mjs browser-local/tests/r67-bulk-recovery.mjs browser-local/tests/r66-xlsx-package-guard.mjs browser-local/tests/r66-xlsx-structure-extra.mjs
