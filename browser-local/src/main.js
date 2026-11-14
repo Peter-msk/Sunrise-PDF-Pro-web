@@ -345,7 +345,7 @@ $('convert').addEventListener('click',async()=>{
     const phases=new Set(['svg_build','svg_normalize','image_gif','image_png',
      'image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done',
      'pdf_finalize','pdf_write','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save']);
-    item._proDiagStage=info.stage==='load'?'load':
+    item._proDiagStage=info.stage==='load'?(['xlsx_package','xlsx_parse'].includes(info.detail)?info.detail:'load'):
      info.stage==='fonts'?(info.detail==='read'?'font_read':info.detail==='bundled'?'font_bundle':
       info.detail==='measure'?'font_measure':info.detail==='scan'?'font_scan':'fonts'):
      phases.has(info.detail)?info.detail:'render';
@@ -381,7 +381,7 @@ $('convert').addEventListener('click',async()=>{
      pdf_finalize:'PDF 최종 저장 준비',pdf_write:'페이지 PDF 작성 중',pdf_stream:'PDF 바이트 생성 중',
      pdf_done:'PDF 바이트 생성 완료',compat_raster:'호환 이미지 페이지 생성',compat_page_done:'호환 이미지 페이지 완료',compat_save:'호환 PDF 저장 중'
     };
-    const message=info.stage==='load'?'문서 읽는 중':
+    const message=info.stage==='load'?(info.detail==='xlsx_package'?'XLSX 압축 구조 안전 검사':info.detail==='xlsx_parse'?'XLSX 시트 해석':'문서 읽는 중'):
      info.stage==='fonts'?fontStatus:
      stepLabels[info.detail]||'페이지 변환';
     const byteStatus=(info.detail==='pdf_stream'||info.detail==='pdf_write')&&Number.isSafeInteger(info.bytes)
