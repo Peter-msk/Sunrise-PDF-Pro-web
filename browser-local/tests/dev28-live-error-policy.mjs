@@ -15,7 +15,7 @@ test('XLSX and file reader error categories survive anonymous classification',()
   assert.equal(classifyProError('문서 처리 실패 ('+code+')'),code);
  }
  assert.equal(classifyProError('사용자정보.pdf /local/private'), 'CONVERSION_FAILED');
- assert.equal(classifyProError('XLSX_ZIP_PATH_/local/name.xlsx'),'CONVERSION_FAILED');
+ assert.equal(classifyProError('사용자 파일 /local/private/name.xlsx 에서 오류'),'CONVERSION_FAILED');
 });
 
 test('missing glyph explicitly offers per-file raster PDF, never auto-downgrades unrelated docs',()=>{
