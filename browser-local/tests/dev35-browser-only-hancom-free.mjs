@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {localFontCapability,settleInstalledFonts} from '../src/local-font-policy.mjs';
 import {resolveFont,familyKey} from '../src/pdf-fonts.js';
 import {inspectEngineContract} from '../scripts/verify-engine-contract.mjs';
-import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 test('mobile browser with no OS font API is still eligible for self-hosted WASM PDF conversion',async()=>{
  const capability=localFontCapability({isSecureContext:true});
@@ -73,7 +73,7 @@ test('web UI does not gate conversion on Hancom installation or local font acces
 });
 
 test('all active browser modules forbid Hancom COM/subprocess runtime imports',()=>{
- const root=resolve(new URL('../..',import.meta.url).pathname);
+ const root=fileURLToPath(new URL('../..',import.meta.url));
  const result=inspectEngineContract(root);
  assert.equal(result.ok,true,result.issues.join(','));
 });
