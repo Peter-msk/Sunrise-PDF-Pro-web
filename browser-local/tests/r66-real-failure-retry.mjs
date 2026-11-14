@@ -60,7 +60,9 @@ test('UI uses the plan for exactly one retry without changing global option',()=
  const src=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.match(src,/requestedFileRecovery=item;/);
- assert.match(src,/planConversion\(items,\$\('pdf-engine'\)\.value,requested\)/);
+ assert.match(src,/const selectedEngine=requestedBatchEngine\|\|\$\('pdf-engine'\)\.value/);
+ assert.match(src,/requestedBatchEngine=null/);
+ assert.match(src,/planConversion\(items,selectedEngine,requested\)/);
  assert.match(src,/const \{pending,engine\}=plan/);
  assert.match(src,/item\.lastEngine=itemEngine/);
   assert.match(src,/itemEngine=spec\?\.engine\|\|engine/);
