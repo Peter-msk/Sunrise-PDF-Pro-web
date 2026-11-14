@@ -13,6 +13,7 @@ const POLICY = Object.freeze({
   'X-Frame-Options':'DENY','Permissions-Policy':'camera=(), microphone=(), geolocation=()',
   'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'"
 });
+import {blocksLegacyDocumentUpload} from './browser-only-upload-policy.mjs';
 const utf = new TextEncoder();
 function originConfig(env) {
   if(typeof env?.SUNRISE_BACKEND_ORIGIN!=='string'||typeof env?.SUNRISE_EDGE_HMAC_SECRET!=='string'||env.SUNRISE_EDGE_HMAC_SECRET.length<32) return null;
@@ -115,6 +116,10 @@ export default {
       if(method==='GET'&&path.startsWith('/admin/')&&adminResponse.headers.get('content-type')?.includes('text/html'))return new HTMLRewriter().on('#side',{element(e){e.append('<a href="/admin/traces/">◈ <span>Trace v2 DEV4</span></a>',{html:true});}}).transform(adminResponse);
       return adminResponse;
     }
+    // The public HWP/HWPX engine is /local/ browser WASM. Never relay
+    // original documents to a legacy conversion server, even if configured.
+    if(blocksLegacyDocumentUpload(path,method,request.headers.get('content-type')))
+      return json({detail:'DOCUMENT_UPLOAD_DISABLED_USE_BROWSER_WASM'},410,method);
     const target=originConfig(env);
     if(path==='/local')return Response.redirect(new URL('/local/',request.url),302);
     if(path==='/local/'||path==='/local/index.html'){

@@ -79,6 +79,8 @@ export function localFailureAdvice(error){
   return '엑셀 처리 모듈 로드 실패: 네트워크 상태를 확인하고 페이지를 새로고침한 뒤 해당 파일을 다시 시도하세요.';
  if(/\b(?:FILE_READ_IDLE_TIMEOUT|FILE_READ_[A-Z0-9_]+)\b/.test(message))
   return '파일 읽기 실패: 파일 잠금·브라우저 메모리·저장장치 접근 상태를 확인하고 해당 파일만 다시 시도하세요.';
+ if(/\bSVG_FILTER_EFFECT_UNSUPPORTED\b/.test(message))
+  return 'SVG 그림 효과가 기본 벡터 출력 엔진에서 지원되지 않습니다. 이 파일만 혼합 PDF로 복구하면 해당 쪽만 이미지가 되어 글자 검색이 제한됩니다. 혼합 출력도 실패한 경우 호환 이미지 PDF를 직접 선택하세요. 원본과 출력 결과를 확인하세요.';
  if(/\bFONT_GLYPH_MISSING\b/.test(message))
   return '원본 서체의 일부 문자를 PDF에 넣을 수 없습니다. 원본 글꼴을 추가하거나 글자 검색이 불가능한 이미지 PDF 복구를 직접 선택하세요.';
  if(/\bPDF_OUTPUT_[A-Z0-9_]+\b/.test(message))
