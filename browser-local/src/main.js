@@ -7,6 +7,7 @@ import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
+import {buildLocalBatchQaReport} from './local-batch-qa.mjs';
 import {canRecoverFile,planConversion,planBulkRecovery,planSingleRetry,localFailureAdvice,recoveryEngine,recoveryCode} from './conversion-recovery.mjs';
 import {requestLocalFontAccess} from './local-fonts.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
@@ -104,6 +105,7 @@ function show(item){
  $('quality-detail').replaceChildren(title,detail);viewer.open(item.result.pdf);sync();
 }
 function sync(){
+ $('qa-export').disabled=!items.length;
  const pending=items.some(i=>['ready','failed','cancelled'].includes(i.state));
  $('convert').disabled=!ready||busy||!pending;$('reset').disabled=busy||!items.length;$('cancel').disabled=!busy;
  const bulk=$('recover-failed'),recoverable=items.filter(canRecoverFile).length;
@@ -322,6 +324,25 @@ for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{e.p
 $('drop').addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer?.files||[])));
 $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.';draw();});
 $('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');draw();});
+// Export is an explicit, local user action. It works during a long-running
+// batch so the last recorded stage is not lost; it never sends source data.
+$('qa-export').addEventListener('click',()=>{
+ if(!items.length)return;
+ try{
+  const report=buildLocalBatchQaReport(items);
+  const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],
+   {type:'application/json'}));
+  const link=document.createElement('a');
+  link.href=url;
+  link.download='Sunrise_PDF_PRO_Web_QA_'+
+   report.generated_at.replace(/[-:T]/g,'').slice(0,14)+'.json';
+  document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  status('실기 검증 보고서 다운로드를 요청했습니다. 파일명·본문·경로는 보고서에 포함하지 않습니다.');
+ }catch(error){
+  status('실기 검증 보고서 생성 실패: '+String(error?.message||error));
+ }
+});
 $('recover-failed').addEventListener('click',()=>{
  if(busy||!ready||!items.some(canRecoverFile))return;
  requestedFileRetry=null;requestedFileRecovery=null;requestedBulkRecovery=true;
