@@ -5,7 +5,7 @@
 const sid=crypto.randomUUID();
 let lastActivity=Date.now();
 const acceptedFeatures=new Set(['hwp','hwpx','xlsx','xls','png','jpg','batch','ui','other']);
-const acceptedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','svg_build','svg_normalize','image_gif','image_png','image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done','pdf_finalize','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save','pdf','download','open','viewer','xlsx_package','xlsx_parse','unknown']);
+const acceptedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','svg_build','svg_normalize','image_gif','image_png','image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done','pdf_finalize','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save','pdf','download','open','viewer','xlsx_package','xlsx_parse','xlsx_layout','unknown']);
 /** Classify only the extension. Never return the filename or directory. */
 export function proFeature(file){
  const name=typeof file?.name==='string'?file.name:'';
