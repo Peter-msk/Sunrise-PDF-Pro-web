@@ -7,7 +7,7 @@ import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
-import {canRecoverFile,planConversion,planBulkRecovery,recoveryEngine,recoveryCode} from './conversion-recovery.mjs';
+import {canRecoverFile,planConversion,planBulkRecovery,planSingleRetry,recoveryEngine,recoveryCode} from './conversion-recovery.mjs';
 import {requestLocalFontAccess} from './local-fonts.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
 import {summarizeVectorPreservation,inspectPdfVectorQuality} from './pdf-vector-quality.mjs';
@@ -20,7 +20,7 @@ const $=id=>document.getElementById(id);
 const conversionClock=createConversionClock();
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
-let requestedFileRecovery=null,requestedBulkRecovery=false;
+let requestedFileRecovery=null,requestedBulkRecovery=false,requestedFileRetry=null;
 const status=value=>{$('status').textContent=value;};
 const fontStatus=value=>{const node=$('pc-font-status');if(node)node.textContent=value;};
 // Permission is requested only in a real click. Enumeration is NOT proof a
@@ -257,11 +257,27 @@ function draw(){
    recover.disabled=busy;
    recover.addEventListener('click',()=>{
     if(busy||!ready||!canRecoverFile(item))return;
-    requestedFileRecovery=item;
+    requestedFileRetry=null;requestedFileRecovery=item;
     $('convert').click();
    });
    actions.append(recover);
   }
+   // Generic one-file retry preserves the user's output choice. Specialized
+   // HWP recovery remains the only action that changes output quality.
+   if(['failed','cancelled'].includes(item.state)&&inputKind(item.file)&&!canRecoverFile(item)){
+    const retry=document.createElement('button');
+    retry.type='button';retry.className='secondary file-retry';
+    retry.textContent='이 파일만 다시 시도';
+    retry.title='현재 출력 설정으로 이 파일만 다시 변환합니다. 이미 완료된 PDF와 다른 실패·대기 파일은 유지합니다.';
+    retry.setAttribute('aria-label',item.file.name+' 파일만 다시 변환');
+    retry.disabled=busy||!ready;
+    retry.addEventListener('click',()=>{
+     if(busy||!ready||!items.includes(item)||!['failed','cancelled'].includes(item.state)||!inputKind(item.file))return;
+     requestedFileRecovery=null;requestedBulkRecovery=false;requestedFileRetry=item;
+     $('convert').click();
+    });
+    actions.append(retry);
+   }
    // Chrome/Edge printing can recover a failed vector PDF caused by a
    // missing glyph or unsupported SVG effect. This is always user-triggered;
    // no inferred font replacement, raster downgrade, or success status.
@@ -308,20 +324,23 @@ $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from
 $('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');draw();});
 $('recover-failed').addEventListener('click',()=>{
  if(busy||!ready||!items.some(canRecoverFile))return;
- requestedFileRecovery=null;requestedBulkRecovery=true;
+ requestedFileRetry=null;requestedFileRecovery=null;requestedBulkRecovery=true;
  $('convert').click();
 });
 $('convert').addEventListener('click',async()=>{
  if(busy||!ready)return;
  const requested=requestedFileRecovery;requestedFileRecovery=null;
+ const oneFileRetry=requestedFileRetry;requestedFileRetry=null;
  const bulkRequested=requestedBulkRecovery;requestedBulkRecovery=false;
- const plan=bulkRequested?planBulkRecovery(items):planConversion(items,$('pdf-engine').value,requested);
+ let plan=bulkRequested?planBulkRecovery(items):planConversion(items,$('pdf-engine').value,requested);
+ if(oneFileRetry&&!bulkRequested&&!requested)plan=planSingleRetry(items,$('pdf-engine').value,oneFileRetry);
  const {pending,engine}=plan;
  const recoverySpecs=new Map((plan.targets||[]).map(spec=>[spec.item,spec]));
  if(!pending.length)return;
  conversionClock.start(pending.length);
  const fontFiles=Array.from($('pdf-font').files||[]);
  if(plan.bulk)status('실패한 문서 '+pending.length+'개만 명시적으로 복구합니다. SVG 필터 오류는 해당 쪽만 이미지로, 글꼴 누락·스트림 오류 또는 혼합 재실패는 전체 이미지 PDF로 출력되어 글자 검색이 불가능합니다. 성공 파일과 대기 파일은 제외됩니다.');
+ else if(plan.singleRetry)status('선택한 문서 1개만 동일한 출력 설정으로 다시 변환합니다. 완료 파일과 다른 실패·대기 파일은 유지합니다.');
  else if(plan.recovery)status(engine==='hybrid-filter'
   ?'선택한 문서 1개만 혼합 PDF로 다시 변환합니다. 미지원 필터 쪽만 이미지로 처리하며 나머지 쪽은 벡터로 유지합니다.'
   :'선택한 문서 1개만 호환 이미지 PDF로 다시 변환합니다. 모든 쪽의 글자 검색은 불가능합니다.');
@@ -453,7 +472,7 @@ $('cancel').addEventListener('click',()=>{
  status('취소 요청됨 · 현재 작업이 제어를 반환하면 중단합니다. 이미 완료된 PDF는 유지됩니다.');
  $('cancel').disabled=true;
 });
-$('reset').addEventListener('click',()=>{requestedFileRecovery=null;conversionClock.reset();for(const item of items)release(item);items=[];clearPrint();clearArchive();$('progress').value=0;show(null);draw();status('새 문서를 선택해 주세요.');});
+$('reset').addEventListener('click',()=>{requestedFileRecovery=null;requestedFileRetry=null;requestedBulkRecovery=false;conversionClock.reset();for(const item of items)release(item);items=[];clearPrint();clearArchive();$('progress').value=0;show(null);draw();status('새 문서를 선택해 주세요.');});
 viewer.open(null);
 status(document.wasDiscarded
  ?'브라우저가 이전 탭을 메모리에서 폐기했습니다. 미완료 변환은 복원할 수 없습니다. 원본 파일을 다시 선택해 변환하세요.'
