@@ -7,6 +7,7 @@ import {inspectEngineContract} from '../scripts/verify-engine-contract.mjs';
 import {buildLocalBatchQaReport} from '../src/local-batch-qa.mjs';
 import {reviewLocal25FileReport} from '../src/local-qa-release-gate.mjs';
 import {fileURLToPath} from 'node:url';
+import {blocksLegacyDocumentUpload} from '../../src/browser-only-upload-policy.mjs';
 
 test('mobile browser with no OS font API is still eligible for self-hosted WASM PDF conversion',async()=>{
  const capability=localFontCapability({isSecureContext:true});
@@ -103,4 +104,35 @@ test('DEV35 font quality evidence is numeric and safe for sensitive 25-file repo
   audited.substituted_font_files,audited.bundled_font_files,audited.unmatched_pc_font_files
  ],[1,1,1]);
  assert.equal(audited.visual_review_required,true);
+});
+
+test('DEV35 legacy server PDF upload paths are blocked, normal JSON/admin routes remain unaffected',()=>{
+ for(const [path,verb,type] of [
+  ['/api/jobs','POST','multipart/form-data; boundary=sensitive'],
+  ['/api/jobs/','POST','application/octet-stream'],
+  ['/api/convert','POST','application/octet-stream'],
+  ['/api/upload/hwp','POST','application/octet-stream'],
+  ['/api/documents','POST','application/json'],
+  ['/api/session','POST','multipart/form-data; boundary=xyz'],
+ ]){
+  assert.equal(blocksLegacyDocumentUpload(path,verb,type),true,path);
+ }
+ for(const [path,verb,type] of [
+  ['/api/jobs','GET',''],
+  ['/api/jobs/123','GET',''],
+  ['/api/session','POST','application/json'],
+  ['/api/status','GET',''],
+  ['/api/jobs/123/cancel','POST','application/json'],
+  ['/api/public/trace-dev4','POST','application/json'],
+  ['/local/','POST','multipart/form-data'],
+  ['/admin/','POST','application/x-www-form-urlencoded'],
+ ]){
+  assert.equal(blocksLegacyDocumentUpload(path,verb,type),false,path);
+ }
+ const worker=readFileSync(new URL('../../src/worker.js',import.meta.url),'utf8');
+ assert.match(worker,/blocksLegacyDocumentUpload\(path,method,request\.headers\.get\('content-type'\)\)/);
+ assert.match(worker,/DOCUMENT_UPLOAD_DISABLED_USE_BROWSER_WASM/);
+ assert.ok(worker.indexOf('blocksLegacyDocumentUpload(path,method,request.headers')<
+  worker.indexOf('return relay(request,env,target)'),
+ 'legacy request must be blocked before forwarding document bytes');
 });
