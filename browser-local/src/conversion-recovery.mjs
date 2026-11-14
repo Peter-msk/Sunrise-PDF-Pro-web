@@ -3,7 +3,7 @@
  * any other document. The user's per-file click is the explicit consent to
  * create an image PDF: never infer consent from a failure or switch defaults.
  */
-const RECOVERABLE_ERROR = /\b(?:SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT)\b/;
+const RECOVERABLE_ERROR = /\b(?:SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT|FONT_GLYPH_MISSING)\b/;
 
 export function recoveryCode(error) {
  const message=String(error||'');
