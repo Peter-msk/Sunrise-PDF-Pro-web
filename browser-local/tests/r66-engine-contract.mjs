@@ -67,3 +67,21 @@ test('CLI fails closed for forbidden local COM bridge',()=>withFixture(f=>{
   assert.equal(run.status,1);
   assert.match(run.stderr,/UNAPPROVED_HANCOM_RUNTIME/);
 }));
+
+
+test('DEV35 forbids Hancom COM code in any added browser module, not just converter.js',()=>withFixture(f=>{
+ f.write('browser-local/src/mobile-import.js',"const app = win32com.client.Dispatch('HWPFrame.HwpObject');");
+ const result=inspectEngineContract(f.dir);
+ assert.equal(result.ok,false);
+ assert.ok(result.issues.some(code=>code==='BROWSER_NATIVE_HANCOM_DEPENDENCY:browser-local/src/mobile-import.js'));
+}));
+test('DEV35 forbids OS child process bridges from browser conversion modules',()=>withFixture(f=>{
+ f.write('browser-local/src/other-converter.mjs',"import {spawn} from 'node:child_process';");
+ const result=inspectEngineContract(f.dir);
+ assert.ok(result.issues.includes('BROWSER_CHILD_PROCESS_DEPENDENCY:browser-local/src/other-converter.mjs'));
+}));
+test('DEV35 browser-only architecture check accepts optional font metadata helpers',()=>withFixture(f=>{
+ f.write('browser-local/src/optional-font.mjs',"export const optional=queryLocalFonts=>queryLocalFonts?.() ?? []; ");
+ const result=inspectEngineContract(f.dir);
+ assert.equal(result.ok,true,JSON.stringify(result.issues));
+}));
