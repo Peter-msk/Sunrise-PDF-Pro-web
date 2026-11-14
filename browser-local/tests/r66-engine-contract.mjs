@@ -16,6 +16,10 @@ function fixture(){
   write('browser-local/src/converter.js',"import {} from '@rhwp/core'; tryProfessionalDocument(); allowRasterFallback:false");
   write('browser-local/src/svg-professional.js',"hwpDoc.renderPageSvgWithProfile(i,'print'); SVGtoPDF();");
   write('browser-local/src/pdfkit-backend.js',"const m=import('pdfkit');function toBlob(){}");
+  for(const name of ['NanumMyeongjo-Regular.ttf','NanumMyeongjo-Bold.ttf',
+   'NanumGothic-Regular.ttf','NanumGothic-Bold.ttf','SunriseSymbols.otf','SunriseMarks.ttf'])
+   write('browser-local/public/fonts/'+name,'synthetic-test-font');
+
   return {dir,write,cleanup:()=>rmSync(dir,{recursive:true,force:true})};
 }
 function withFixture(run){const f=fixture();try{return run(f);}finally{f.cleanup();}}
@@ -66,4 +70,29 @@ test('CLI fails closed for forbidden local COM bridge',()=>withFixture(f=>{
   const run=spawnSync(process.execPath,[join(f.dir,'browser-local/scripts/verify-engine-contract.mjs')],{encoding:'utf8'});
   assert.equal(run.status,1);
   assert.match(run.stderr,/UNAPPROVED_HANCOM_RUNTIME/);
+}));
+
+
+test('DEV35 forbids Hancom COM code in any added browser module, not just converter.js',()=>withFixture(f=>{
+ f.write('browser-local/src/mobile-import.js',"const app = win32com.client.Dispatch('HWPFrame.HwpObject');");
+ const result=inspectEngineContract(f.dir);
+ assert.equal(result.ok,false);
+ assert.ok(result.issues.some(code=>code==='BROWSER_NATIVE_HANCOM_DEPENDENCY:browser-local/src/mobile-import.js'));
+}));
+test('DEV35 forbids OS child process bridges from browser conversion modules',()=>withFixture(f=>{
+ f.write('browser-local/src/other-converter.mjs',"import {spawn} from 'node:child_process';");
+ const result=inspectEngineContract(f.dir);
+ assert.ok(result.issues.includes('BROWSER_CHILD_PROCESS_DEPENDENCY:browser-local/src/other-converter.mjs'));
+}));
+test('DEV35 browser-only architecture check accepts optional font metadata helpers',()=>withFixture(f=>{
+ f.write('browser-local/src/optional-font.mjs',"export const optional=queryLocalFonts=>queryLocalFonts?.() ?? []; ");
+ const result=inspectEngineContract(f.dir);
+ assert.equal(result.ok,true,JSON.stringify(result.issues));
+}));
+
+test('DEV35 missing mobile bundled font is a blocking architectural regression',()=>withFixture(f=>{
+ rmSync(join(f.dir,'browser-local/public/fonts/NanumGothic-Regular.ttf'));
+ const result=inspectEngineContract(f.dir);
+ assert.equal(result.ok,false);
+ assert.ok(result.issues.includes('MISSING_MOBILE_BUNDLED_FONT:NanumGothic-Regular.ttf'));
 }));

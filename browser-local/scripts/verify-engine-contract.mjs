@@ -3,7 +3,7 @@
  * No document bytes are read, no network is contacted, and no files are written.
  * This guard is an architecture regression check, NOT a PDF quality test.
  */
-import {readFileSync,existsSync} from 'node:fs';
+import {readFileSync,existsSync,readdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
 
@@ -45,7 +45,42 @@ export function inspectEngineContract(root){
     if(/\b(?:win32com|ActiveXObject|HWPFrame\.HwpObject)\b/.test(body))
       issues.push('NATIVE_COM_DEPENDENCY:'+rel);
   }
-  return {ok:issues.length===0,issues,engine:'browser-wasm-svg-pdfkit',filesInspected:4};
+  // DEV35: A native Hancom/COM or subprocess shim may be introduced outside
+  // converter.js (e.g. in a new format dispatcher). Inspect all active browser
+  // modules, not only the original three files. The web bundle may fetch its
+  // own pinned WASM and OFL fonts, but must never execute local applications.
+  // Mobile browsers commonly lack Local Font Access. A missing self-hosted
+  // fallback face must stop a build, not fail only at the user's document.
+  for(const font of [
+   'NanumMyeongjo-Regular.ttf','NanumMyeongjo-Bold.ttf',
+   'NanumGothic-Regular.ttf','NanumGothic-Bold.ttf',
+   'SunriseSymbols.otf','SunriseMarks.ttf'
+  ]){
+   if(!existsSync(resolve(root,'browser-local/public/fonts',font)))
+    issues.push('MISSING_MOBILE_BUNDLED_FONT:'+font);
+  }
+  const runtime=resolve(root,'browser-local/src');
+  let browserModules=0;
+  if(existsSync(runtime)){
+   const dirs=[runtime];
+   while(dirs.length){
+    const dir=dirs.pop();
+    for(const entry of readdirSync(dir,{withFileTypes:true})){
+     const full=resolve(dir,entry.name);
+     if(entry.isDirectory()){dirs.push(full);continue;}
+     if(!entry.isFile()||!/\.m?js$/i.test(entry.name))continue;
+     browserModules++;
+     const source=readFileSync(full,'utf8');
+     const rel=full.slice(root.length+1).replaceAll('\\','/');
+     if(/\b(?:win32com(?:\.client)?|comtypes\.client|HWPFrame\.HwpObject|new\s+ActiveXObject\s*\(|(?:win32|node):?COMObject\s*\()/i.test(source))
+      issues.push('BROWSER_NATIVE_HANCOM_DEPENDENCY:'+rel);
+     if(/(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)['"](?:node:)?child_process['"]/i.test(source))
+      issues.push('BROWSER_CHILD_PROCESS_DEPENDENCY:'+rel);
+    }
+   }
+  }
+  return {ok:issues.length===0,issues,engine:'browser-wasm-svg-pdfkit',
+   filesInspected:4+browserModules};
 }
 
 const invoked=process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url);

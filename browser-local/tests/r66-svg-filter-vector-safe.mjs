@@ -88,7 +88,9 @@ test('classifier rejects nonidentity matrices, Gaussian blur and custom filter e
   [color('saturate','values="0.5"'),'',false],
   [color('hueRotate','values="90"'),'',false],
   [color('matrix','values="1 0 0 0 0"'),'',false],
-  ['<feGaussianBlur stdDeviation="0"/>','',false],
+  ['<feGaussianBlur stdDeviation="0"/>','',true],
+  ['<feOffset dx="0" dy="0"/>','',true],
+  ['<feOffset dx="1" dy="0"/>','',false],
   ['<feBlend in="SourceGraphic" in2="BackgroundImage"/>','',false],
   [color('saturate','values="1"'),'color-interpolation-filters="invalid"',false]
  ];
@@ -97,6 +99,51 @@ test('classifier rejects nonidentity matrices, Gaussian blur and custom filter e
   assert.equal(identifyIdentitySvgFilter(parsed.querySelector('filter')),valid,fx);
  }
 }));
+test('DEV33 strict zero CSS blur is only normalized for a safe vector leaf',()=>dom(async()=>{
+ for(const value of ['blur(0)','blur(0px)','blur(0.0px)','contrast(1) blur(0px)']){
+  const out=await normalize(svg(rect('filter="'+value+'"')));
+  vector(out);assert.match(out.svg,/fill="#ff0000"/,value);
+  assert.equal(out.filtersApplied,1,value);
+ }
+ for(const value of ['blur(1px)','blur(-1px)','blur(0.001px)','blur(var(--x))']){
+  await assert.rejects(normalize(svg(rect('filter="'+value+'"'))),/SVG_FILTER_EFFECT_UNSUPPORTED/,value);
+ }
+ await assert.rejects(normalize(svg('<g filter="blur(0px)">'+rect()+'</g>')),
+  /SVG_FILTER_EFFECT_UNSUPPORTED/);
+}));
+
+test('DEV33 zero Gaussian blur / zero offset retain vector text and geometry',()=>dom(async()=>{
+ const effects=[
+  '<feGaussianBlur stdDeviation="0"/>',
+  '<feGaussianBlur stdDeviation="0 0"/>',
+  '<feGaussianBlur stdDeviation="0.0,0.0" in="SourceGraphic"/>',
+  '<feOffset dx="0" dy="0"/>',
+  '<feOffset/>'
+ ];
+ for(const fx of effects){
+  const out=await normalize(svg(def(fx)+rect('filter="url(#effect)"')));
+  vector(out);assert.match(out.svg,/fill="#ff0000"/,fx);
+  assert.equal(out.filtersApplied,1,fx);
+  assert.equal(out.imagesChanged,0,fx);
+ }
+}));
+
+test('DEV33 nonzero effects, SourceAlpha and filter region never disappear',()=>dom(async()=>{
+ const cases=[
+  [def('<feGaussianBlur stdDeviation="3"/>'),rect('filter="url(#effect)"')],
+  [def('<feGaussianBlur stdDeviation="0.001"/>'),rect('filter="url(#effect)"')],
+  [def('<feGaussianBlur stdDeviation="0" in="SourceAlpha"/>'),rect('filter="url(#effect)"')],
+  [def('<feOffset dx="0" dy="2"/>'),rect('filter="url(#effect)"')],
+  [def('<feOffset dx="0" dy="0" in="SourceAlpha"/>'),rect('filter="url(#effect)"')],
+  [def('<feGaussianBlur stdDeviation="0"/>','width="40%"'),rect('filter="url(#effect)"')],
+  [def('<feGaussianBlur stdDeviation="0"/>'),rect('opacity="0.8" filter="url(#effect)"')],
+  [def('<feOffset dx="0" dy="0"/>'),'<g filter="url(#effect)">'+rect()+'</g>']
+ ];
+ for(const [filter,shape] of cases){
+  await assert.rejects(normalize(svg(filter+shape)),/SVG_FILTER_EFFECT_UNSUPPORTED/,shape);
+ }
+}));
+
 test('group isolation, stroke, opacity, clip-path, class and blending remain fail-closed',()=>dom(async()=>{
  const fx=def(color('saturate','values="1"'));
  for(const shape of [

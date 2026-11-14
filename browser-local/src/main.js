@@ -7,6 +7,7 @@ import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
+import {buildLocalBatchQaReport} from './local-batch-qa.mjs';
 import {canRecoverFile,planConversion,planBulkRecovery,planSingleRetry,localFailureAdvice,recoveryEngine,recoveryCode} from './conversion-recovery.mjs';
 import {requestLocalFontAccess} from './local-fonts.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
@@ -20,16 +21,23 @@ const $=id=>document.getElementById(id);
 const conversionClock=createConversionClock();
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
-let requestedFileRecovery=null,requestedBulkRecovery=false,requestedFileRetry=null;
+let requestedFileRecovery=null,requestedBulkRecovery=false,requestedFileRetry=null,requestedBatchEngine=null;
 const status=value=>{$('status').textContent=value;};
 const fontStatus=value=>{const node=$('pc-font-status');if(node)node.textContent=value;};
 // Permission is requested only in a real click. Enumeration is NOT proof a
 // font can be embedded into PDF. A separate PDF usage count is shown after
 // the document has been rendered.
 const fontCapability=localFontCapability();
-fontStatus(!fontCapability.secure?'PC 글꼴 접근은 HTTPS 연결에서만 지원됩니다.':
- !fontCapability.supported?'이 브라우저는 PC 글꼴 파일 접근을 지원하지 않습니다. Chrome/Edge 데스크톱에서 확인하거나 글꼴 파일을 직접 추가하세요.':
- 'PC 글꼴 조회 가능 여부: 아직 확인하지 않음 · 글꼴 연결 확인을 누르면 사이트 권한을 요청할 수 있습니다.');
+// The web's bundled RHWP WASM/PDF engine works without Hancom Office on
+// Windows, macOS or mobile. OS font enumeration is an optional quality aid.
+const deviceFontsAvailable=fontCapability.secure&&fontCapability.supported;
+if(!deviceFontsAvailable){
+ const check=$('font-check');
+ if(check){check.disabled=true;check.title='이 기기에서는 설치 글꼴 조회를 지원하지 않습니다. 한컴오피스 설치는 필요 없으며 TTF/OTF를 직접 추가할 수 있습니다.';}
+}
+fontStatus(!fontCapability.secure?'이 페이지에서는 설치 글꼴 접근 권한을 사용할 수 없습니다. 웹 PDF 변환은 계속 가능하며 내장 글꼴 또는 직접 선택한 TTF/OTF로 진행합니다.':
+ !fontCapability.supported?'모바일·이 브라우저에서는 설치 글꼴 자동 조회를 지원하지 않습니다. 한컴오피스 없이 웹에서 PDF로 변환하며, 내장 글꼴을 쓰거나 원본 TTF/OTF를 추가할 수 있습니다.':
+ 'PC 설치 글꼴을 선택적으로 사용할 수 있습니다. 원본 서체와 일치하는지 확인하려면 글꼴 연결 확인을 누르세요. 한컴오피스 설치는 필요 없습니다.');
 // Browser background timer policies can stall a conversion. Never claim that
 // a frozen/discarded page is running; refresh the visible progress on return.
 let backgroundSince=null,browserFrozen=false;
@@ -104,8 +112,12 @@ function show(item){
  $('quality-detail').replaceChildren(title,detail);viewer.open(item.result.pdf);sync();
 }
 function sync(){
+ $('qa-export').disabled=!items.length;
  const pending=items.some(i=>['ready','failed','cancelled'].includes(i.state));
  $('convert').disabled=!ready||busy||!pending;$('reset').disabled=busy||!items.length;$('cancel').disabled=!busy;
+ const hybridPending=items.some(i=>isHwp(i.file)&&['ready','failed','cancelled'].includes(i.state));
+ $('convert-hybrid').hidden=!hybridPending;
+ $('convert-hybrid').disabled=!ready||busy||!hybridPending;
  const bulk=$('recover-failed'),recoverable=items.filter(canRecoverFile).length;
  if(bulk){bulk.hidden=recoverable===0;bulk.disabled=!ready||busy||recoverable===0;
   bulk.textContent='실패 파일 '+recoverable+'개만 복구';
@@ -322,6 +334,37 @@ for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{e.p
 $('drop').addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer?.files||[])));
 $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.';draw();});
 $('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');draw();});
+// Export is an explicit, local user action. It works during a long-running
+// batch so the last recorded stage is not lost; it never sends source data.
+$('qa-export').addEventListener('click',()=>{
+ if(!items.length)return;
+ try{
+  const report=buildLocalBatchQaReport(items);
+  const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],
+   {type:'application/json'}));
+  const link=document.createElement('a');
+  link.href=url;
+  link.download='Sunrise_PDF_PRO_Web_QA_'+
+   report.generated_at.replace(/[-:T]/g,'').slice(0,14)+'.json';
+  document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  status('실기 검증 보고서 다운로드를 요청했습니다. 파일명·본문·경로는 보고서에 포함하지 않습니다.');
+ }catch(error){
+  status('실기 검증 보고서 생성 실패: '+String(error?.message||error));
+ }
+});
+// A visible one-click opt-in avoids forcing users to run every incompatible
+// HWP once in professional mode and only then discover the hidden setting.
+// No default or background downgrade: the explicit button selection is the
+// sole authority to choose hybrid-filter for a whole pending batch.
+$('convert-hybrid').addEventListener('click',()=>{
+ if(busy||!ready||!items.some(i=>isHwp(i.file)&&
+  ['ready','failed','cancelled'].includes(i.state)))return;
+ requestedFileRecovery=null;requestedFileRetry=null;requestedBulkRecovery=false;
+ requestedBatchEngine='hybrid-filter';
+ status('사용자가 혼합 출력을 선택했습니다. 미지원 필터가 있는 페이지만 이미지로 출력합니다. 해당 쪽의 텍스트 검색은 불가능합니다.');
+ $('convert').click();
+});
 $('recover-failed').addEventListener('click',()=>{
  if(busy||!ready||!items.some(canRecoverFile))return;
  requestedFileRetry=null;requestedFileRecovery=null;requestedBulkRecovery=true;
@@ -332,8 +375,12 @@ $('convert').addEventListener('click',async()=>{
  const requested=requestedFileRecovery;requestedFileRecovery=null;
  const oneFileRetry=requestedFileRetry;requestedFileRetry=null;
  const bulkRequested=requestedBulkRecovery;requestedBulkRecovery=false;
- let plan=bulkRequested?planBulkRecovery(items):planConversion(items,$('pdf-engine').value,requested);
- if(oneFileRetry&&!bulkRequested&&!requested)plan=planSingleRetry(items,$('pdf-engine').value,oneFileRetry);
+ // A one-click hybrid choice is consumed by this one operation only. Keep
+ // the visible professional default and subsequent conversions unchanged.
+ const selectedEngine=requestedBatchEngine||$('pdf-engine').value;
+ requestedBatchEngine=null;
+ let plan=bulkRequested?planBulkRecovery(items):planConversion(items,selectedEngine,requested);
+ if(oneFileRetry&&!bulkRequested&&!requested)plan=planSingleRetry(items,selectedEngine,oneFileRetry);
  const {pending,engine}=plan;
  const recoverySpecs=new Map((plan.targets||[]).map(spec=>[spec.item,spec]));
  if(!pending.length)return;
@@ -347,7 +394,14 @@ $('convert').addEventListener('click',async()=>{
  if(!plan.bulk&&engine==='compat-raster')fontStatus('호환 이미지 PDF는 페이지를 그림으로 출력하므로 PC 글꼴의 PDF 임베딩 절차를 사용하지 않습니다.');
  const needsFonts=pending.some(item=>isHwp(item.file)&&
   (recoverySpecs.get(item)?.engine||engine)!=='compat-raster');
- let fontsRequest=null,fontAccessNotice='';try{if(USE_PC_FONTS_BY_DEFAULT&&needsFonts)fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){fontAccessNotice='PC 설치 글꼴 API를 사용할 수 없어 내장 글꼴로 진행합니다. 원본 글꼴은 TTF/OTF로 직접 선택할 수 있습니다.';}
+ let fontsRequest=null,fontAccessNotice='';
+ try{
+  if(USE_PC_FONTS_BY_DEFAULT&&needsFonts){
+   if(deviceFontsAvailable)
+    fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();
+   else fontAccessNotice='이 기기는 설치 글꼴 자동 조회를 지원하지 않습니다. 한컴오피스 설치 없이 웹 엔진과 내장 글꼴로 변환합니다. 원본 TTF/OTF가 있으면 직접 추가할 수 있습니다. 대체 서체로 줄바꿈이나 배치가 달라질 수 있습니다.';
+  }
+ }catch(error){fontAccessNotice='설치 글꼴 접근을 시작하지 못해 내장 글꼴로 계속합니다. 원본 TTF/OTF는 직접 추가할 수 있습니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();refreshBrowserLifecycle();let completed=0;
  try{
   let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');if(access.status==='ready')verifiedPcFontData=localFonts;
@@ -458,7 +512,12 @@ $('convert').addEventListener('click',async()=>{
 });
 $('print-prepare').addEventListener('click',async()=>{
  if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;
- let fontsRequest=null,printFontNotice='';try{if(USE_PC_FONTS_BY_DEFAULT)fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();}catch(error){printFontNotice='PC 글꼴 API를 사용할 수 없어 내장 글꼴로 인쇄합니다.';}
+ let fontsRequest=null,printFontNotice='';
+ try{
+  if(USE_PC_FONTS_BY_DEFAULT&&deviceFontsAvailable)
+   fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();
+  else printFontNotice='설치 글꼴 자동 조회가 없어 내장 글꼴과 사용자가 선택한 글꼴로 인쇄합니다. 한컴오피스 설치는 필요하지 않습니다.';
+ }catch(error){printFontNotice='설치 글꼴 접근 실패: 내장 글꼴로 인쇄합니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();refreshBrowserLifecycle();
  try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;if(access.status==='ready')verifiedPcFontData=localFonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('브라우저 인쇄 준비 완료. 해당 문서의 브라우저 PDF로 저장 버튼을 눌러 PDF 저장 대상을 직접 선택하세요. 필터·글꼴·배치를 원본과 대조해야 하며 앱의 실패 상태는 자동으로 성공 처리되지 않습니다.'+(printFontNotice?' · '+printFontNotice:''));}
  catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+String(error?.message||error));}
@@ -472,7 +531,7 @@ $('cancel').addEventListener('click',()=>{
  status('취소 요청됨 · 현재 작업이 제어를 반환하면 중단합니다. 이미 완료된 PDF는 유지됩니다.');
  $('cancel').disabled=true;
 });
-$('reset').addEventListener('click',()=>{requestedFileRecovery=null;requestedFileRetry=null;requestedBulkRecovery=false;conversionClock.reset();for(const item of items)release(item);items=[];clearPrint();clearArchive();$('progress').value=0;show(null);draw();status('새 문서를 선택해 주세요.');});
+$('reset').addEventListener('click',()=>{requestedFileRecovery=null;requestedFileRetry=null;requestedBulkRecovery=false;requestedBatchEngine=null;conversionClock.reset();for(const item of items)release(item);items=[];clearPrint();clearArchive();$('progress').value=0;show(null);draw();status('새 문서를 선택해 주세요.');});
 viewer.open(null);
 status(document.wasDiscarded
  ?'브라우저가 이전 탭을 메모리에서 폐기했습니다. 미완료 변환은 복원할 수 없습니다. 원본 파일을 다시 선택해 변환하세요.'

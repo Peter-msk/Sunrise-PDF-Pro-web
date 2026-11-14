@@ -25,7 +25,7 @@ const LOCAL_FILTER=/^url\(\s*['"]?#([A-Za-z_][\w.-]*)['"]?\s*\)$/;
 const CSS_FULL_GRAY_TOKEN=/\s*(?:grayscale\(\s*(?:1(?:\.0+)?|100%)?\s*\)|saturate\(\s*(?:0(?:\.0+)?|0%)\s*\))\s*/giy;
 // Only a strict list of provably no-op CSS filter functions can be removed.
 // Each function is checked independently; no urls, variables or mixed effects.
-const CSS_IDENTITY_TOKEN=/\s*(?:grayscale\(\s*(?:0(?:\.0+)?|0%)\s*\)|saturate\(\s*(?:1(?:\.0+)?|100%)?\s*\)|brightness\(\s*(?:1(?:\.0+)?|100%)?\s*\)|contrast\(\s*(?:1(?:\.0+)?|100%)?\s*\)|opacity\(\s*(?:1(?:\.0+)?|100%)?\s*\)|invert\(\s*(?:0(?:\.0+)?|0%)\s*\)|sepia\(\s*(?:0(?:\.0+)?|0%)\s*\)|hue-rotate\(\s*(?:0(?:\.0+)?(?:deg|rad|turn)?)?\s*\))\s*/giy;
+const CSS_IDENTITY_TOKEN=/\s*(?:grayscale\(\s*(?:0(?:\.0+)?|0%)\s*\)|saturate\(\s*(?:1(?:\.0+)?|100%)?\s*\)|brightness\(\s*(?:1(?:\.0+)?|100%)?\s*\)|contrast\(\s*(?:1(?:\.0+)?|100%)?\s*\)|opacity\(\s*(?:1(?:\.0+)?|100%)?\s*\)|invert\(\s*(?:0(?:\.0+)?|0%)\s*\)|sepia\(\s*(?:0(?:\.0+)?|0%)\s*\)|hue-rotate\(\s*(?:0(?:\.0+)?(?:deg|rad|turn)?)?\s*\)|blur\(\s*0(?:\.0+)?(?:px)?\s*\))\s*/giy;
 function isCssIdentityFilter(value){
  let at=0,n=0;
  while(at<value.length){
@@ -196,6 +196,34 @@ export function identifyIdentitySvgFilter(element){
    ['feFuncR','feFuncG','feFuncB','feFuncA'].every(name=>
     fs.some(x=>x.localName===name&&x.children.length===0&&
      x.getAttribute('type')==='identity'&&x.attributes.length===1));
+ }
+ // The first SVG filter primitive uses SourceGraphic by default. A blur of
+ // exactly zero or an offset of zero is mathematically identity. Never infer
+ // this for a chain, SourceAlpha input, a custom filter extent or a group;
+ // the caller still requires a safe isolated opaque leaf.
+ if(primitive.localName==='feGaussianBlur'||primitive.localName==='feOffset'){
+  if(primitive.children.length)return false;
+  const blur=primitive.localName==='feGaussianBlur';
+  const permitted=blur
+   ?['stdDeviation','in','result','color-interpolation-filters']
+   :['dx','dy','in','result','color-interpolation-filters'];
+  if(Array.from(primitive.attributes).some(a=>!permitted.includes(a.name)))return false;
+  if(primitive.hasAttribute('color-interpolation-filters')&&
+   !['sRGB','linearRGB'].includes(primitive.getAttribute('color-interpolation-filters')))return false;
+  // An explicit SourceAlpha may discard colours even at radius/offset zero.
+  if(primitive.hasAttribute('in')&&primitive.getAttribute('in')!=='SourceGraphic')
+   return false;
+  const svgZero=/^\+?(?:0+(?:\.0*)?|\.[0]+)(?:[eE][+-]?\d+)?$/;
+  const allZero=value=>{
+   if(value===null)return true;
+   const terms=value.trim().split(/[\s,]+/);
+   return terms.length>0&&terms.length<=2&&terms.every(token=>
+    svgZero.test(token)&&Number(token)===0);
+  };
+  if(blur)return allZero(primitive.getAttribute('stdDeviation'));
+  const dx=primitive.getAttribute('dx'),dy=primitive.getAttribute('dy');
+  return (dx===null||svgZero.test(dx.trim())&&Number(dx)===0)&&
+   (dy===null||svgZero.test(dy.trim())&&Number(dy)===0);
  }
  return false;
 }
