@@ -20,6 +20,24 @@ const ERROR_CODES=[
  'PDF_OUTPUT_XREF_OFFSET_INVALID','PDF_OUTPUT_BYTES_LIMIT',
  'PDF_RESULT_BYTES_MISMATCH'
 ];
+const FILTER_CATEGORIES=[
+ ['unsafe-identity-target','합성·불투명도·클리핑 안전성'],
+ ['css-or-external','미지원 CSS 또는 외부 필터 참조'],
+ ['missing-definition','필터 정의 없음'],
+ ['multi-primitive','복합 필터 체인'],
+ ['blur','흐림 또는 그림자'],
+ ['blend','색상 혼합'],
+ ['composite','합성'],
+ ['displacement','위치 변형'],
+ ['other-primitive','기타 SVG 필터 효과']
+];
+export function localQaFilterCategory(error){
+ const value=String(error||'');
+ if(!/\bSVG_FILTER_EFFECT_UNSUPPORTED\b/.test(value))return null;
+ const match=/분류:\s*([^);.\r\n]+)/.exec(value);
+ if(!match)return 'unspecified';
+ return FILTER_CATEGORIES.find(([,label])=>label===match[1].trim())?.[0]||'unspecified';
+}
 function extension(file){
  const m=/\.([a-z0-9]{2,5})$/i.exec(String(file?.name||''));
  const value=m?.[1].toLowerCase();
@@ -52,6 +70,7 @@ export function buildLocalBatchQaReport(items,{generatedAt=new Date().toISOStrin
    index:i+1,format:extension(item?.file),state,engine,
    duration_ms:safeDuration(item?._proDurationMs),phase,
    error_code:state==='failed'?localQaErrorCode(item?.error):null,
+   filter_category:state==='failed'?localQaFilterCategory(item?.error):null,
    pages:safeCount(result?.pages),
    vector_pages:safeCount(result?.vectorPages),
    raster_pages:safeCount(result?.rasterPages)
