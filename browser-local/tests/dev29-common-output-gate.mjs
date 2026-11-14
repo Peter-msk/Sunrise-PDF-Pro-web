@@ -72,3 +72,12 @@ test('progress display exception never reaches conversion and never logs its con
   assert.deepEqual(warnings,[['CONVERSION_PROGRESS_OBSERVER_FAILED','Error']]);
  }finally{console.warn=original;}
 });
+
+test('all supported format dispatches share one release gate and one guarded observer',()=>{
+ const source=readFileSync(new URL('../src/convert-any.js',import.meta.url),'utf8');
+ assert.match(source,/if\(isHwp\(file\)\)result=await convertToPdf\(file,progress,signal,options\)/);
+ assert.match(source,/\.convertImage\(file,progress,signal,kind\)/);
+ assert.match(source,/\.convertSpreadsheet\(file,progress,signal,kind\)/);
+ assert.equal((source.match(/assertConvertedPdfResult\(result,signal\)/g)||[]).length,1);
+ assert.equal((source.match(/safeConversionProgress\(onProgress\)/g)||[]).length,1);
+});
