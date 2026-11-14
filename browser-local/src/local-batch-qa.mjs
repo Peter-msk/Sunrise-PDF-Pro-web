@@ -75,7 +75,15 @@ export function buildLocalBatchQaReport(items,{generatedAt=new Date().toISOStrin
    filter_category:state==='failed'?localQaFilterCategory(item?.error):null,
    pages:safeCount(result?.pages),
    vector_pages:safeCount(result?.vectorPages),
-   raster_pages:safeCount(result?.rasterPages)
+   raster_pages:safeCount(result?.rasterPages),
+   // Numeric evidence only. Font family names and document content remain local.
+   substituted_font_families:Array.isArray(result?.substituteFamilies)
+    ?safeCount(result.substituteFamilies.length):null,
+   bundled_font_faces:safeCount(result?.fontUsage?.bundled),
+   pc_font_faces:safeCount(result?.fontUsage?.local),
+   manual_font_faces:safeCount(result?.fontUsage?.selected),
+   unmatched_pc_font_families:Array.isArray(result?.sourceFontInventory?.missing)
+    ?safeCount(result.sourceFontInventory.missing.length):null
   };
  });
  const totals={queued:records.length,done:0,failed:0,ready:0,working:0,cancelled:0,invalid:0};
