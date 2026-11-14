@@ -36,7 +36,7 @@ test('each failed document chooses the least destructive engine independently',(
 });
 
 test('bulk button cannot degrade unrecognized failure, completed file or cancelled file',()=>{
- const ignored=failed('missingfont.hwp','FONT_GLYPH_MISSING');
+ const ignored=failed('unmatched-family.hwp','FONT_FAMILY_OR_VARIANT_UNAVAILABLE');
  const doneButFailed={...failed('done.hwp'),state:'done'};
  const cancelled={...failed('cancelled.hwpx'),state:'cancelled'};
  const notHwp=failed('sheet.xlsx');
