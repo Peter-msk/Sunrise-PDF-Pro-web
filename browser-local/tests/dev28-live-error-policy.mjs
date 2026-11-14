@@ -50,11 +50,13 @@ test('live UI discloses quality loss and XLSX diagnostic stages without touching
  assert.match(ui,/글꼴 누락·스트림 오류/);
  assert.match(ui,/글자 검색이 불가능/);
  assert.match(ui,/itemEngine=spec\?\.engine\|\|engine/);
- assert.match(ui,/item\._proDiagStage=info\.stage==='load'\?\(\['xlsx_package','xlsx_parse'\]/);
+ assert.match(ui,/item\._proDiagStage=info\.stage==='load'\?\(\['xlsx_package','xlsx_parse','xlsx_layout'\]/);
  assert.match(telemetry,/xlsx_package','xlsx_parse'/);
  assert.match(backend,/xlsx_package','xlsx_parse'/);
  assert.match(sheet,/detail:'xlsx_package'/);
  assert.match(sheet,/detail:'xlsx_parse'/);
+ assert.match(sheet,/detail:'xlsx_layout'/);
+ assert.match(backend,/xlsx_layout/);
  assert.match(sheet,/XLSX_PARSE_FAILED/);
  assert.match(sheet,/XLSX_ENGINE_UNAVAILABLE/);
  assert.doesNotMatch(ui,/\$\('pdf-engine'\)\.value\s*=\s*'compat-raster'/);
