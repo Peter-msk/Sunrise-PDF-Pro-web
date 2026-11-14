@@ -5,7 +5,7 @@
 const sid=crypto.randomUUID();
 let lastActivity=Date.now();
 const acceptedFeatures=new Set(['hwp','hwpx','xlsx','xls','png','jpg','batch','ui','other']);
-const acceptedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','svg_build','svg_normalize','image_gif','image_png','image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done','pdf_finalize','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save','pdf','download','open','viewer','unknown']);
+const acceptedStages=new Set(['none','load','fonts','font_scan','font_read','font_bundle','font_measure','parse','render','svg_build','svg_normalize','image_gif','image_png','image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done','pdf_finalize','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save','pdf','download','open','viewer','xlsx_package','xlsx_parse','xlsx_layout','unknown']);
 /** Classify only the extension. Never return the filename or directory. */
 export function proFeature(file){
  const name=typeof file?.name==='string'?file.name:'';
@@ -17,7 +17,7 @@ export function classifyProError(error){
  const code=typeof error?.code==='string'?error.code:'';
  if(/^[A-Z][A-Z0-9_]{2,63}$/.test(code))return code;
  // Extract ONLY stable machine error tokens, never the surrounding free-text message.
- const match=String(error?.message||error||'').match(/\b(?:SVG|PDF|HWP|HWPX|PNG|GIF|FONT|WASM)_[A-Z0-9_]{3,55}\b/);
+ const match=String(error?.message||error||'').match(/\b(?:SVG|PDF|HWPX|HWP|XLSX|XLS|FILE|ZIP|PNG|GIF|FONT|PC_FONT|CSS_FONT|WASM)_[A-Z0-9_]{3,55}\b/);
  return match?match[0]:'CONVERSION_FAILED';
 }
 export function emitProEvent(kind,{feature='ui',stage='none',error_code='NONE',duration_ms=0}={}){
