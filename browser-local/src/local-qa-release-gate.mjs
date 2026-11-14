@@ -31,7 +31,7 @@ export function reviewLocal25FileReport(report,{expectedFiles=QA_BATCH_SIZE}={})
  const files=report.files,seen=new Set();
  if(files.length!==expectedFiles)mark(issues,'QA_FILE_COUNT_MISMATCH');
  const counts=Object.fromEntries(STATES.map(state=>[state,0]));
- let imagePages=0;
+ let imagePages=0,substitutedFontFiles=0,bundledFontFiles=0,unmatchedPcFontFiles=0;
  for(let i=0;i<files.length&&i<expectedFiles;i++){
   const f=files[i],index=i+1;
   if(!f||typeof f!=='object'||Array.isArray(f)){mark(issues,'QA_FILE_RECORD_INVALID',index);continue;}
@@ -56,6 +56,19 @@ export function reviewLocal25FileReport(report,{expectedFiles=QA_BATCH_SIZE}={})
   if(r!==null&&r!==undefined&&!count(r))mark(issues,'QA_RASTER_PAGES_INVALID',index);
   if(count(v)&&count(r)&&v+r!==f.pages)mark(issues,'QA_PAGE_COMPONENTS_MISMATCH',index);
   if(count(r))imagePages+=r;
+  // These are observed selection/substitution indicators, NOT proof of
+  // exact font embedding or of identical line breaks. Older v1 reports may
+  // legitimately lack the optional numeric fields.
+  for(const name of ['substituted_font_families','bundled_font_faces',
+   'pc_font_faces','manual_font_faces','unmatched_pc_font_families']){
+   if(f[name]!=null&&!count(f[name]))mark(issues,'QA_FONT_COUNT_INVALID',index);
+  }
+  if(count(f.substituted_font_families)&&f.substituted_font_families>0)
+   substitutedFontFiles++;
+  if(count(f.bundled_font_faces)&&f.bundled_font_faces>0)
+   bundledFontFiles++;
+  if(count(f.unmatched_pc_font_families)&&f.unmatched_pc_font_families>0)
+   unmatchedPcFontFiles++;
  }
  // Do not trust an externally supplied summary when the file-level evidence
  // differs. Never count successes based on anonymous server telemetry.
@@ -68,6 +81,8 @@ export function reviewLocal25FileReport(report,{expectedFiles=QA_BATCH_SIZE}={})
   status:issues.length?'BLOCKED':'VISUAL_REVIEW_REQUIRED',
   expected_files:expectedFiles,reported_files:files.length,
   complete_files:counts.done,image_pages:imagePages,
+  substituted_font_files:substitutedFontFiles,bundled_font_files:bundledFontFiles,
+  unmatched_pc_font_files:unmatchedPcFontFiles,
   issues:issues.slice(0,expectedFiles+6),visual_review_required:true
  };
 }
