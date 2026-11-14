@@ -108,7 +108,8 @@ function sync(){
  $('convert').disabled=!ready||busy||!pending;$('reset').disabled=busy||!items.length;$('cancel').disabled=!busy;
  const bulk=$('recover-failed'),recoverable=items.filter(canRecoverFile).length;
  if(bulk){bulk.hidden=recoverable===0;bulk.disabled=!ready||busy||recoverable===0;
-  bulk.textContent='실패 파일 '+recoverable+'개만 복구';}
+  bulk.textContent='실패 파일 '+recoverable+'개만 복구';
+  bulk.title='사용자가 직접 누를 때만 실패 파일을 다시 변환합니다. 글꼴 누락·PDF 스트림 오류는 문서 전체가 이미지 PDF로 저장되어 글자 검색이 불가능합니다. SVG 필터 오류는 먼저 해당 쪽만 이미지로 복구합니다.';}
  for(const id of ['source','pdf-font','pdf-engine'])$(id).disabled=busy;
  $('print-prepare').disabled=!ready||busy||!active||!isHwp(active.file)||active.state==='invalid';$('print-save').disabled=busy||!printJob;
  $('total-count').textContent=items.length;$('done-count').textContent=items.filter(i=>i.state==='done').length;
@@ -125,7 +126,7 @@ function draw(){
   const body=document.createElement('div'),name=document.createElement('div'),meta=document.createElement('div');name.className='file-name';name.textContent=item.file.name;meta.className='file-meta';
   const labels={ready:'변환 대기',working:'변환 중',done:'변환 완료',failed:'변환 실패',invalid:'지원하지 않는 파일',cancelled:'취소됨 · 다시 변환 가능'};
   let message=labels[item.state]||'';
-  if(item.error){message+=' · '+item.error;meta.classList.add('error');if(isHwp(item.file)&&/SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT/.test(item.error))message+=' · 아래 출력 및 글꼴 옵션에서 호환 방식 선택 후 다시 변환할 수 있습니다(이미지 PDF, 글자 검색 불가).';}
+  if(item.error){message+=' · '+item.error;meta.classList.add('error');if(isHwp(item.file)&&/SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT|FONT_GLYPH_MISSING/.test(item.error))message+=' · 아래 출력 및 글꼴 옵션에서 호환 방식 선택 후 다시 변환할 수 있습니다(이미지 PDF, 글자 검색 불가).';}
   if(item.result?.substituteFamilies?.length)message+=' · 대체 글꼴: '+item.result.substituteFamilies.join(', ');
   if(item.result?.warnings?.length)message+=' · '+item.result.warnings.join(' ');
   if(item.fontAuditMessage)message+=' · '+item.fontAuditMessage;
@@ -320,7 +321,7 @@ $('convert').addEventListener('click',async()=>{
  if(!pending.length)return;
  conversionClock.start(pending.length);
  const fontFiles=Array.from($('pdf-font').files||[]);
- if(plan.bulk)status('실패한 문서 '+pending.length+'개만 명시적으로 복구합니다. SVG 필터 오류는 해당 쪽만 이미지로, 스트림 오류나 혼합 재실패는 전체 이미지로 출력됩니다. 성공 파일과 일반 대기 파일은 제외됩니다.');
+ if(plan.bulk)status('실패한 문서 '+pending.length+'개만 명시적으로 복구합니다. SVG 필터 오류는 해당 쪽만 이미지로, 글꼴 누락·스트림 오류 또는 혼합 재실패는 전체 이미지 PDF로 출력되어 글자 검색이 불가능합니다. 성공 파일과 대기 파일은 제외됩니다.');
  else if(plan.recovery)status(engine==='hybrid-filter'
   ?'선택한 문서 1개만 혼합 PDF로 다시 변환합니다. 미지원 필터 쪽만 이미지로 처리하며 나머지 쪽은 벡터로 유지합니다.'
   :'선택한 문서 1개만 호환 이미지 PDF로 다시 변환합니다. 모든 쪽의 글자 검색은 불가능합니다.');
