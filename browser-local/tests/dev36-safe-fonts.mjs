@@ -6,11 +6,12 @@ import {approvedFonts,approvedSource,verifyApprovedFont} from '../scripts/instal
 import {loadPdfFonts,resolveFont,familyKey} from '../src/pdf-fonts.js';
 import {localFamilyKeys} from '../src/local-fonts.js';
 
-test('DEV36 default assets contain four KERIS fonts and one OFL symbol fallback',()=>{
+test('DEV37 defaults contain four KERIS body faces and three OFL symbol/Unicode fallbacks',()=>{
  assert.deepEqual(approvedFonts.map(f=>f.name),[
   'HakgyoansimBareonbatangR.ttf','HakgyoansimBareonbatangB.ttf',
   'HakgyoansimBareondotumR.ttf','HakgyoansimBareondotumB.ttf',
-  'NotoSansSymbols2-Regular.ttf'
+  'NotoSansSymbols2-Regular.ttf',
+  'NotoSans-Regular.ttf','NotoSansYi-Regular.ttf'
  ]);
  const src=readFileSync(new URL('../src/bundled-fonts.js',import.meta.url),'utf8');
  for(const font of approvedFonts)assert.ok(src.includes(font.name),font.name);
@@ -56,10 +57,12 @@ test('DEV36 Worker allowlist rejects retired font URL patterns',()=>{
  const worker=readFileSync(new URL('../../src/worker.js',import.meta.url),'utf8');
  assert.match(worker,/HakgyoansimBareon/);
  assert.match(worker,/NotoSansSymbols2-Regular/);
+ assert.match(worker,/NotoSans-Regular/);
+ assert.match(worker,/NotoSansYi-Regular/);
  assert.doesNotMatch(worker,/Nanum\(\?:Gothic\|Myeongjo\)/);
 });
 
-test('DEV36 actual 5 font binaries are valid fontkit faces with correct B/R and common symbols',async()=>{
+test('DEV37 all seven pinned font binaries parse and cover the eight reported missing punctuation glyphs',async()=>{
  const {default:fontkit}=await import('@pdf-lib/fontkit');
  const files=await Promise.all(approvedFonts.map(async font=>{
   const bytes=await readFile(new URL('../public/fonts/'+font.name,import.meta.url));
@@ -67,20 +70,24 @@ test('DEV36 actual 5 font binaries are valid fontkit faces with correct B/R and 
   return {name:font.name,arrayBuffer:async()=>Uint8Array.from(bytes).buffer};
  }));
  const registry=await loadPdfFonts(files,fontkit);
- assert.equal(registry.faces.length,5);
+ assert.equal(registry.faces.length,7);
  assert.deepEqual(registry.faces.slice(0,4).map(f=>f.bold),[false,true,false,true]);
- const symbol=registry.faces.at(-1);
- assert.match(symbol.family,/Noto Sans Symbols\\s*2/i);
- assert.ok(symbol,'Noto symbol font face must be parsed successfully');
- for(const char of ['◦','•','▸','∘']){
-  assert.ok(symbol.characterSet.has(char.codePointAt(0)),
-   'required real-report symbol missing from fallback: '+char);
- }
- // The original reports contain further punctuation not in these five fonts.
- // Never claim perfect glyph fidelity based on font embedding alone.
+ const symbols=registry.faces[4];
+ assert.match(symbols.family,/Noto Sans Symbols\\s*2/i);
+ for(const c of ['◦','•','▸','∘'])
+  assert.ok(symbols.characterSet.has(c.codePointAt(0)),'symbol fallback missing: '+c);
  const unresolved=['‧','‑','｢','｣','․','･','⁀','‿'];
- const remaining=unresolved.filter(char=>!registry.faces.some(face=>face.characterSet.has(char.codePointAt(0))));
- assert.ok(remaining.length>0,'unverified punctuation must be represented as a real coverage gap');
+ const oldFive=registry.faces.slice(0,5);
+ for(const c of unresolved){
+  const cp=c.codePointAt(0);
+  assert.equal(oldFive.some(f=>f.characterSet.has(cp)),false,'regression fixture mismatch: '+c);
+  assert.ok(registry.faces.slice(5).some(f=>f.characterSet.has(cp)),
+   'new fallback must cover U+'+cp.toString(16).toUpperCase());
+  const options={faces:registry.faces.map((f,i)=>({...f,isFallback:true,
+   genericFamily:i<2?'serif':i<4?'sans':'symbol'}))};
+  const selected=resolveFont(options,'알 수 없는 원본 서체','normal','normal',c);
+  assert.ok(selected?.characterSet?.has(cp),'PDF font selection must retain: '+c);
+ }
 });
 
 test('DEV36 KERIS Korean/English names match for optional installed PC fonts',()=>{
