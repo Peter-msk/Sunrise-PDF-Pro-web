@@ -83,6 +83,10 @@ export function localFailureAdvice(error){
   return 'SVG 그림 효과가 기본 벡터 출력 엔진에서 지원되지 않습니다. 이 파일만 혼합 PDF로 복구하면 해당 쪽만 이미지가 되어 글자 검색이 제한됩니다. 혼합 출력도 실패한 경우 호환 이미지 PDF를 직접 선택하세요. 원본과 출력 결과를 확인하세요.';
  if(/\bFONT_GLYPH_MISSING\b/.test(message))
   return '원본 서체의 일부 문자를 PDF에 넣을 수 없습니다. 원본 글꼴을 추가하거나 글자 검색이 불가능한 이미지 PDF 복구를 직접 선택하세요.';
+ if(/\bSVG_RENDER_SOURCE_CHARS_LIMIT\b/.test(message))
+  return 'SVG 페이지가 안전한 벡터 출력 한도를 초과했습니다. 동일 모드의 무조건 재시도는 피하세요. 이미지 호환 변환도 메모리를 많이 사용할 수 있으므로 다른 문서를 먼저 완료하고 이 파일만 별도로 시험하세요.';
+ if(/\bWASM_INIT_FAILED\b/.test(message))
+  return '웹 엔진 초기화 단계에서 실패했습니다. 파일을 다시 업로드하지 않고 브라우저 메모리·자산 네트워크 상태를 점검한 뒤 해당 파일만 재시도하세요.';
  if(/\bPDF_OUTPUT_[A-Z0-9_]+\b/.test(message))
   return '생성된 PDF의 완전성 검사 실패: 잘린 파일은 제공하지 않습니다. 해당 파일만 다시 시도하세요.';
  return null;
