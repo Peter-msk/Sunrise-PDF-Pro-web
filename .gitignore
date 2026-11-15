@@ -4,3 +4,10 @@ browser-local/dist/
 browser-local/public/rhwp_bg.wasm
 artifacts/
 *.log
+
+# DEV36 approved OFL fonts are pinned and fetched at build time.
+browser-local/public/fonts/HakgyoansimBareonbatangR.ttf
+browser-local/public/fonts/HakgyoansimBareonbatangB.ttf
+browser-local/public/fonts/HakgyoansimBareondotumR.ttf
+browser-local/public/fonts/HakgyoansimBareondotumB.ttf
+browser-local/public/fonts/NotoSansSymbols2-Regular.ttf
