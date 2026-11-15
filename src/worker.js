@@ -139,7 +139,7 @@ export default {
       const name=path.slice('/local/'.length);
       return localAsset(request,env,'/'+name,method,'application/javascript; charset=utf-8');
     }
-    const fontPath=/^\/local\/fonts\/(Nanum(?:Gothic|Myeongjo)-(?:Regular|Bold)\.ttf|SunriseSymbols\.otf|SunriseMarks\.ttf)$/.exec(path);
+    const fontPath=/^\/local\/fonts\/(HakgyoansimBareon(?:batang|dotum)[RB]\.ttf|NotoSansSymbols2-Regular\.ttf)$/.exec(path);
     if(fontPath){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       return localAsset(request,env,'/fonts/'+fontPath[1],method,fontPath[1].endsWith('.otf')?'font/otf':'font/ttf');
