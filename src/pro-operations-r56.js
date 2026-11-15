@@ -93,7 +93,7 @@ export const OPERATIONS_R56_JS=String.raw`/* Sunrise PDF PRO R56: non-invasive o
    const wrap=document.createElement('div');wrap.className='file-list-scroll';wrap.setAttribute('role','region');
    wrap.setAttribute('aria-label','변환 파일 목록, 좌우로 스크롤 가능');
    const header=document.createElement('div');header.className='file-list-header';header.setAttribute('aria-hidden','true');
-   for(const label of ['구분','파일명','용량','파일속성','비고'])header.append(rowCell('file-list-heading',label));
+   for(const label of ['구분','파일명','용량','파일속성','작업'])header.append(rowCell('file-list-heading',label));
    list.parentNode.insertBefore(wrap,list);wrap.append(header,list);
   }
   transform();
