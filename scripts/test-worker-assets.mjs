@@ -85,7 +85,8 @@ assert.equal(health.default_output,'professional');
 assert.deepEqual(health.optional_outputs,['native-print']);
 console.log('Professional engine chunk routing, asset boundaries and print CSP: PASS');
 
-assert.equal((await worker.fetch(new Request('https://sunrise.example/local/fonts/NanumGothic-Regular.ttf',{method:'POST'}),env)).status,405);
+assert.equal((await worker.fetch(new Request('https://sunrise.example/local/fonts/HakgyoansimBareondotumR.ttf',{method:'POST'}),env)).status,405);
+assert.equal((await worker.fetch(new Request('https://sunrise.example/local/fonts/NanumGothic-Regular.ttf'),env)).status,404,'retired fonts must not be served');
 assert.equal((await worker.fetch(new Request('https://sunrise.example/local/fonts/unknown.ttf'),env)).status,404);
 console.log('Bundled font asset routing: PASS');
 
