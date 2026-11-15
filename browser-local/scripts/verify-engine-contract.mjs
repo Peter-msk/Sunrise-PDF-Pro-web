@@ -54,7 +54,8 @@ export function inspectEngineContract(root){
   for(const font of [
    'HakgyoansimBareonbatangR.ttf','HakgyoansimBareonbatangB.ttf',
    'HakgyoansimBareondotumR.ttf','HakgyoansimBareondotumB.ttf',
-   'NotoSansSymbols2-Regular.ttf'
+   'NotoSansSymbols2-Regular.ttf',
+   'NotoSans-Regular.ttf','NotoSansYi-Regular.ttf'
   ]){
    if(!existsSync(resolve(root,'browser-local/public/fonts',font)))
     issues.push('MISSING_MOBILE_BUNDLED_FONT:'+font);
