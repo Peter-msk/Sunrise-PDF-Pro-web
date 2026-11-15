@@ -418,7 +418,7 @@ $('convert').addEventListener('click',async()=>{
     const phases=new Set(['svg_build','svg_normalize','image_gif','image_png',
      'image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done',
      'pdf_finalize','pdf_write','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save']);
-    item._proDiagStage=info.stage==='load'?(['xlsx_package','xlsx_parse','xlsx_layout'].includes(info.detail)?info.detail:'load'):
+    item._proDiagStage=info.stage==='load'?(['wasm_init','wasm_ready','xlsx_package','xlsx_parse','xlsx_layout'].includes(info.detail)?info.detail:'load'):
      info.stage==='fonts'?(info.detail==='read'?'font_read':info.detail==='bundled'?'font_bundle':
       info.detail==='measure'?'font_measure':info.detail==='scan'?'font_scan':'fonts'):
      phases.has(info.detail)?info.detail:'render';
@@ -441,7 +441,7 @@ $('convert').addEventListener('click',async()=>{
     }
     const part=info.stage==='load'?Math.min(.15,.15*info.loaded/Math.max(1,info.total)):info.stage==='fonts'?.15+.15*info.page/Math.max(1,info.total):.30+.69*info.page/Math.max(1,info.total);
     $('progress').value=Math.min(99,Math.round((completed+part)/pending.length*100));
-    conversionClock.update(completed,part,info.stage==='fonts'?'글꼴 검사':info.stage==='load'?'문서 읽기':'페이지 출력');
+    conversionClock.update(completed,part,info.stage==='fonts'?'글꼴 검사':info.stage==='load'?(info.detail==='wasm_init'?'웹 엔진 초기화':'문서 읽기'):'페이지 출력');
     const fontStatus=info.detail==='read'?'PC 글꼴 파일 읽는 중':
      info.detail==='bundled'?'기본 글꼴 준비 중':info.detail==='measure'?'PDF 측정용 글꼴 준비 중':
      info.detail==='complete'?'PDF 출력 시작 중':'문서에 필요한 글꼴 검색 중';
@@ -454,7 +454,7 @@ $('convert').addEventListener('click',async()=>{
      pdf_finalize:'PDF 최종 저장 준비',pdf_write:'페이지 PDF 작성 중',pdf_stream:'PDF 바이트 생성 중',
      pdf_done:'PDF 바이트 생성 완료',compat_raster:'호환 이미지 페이지 생성',compat_page_done:'호환 이미지 페이지 완료',compat_save:'호환 PDF 저장 중'
     };
-    const message=info.stage==='load'?(info.detail==='xlsx_package'?'XLSX 압축 구조 안전 검사':info.detail==='xlsx_parse'?'XLSX 시트 해석':info.detail==='xlsx_layout'?'XLSX 인쇄 레이아웃 검사':'문서 읽는 중'):
+    const message=info.stage==='load'?(info.detail==='wasm_init'?'RHWP 웹 엔진 초기화 중 · 최초 이용 시 시간이 걸릴 수 있습니다':info.detail==='wasm_ready'?'RHWP 웹 엔진 준비 완료':'xlsx_package'===info.detail?'XLSX 압축 구조 안전 검사':info.detail==='xlsx_parse'?'XLSX 시트 해석':info.detail==='xlsx_layout'?'XLSX 인쇄 레이아웃 검사':'문서 읽는 중'):
      info.stage==='fonts'?fontStatus:
      stepLabels[info.detail]||'페이지 변환';
     const byteStatus=(info.detail==='pdf_stream'||info.detail==='pdf_write')&&Number.isSafeInteger(info.bytes)
