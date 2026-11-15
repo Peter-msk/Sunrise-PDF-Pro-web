@@ -5,7 +5,7 @@ import {spawnSync} from 'node:child_process';import {PDFDocument} from 'pdf-lib'
 import {planSheet,drawSheetPages} from '../src/spreadsheet-pdf.js';import {imagePdfBytes} from '../src/image-pdf.js';
 const output=resolve(import.meta.dirname,'../../artifacts/multi-format-core');mkdirSync(output,{recursive:true});
 test('XLS/XLSX real PDF writer preserves 70 rows, merges and Korean text over several pages',async()=>{
- const fontBytes=readFileSync(new URL('../public/fonts/NanumGothic-Regular.ttf',import.meta.url));
+ const fontBytes=readFileSync(new URL('../public/fonts/HakgyoansimBareondotumR.ttf',import.meta.url));
  for(const ext of ['xls','xlsx']){
   const input=resolve(import.meta.dirname,'../../artifacts/multi-format/table.'+ext);
   const wb=XLSX.read(readFileSync(input),{type:'buffer',cellStyles:true,cellNF:true,cellText:true});
