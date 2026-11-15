@@ -28,3 +28,12 @@ test('DEV36 oversized SVG explanation does not claim unsafe auto-recovery',()=>{
  assert.ok(!message.includes('자동'));
  assert.match(localFailureAdvice('WASM_INIT_FAILED'),/웹 엔진 초기화/);
 });
+
+test('DEV36 loading status is never an undefined page and always reports WASM boot',()=>{
+ const client=source('../src/main.js');
+ assert.ok(client.includes("['wasm_init','wasm_ready'].includes(item._proDiagStage)"));
+ assert.ok(client.includes("const pageStatus=info.stage!=='load'&&info.stage!=='fonts'"));
+ assert.ok(client.includes("const loadStatus=info.stage==='load'"));
+ assert.ok(client.includes("pageStatus+loadStatus"));
+ assert.ok(!client.includes("+' · '+info.page+'/'+info.total+'쪽"));
+});
