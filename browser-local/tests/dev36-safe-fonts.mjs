@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {readFile} from 'node:fs/promises';
 import {approvedFonts,approvedSource,verifyApprovedFont} from '../scripts/install-safe-fonts.mjs';
 import {loadPdfFonts,resolveFont,familyKey} from '../src/pdf-fonts.js';
 
@@ -55,4 +56,27 @@ test('DEV36 Worker allowlist rejects retired font URL patterns',()=>{
  assert.match(worker,/HakgyoansimBareon/);
  assert.match(worker,/NotoSansSymbols2-Regular/);
  assert.doesNotMatch(worker,/Nanum\(\?:Gothic\|Myeongjo\)/);
+});
+
+test('DEV36 actual 5 font binaries are valid fontkit faces with correct B/R and common symbols',async()=>{
+ const {default:fontkit}=await import('@pdf-lib/fontkit');
+ const files=await Promise.all(approvedFonts.map(async font=>{
+  const bytes=await readFile(new URL('../public/fonts/'+font.name,import.meta.url));
+  assert.equal(verifyApprovedFont(font,bytes),true);
+  return {name:font.name,arrayBuffer:async()=>Uint8Array.from(bytes).buffer};
+ }));
+ const registry=await loadPdfFonts(files,fontkit);
+ assert.equal(registry.faces.length,5);
+ assert.deepEqual(registry.faces.slice(0,4).map(f=>f.bold),[false,true,false,true]);
+ const symbol=registry.faces.find(f=>/Noto Sans Symbols 2/i.test(f.family));
+ assert.ok(symbol,'Noto symbol font face must be parsed successfully');
+ for(const char of ['◦','•','▸','∘']){
+  assert.ok(symbol.characterSet.has(char.codePointAt(0)),
+   'required real-report symbol missing from fallback: '+char);
+ }
+ // The original reports contain further punctuation not in these five fonts.
+ // Never claim perfect glyph fidelity based on font embedding alone.
+ const unresolved=['‧','‑','｢','｣','․','･','⁀','‿'];
+ const remaining=unresolved.filter(char=>!registry.faces.some(face=>face.characterSet.has(char.codePointAt(0))));
+ assert.ok(remaining.length>0,'unverified punctuation must be represented as a real coverage gap');
 });
