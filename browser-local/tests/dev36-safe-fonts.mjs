@@ -68,7 +68,8 @@ test('DEV36 actual 5 font binaries are valid fontkit faces with correct B/R and 
  const registry=await loadPdfFonts(files,fontkit);
  assert.equal(registry.faces.length,5);
  assert.deepEqual(registry.faces.slice(0,4).map(f=>f.bold),[false,true,false,true]);
- const symbol=registry.faces.find(f=>/Noto Sans Symbols 2/i.test(f.family));
+ const symbol=registry.faces.at(-1);
+ assert.match(symbol.family,/Noto Sans Symbols\\s*2/i);
  assert.ok(symbol,'Noto symbol font face must be parsed successfully');
  for(const char of ['◦','•','▸','∘']){
   assert.ok(symbol.characterSet.has(char.codePointAt(0)),
