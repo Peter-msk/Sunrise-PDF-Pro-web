@@ -427,9 +427,13 @@ $('convert').addEventListener('click',async()=>{
     const phaseNow=performance.now();
     const gap=phaseNow-(item._lastDiagSentMs||0);
     const changed=item._lastDiagPhase!==item._proDiagStage;
-    const important=info.page===info.total&&
-     ['svg_build','image_png','svg_vector','pdf_finalize','pdf_write','pdf_stream','pdf_done']
-      .includes(item._proDiagStage);
+    // First-use WASM compilation must report start/ready even before
+    // the normal progress sampling interval has elapsed.
+    const important=(info.stage==='load'&&
+      ['wasm_init','wasm_ready'].includes(item._proDiagStage))||
+      (info.page===info.total&&
+       ['svg_build','image_png','svg_vector','pdf_finalize','pdf_write','pdf_stream','pdf_done']
+        .includes(item._proDiagStage));
     if((item._proProgressEvents||0)<100&&
       ((changed&&(gap>=750||important))||gap>=45000)){
       emitProEvent('convert_progress',{feature:proFeature(file),
@@ -462,7 +466,18 @@ $('convert').addEventListener('click',async()=>{
     // Show completed synchronous stage duration without claiming it could be cancelled mid-call.
     const elapsedStatus=Number.isSafeInteger(info.elapsedMs)&&info.elapsedMs>=1000
      ?' · 단계 소요 '+(info.elapsedMs/1000).toFixed(1)+'초':'';
-    status(file.name+' · '+message+byteStatus+elapsedStatus+' · '+info.page+'/'+info.total+'쪽 · '+(completed+1)+'/'+pending.length+'개');
+    // File reading reports bytes, not PDF pages. WASM has no page count.
+    const pageStatus=info.stage!=='load'&&info.stage!=='fonts'&&
+     Number.isSafeInteger(info.page)&&info.page>=1&&
+     Number.isSafeInteger(info.total)&&info.total>=info.page
+      ?' · '+info.page+'/'+info.total+'쪽':'';
+    const loadStatus=info.stage==='load'&&
+     !['wasm_init','wasm_ready'].includes(info.detail)&&
+     Number.isSafeInteger(info.loaded)&&info.loaded>=0&&
+     Number.isSafeInteger(info.total)&&info.total>0
+      ?' · '+Math.min(100,Math.floor(info.loaded/info.total*100))+'% 읽음':'';
+    status(file.name+' · '+message+byteStatus+elapsedStatus+pageStatus+loadStatus+
+     ' · '+(completed+1)+'/'+pending.length+'개');
    },signal,{fontFiles,engine:itemEngine,localFonts});
    if(fontAccessNotice&&isHwp(file))result.warnings=[...(result.warnings||[]),fontAccessNotice];
    if((plan.recovery&&item===requested)||spec){
