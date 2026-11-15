@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {readFile} from 'node:fs/promises';
 import {approvedFonts,approvedSource,verifyApprovedFont} from '../scripts/install-safe-fonts.mjs';
 import {loadPdfFonts,resolveFont,familyKey} from '../src/pdf-fonts.js';
+import {localFamilyKeys} from '../src/local-fonts.js';
 
 test('DEV36 default assets contain four KERIS fonts and one OFL symbol fallback',()=>{
  assert.deepEqual(approvedFonts.map(f=>f.name),[
@@ -80,4 +81,14 @@ test('DEV36 actual 5 font binaries are valid fontkit faces with correct B/R and 
  const unresolved=['‧','‑','｢','｣','․','･','⁀','‿'];
  const remaining=unresolved.filter(char=>!registry.faces.some(face=>face.characterSet.has(char.codePointAt(0))));
  assert.ok(remaining.length>0,'unverified punctuation must be represented as a real coverage gap');
+});
+
+test('DEV36 KERIS Korean/English names match for optional installed PC fonts',()=>{
+ for(const [korean,english] of [
+  ['학교안심 바른돋움','Hakgyoansim Bareondotum'],
+  ['학교안심 바른바탕','Hakgyoansim Bareonbatang']
+ ]){
+  assert.ok(localFamilyKeys(korean).has(familyKey(english)));
+  assert.ok(localFamilyKeys(english).has(familyKey(korean)));
+ }
 });
