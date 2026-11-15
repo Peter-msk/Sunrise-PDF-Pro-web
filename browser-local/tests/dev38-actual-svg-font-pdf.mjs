@@ -66,7 +66,7 @@ test('DEV38: real SVG->PDFKit retains all eight reported glyphs and embeds selec
   const audit=await inspectPdfFontEmbedding(blob);
   assert.equal(audit.pageCount,1);
   assert.ok(audit.fonts.length>0);
-  assert.ok(audit.fonts.every(f=>f.embedded),'every page font resource should have FontFile');
+  // PDFKit may expose an unused standard Helvetica resource; only the faces\n  // selected by fontCallback must be embedded (no false failure for unused fonts).\n  assert.ok(audit.fonts.some(f=>f.embedded),'selected custom font resource missing');
   const found=compareSelectedAndEmbedded(registry.faces.filter(f=>used.has(f.name)),audit);
   assert.ok(found.every(f=>f.embedded&&f.pdfResourcePresent),'all selected faces need embedded resources');
   assert.ok(used.size>=2,'at least two distinct faces must be selected for eight mixed glyphs');
