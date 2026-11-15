@@ -151,7 +151,9 @@ export async function loadPdfFonts(fontFiles,parser,signal,{postscriptName=null}
     if(!Array.isArray(parsed?.characterSet) || !parsed.familyName)
       throw Error('글꼴의 유니코드 문자표 또는 패밀리 정보를 찾을 수 없습니다: '+file.name);
     const subfamily=String(parsed.subfamilyName||'');
-    const bold=/(bold|semibold|demibold|heavy|black)/i.test(subfamily);
+    // KERIS's OFL school fonts expose subfamily "B"/"R", rather than
+    // "Bold"/"Regular". Do not mistake the B face for another regular face.
+    const bold=/(bold|semibold|demibold|heavy|black)/i.test(subfamily)||/^(?:B|Bd)$/i.test(subfamily.trim());
     const italic=/(italic|oblique)/i.test(subfamily)||Boolean(parsed.italicAngle);
     const aliases=[...new Set([parsed.familyName,parsed.fullName,parsed.postscriptName]
       .filter(Boolean).map(familyKey))];
