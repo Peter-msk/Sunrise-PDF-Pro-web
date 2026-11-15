@@ -6,9 +6,9 @@ import {loadPdfFonts,familyKey} from './pdf-fonts.js';
 const FONT_FILES=[
  ['HakgyoansimBareonbatangR.ttf','serif'],['HakgyoansimBareonbatangB.ttf','serif'],
  ['HakgyoansimBareondotumR.ttf','sans'],['HakgyoansimBareondotumB.ttf','sans'],
- ['NotoSansSymbols2-Regular.ttf','symbol'],
- ['NotoSans-Regular.ttf','symbol'],
- ['NotoSansYi-Regular.ttf','symbol']
+ ['NotoSansSymbols2-Regular.ttf','symbol',['Noto Sans Symbols 2','NotoSansSymbols2']],
+ ['NotoSans-Regular.ttf','symbol',[]],
+ ['NotoSansYi-Regular.ttf','symbol',[]]
 ];
 const FAMILY_ALIASES={
  symbol:['Noto Sans Symbols 2','NotoSansSymbols2'],
@@ -33,7 +33,7 @@ export async function loadBundledFonts(parser,signal){
   face.name='BundledFont'+(index+1);
   face.isFallback=true;
   // Do not masquerade unrelated punctuation faces as Noto Sans Symbols 2.
-  face.cssAliases=category==='symbol' && index>4 ? [] : FAMILY_ALIASES[category];
+  face.cssAliases=FONT_FILES[index][2]??FAMILY_ALIASES[category];
   face.aliases=[...new Set([...face.aliases,...face.cssAliases.map(familyKey)])];
   face.genericFamily=category;
  });
