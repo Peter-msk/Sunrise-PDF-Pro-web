@@ -22,23 +22,52 @@ export const OPERATIONS_R56_JS=String.raw`/* Sunrise PDF PRO R56: non-invasive o
   rows.forEach((row,index)=>{
    const bytes=Number(row.dataset.bytes);
    const rowSize=Number.isSafeInteger(bytes)&&bytes>=0?bytes:null;
-   if(row.dataset.r56!=='1'){
+   if(row.dataset.r56!=='2'){
     const name=row.querySelector('.file-name');
     const body=name?.parentElement;
     const icon=row.querySelector('.file-icon');
     const actions=row.querySelector('.file-actions');
     if(!body||!actions)return;
-    const remove=Array.from(actions.children).find(node=>node.tagName==='BUTTON'&&node.textContent.trim()==='삭제');
-    const tools=document.createElement('span');tools.className='file-inline-tools';
-    for(const action of Array.from(actions.children)){if(action!==remove)tools.append(action);}
-    body.className='file-body';body.append(tools);
+    // Never move action buttons into the filename cell. The old inline tools
+    // consumed the full width and made original filenames unreadable.
+    body.className='file-body';
     if(name){name.title=name.textContent;name.setAttribute('aria-label',name.textContent);}
-    const fmt=rowCell('file-size',rowSize===null?'—':sizeLabel(rowSize));
-    const ext=rowCell('file-extension',String(icon?.textContent||'FILE').trim().toUpperCase());
-    const remark=document.createElement('span');remark.className='file-remark';
-    if(remove){remove.classList.add('file-delete');remove.setAttribute('aria-label',(name?.textContent||'문서')+' 파일 목록에서 삭제');remark.append(remove);}
-    row.replaceChildren(rowCell('file-number',String(index+1)),body,fmt,ext,remark);
-    row.dataset.r56='1';
+    const panel=document.createElement('div');
+    panel.className='file-action-panel';
+    panel.id='file-action-panel-'+String(row.dataset.id||index+1);
+    panel.hidden=true;
+    panel.setAttribute('role','group');
+    panel.setAttribute('aria-label',(name?.textContent||'문서')+' 작업');
+    panel.append(...Array.from(actions.children));
+    const remark=document.createElement('span');
+    remark.className='file-remark';
+    const toggle=document.createElement('button');
+    toggle.type='button';toggle.className='secondary file-action-toggle';
+    toggle.textContent='작업';
+    toggle.setAttribute('aria-controls',panel.id);
+    toggle.setAttribute('aria-expanded','false');
+    toggle.setAttribute('aria-label',(name?.textContent||'문서')+' 파일 작업 펼치기');
+    toggle.addEventListener('click',()=>{
+     const next=panel.hidden;
+     // Keep one file's controls visible at a time. This preserves a compact
+     // queue while allowing all review/download buttons to wrap below it.
+     for(const other of list.querySelectorAll('.file-action-panel')){
+      if(other===panel)continue;
+      other.hidden=true;
+      const otherToggle=other.parentElement?.querySelector('.file-action-toggle');
+      if(otherToggle)otherToggle.setAttribute('aria-expanded','false');
+     }
+     panel.hidden=!next;
+     toggle.setAttribute('aria-expanded',String(next));
+    });
+    remark.append(toggle);
+    row.replaceChildren(
+     rowCell('file-number',String(index+1)),body,
+     rowCell('file-size',rowSize===null?'—':sizeLabel(rowSize)),
+     rowCell('file-extension',String(icon?.textContent||'FILE').trim().toUpperCase()),
+     remark,panel
+    );
+    row.dataset.r56='2';
    }
    const number=row.querySelector('.file-number');if(number)number.textContent=String(index+1);
    const size=row.querySelector('.file-size');if(size)size.textContent=rowSize===null?'—':sizeLabel(rowSize);
@@ -64,7 +93,7 @@ export const OPERATIONS_R56_JS=String.raw`/* Sunrise PDF PRO R56: non-invasive o
    const wrap=document.createElement('div');wrap.className='file-list-scroll';wrap.setAttribute('role','region');
    wrap.setAttribute('aria-label','변환 파일 목록, 좌우로 스크롤 가능');
    const header=document.createElement('div');header.className='file-list-header';header.setAttribute('aria-hidden','true');
-   for(const label of ['구분','파일명','용량','파일속성','비고'])header.append(rowCell('file-list-heading',label));
+   for(const label of ['구분','파일명','용량','파일속성','작업'])header.append(rowCell('file-list-heading',label));
    list.parentNode.insertBefore(wrap,list);wrap.append(header,list);
   }
   transform();
@@ -72,23 +101,32 @@ export const OPERATIONS_R56_JS=String.raw`/* Sunrise PDF PRO R56: non-invasive o
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();`;
-export const OPERATIONS_R56_CSS=String.raw`/* Sunrise PDF PRO R56 one-row, five-column file queue */
-.file-list-scroll{width:100%;max-height:280px;overflow:auto;border:1px solid #dde7f1;border-radius:8px}
-.file-list-header,.files .file-row{display:grid;grid-template-columns:40px minmax(250px,1fr) 78px 72px 65px;gap:6px;align-items:center;min-width:590px;box-sizing:border-box}
-.file-list-header{position:sticky;top:0;z-index:2;background:#eaf1f8;border-bottom:1px solid #cfdeea;padding:8px 10px;color:#45637f;font-size:11px;font-weight:800}
+export const OPERATIONS_R56_CSS=String.raw`/* Sunrise PDF PRO DEV36: filename-first, accessible expandable action rows. */
+.file-list-scroll{width:100%;max-height:440px;overflow-x:auto;overflow-y:auto;border:1px solid #dde7f1;border-radius:8px}
+.file-list-header,.files .file-row{display:grid;grid-template-columns:38px minmax(0,1fr) 72px 64px 70px;gap:7px;align-items:center;min-width:0;box-sizing:border-box}
+.file-list-header{position:sticky;top:0;z-index:2;background:#eaf1f8;border-bottom:1px solid #cfdeea;padding:8px 9px;color:#45637f;font-size:11px;font-weight:800}
 .file-list-header span:nth-child(1),.file-list-header span:nth-child(3),.file-list-header span:nth-child(4),.file-list-header span:nth-child(5){text-align:center}
-.files{display:block;min-width:590px;max-height:none;overflow:visible;list-style:none;margin:0;padding:0}
-.files .file-row{min-height:40px;padding:5px 10px;border-top:0;border-bottom:1px solid #edf2f7;line-height:1.3}
+.files{display:block;min-width:0;max-height:none;overflow:visible;list-style:none;margin:0;padding:0}
+.files .file-row{min-height:48px;padding:7px 9px;border-top:0;border-bottom:1px solid #edf2f7;line-height:1.4}
 .files .file-row:nth-child(even){background:#fbfdff}
 .files .file-row.is-active{background:#edf5ff}
 .files .file-row:last-child{border-bottom:0}
 .files .file-number,.files .file-size,.files .file-extension,.files .file-remark{font-size:11px;white-space:nowrap;text-align:center;color:#516d89}
-.files .file-body{display:flex;gap:6px;align-items:center;min-width:0;overflow:hidden}
-.files .file-body .file-name{min-width:48px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:normal;font-size:12px;font-weight:700}
-.files .file-body .file-meta{flex:0 1 65px;min-width:0;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px}
-.files .file-inline-tools{display:inline-flex;align-items:center;gap:3px;margin-left:auto;flex-shrink:0}
-.files .file-inline-tools button,.files .file-inline-tools a,.files .file-remark .file-delete{font-size:10px;min-height:26px;padding:4px 7px;border-radius:5px}
-.files .file-remark .file-delete{color:#9a3a3a;border-color:#ecd0d0}
-.files .empty{min-width:590px;text-align:center;padding:12px}
-@media(max-width:820px){.file-list-scroll{max-height:270px}.files .file-inline-tools button,.files .file-inline-tools a{min-height:27px}}
+.files .file-body{display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:0;overflow:visible}
+.files .file-body .file-name{display:block;min-width:0;width:100%;max-width:100%;overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;word-break:normal;font-size:12px;font-weight:700;line-height:1.45}
+.files .file-body .file-meta{display:block;width:100%;max-width:100%;min-width:0;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:#62798e}
+.files .file-remark .file-action-toggle{font-size:11px;min-height:30px;padding:4px 9px;border-radius:6px;width:100%;white-space:nowrap}
+.files .file-action-panel{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:3px;padding:10px;background:#f3f7fc;border:1px solid #dbe6f1;border-radius:7px;min-width:0}
+.files .file-action-panel[hidden]{display:none!important}
+.files .file-action-panel button,.files .file-action-panel a{font-size:11px;min-height:32px;padding:5px 9px;max-width:100%;white-space:normal;text-align:center}
+.files .file-action-panel .file-delete{color:#9a3a3a;border-color:#ecd0d0;margin-left:auto}
+.files .empty{min-width:0;text-align:center;padding:12px}
+@media(max-width:620px){
+ .file-list-scroll{max-height:410px}
+ .file-list-header,.files .file-row{grid-template-columns:24px minmax(0,1fr) 52px 39px 46px;gap:3px}
+ .file-list-header,.files .file-row{padding-left:5px;padding-right:5px}
+ .files .file-body .file-name{font-size:11px}
+ .files .file-size,.files .file-extension{font-size:10px}
+ .files .file-remark .file-action-toggle{font-size:10px;padding:4px 3px}
+}
 `;

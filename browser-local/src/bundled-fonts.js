@@ -1,16 +1,17 @@
 import {loadPdfFonts,familyKey} from './pdf-fonts.js';
 
-// OFL-licensed substitute faces. Their use is reported to the caller; they do
+// KERIS school-safe OFL body faces with a Google OFL symbol fallback.
+// Their use is reported to the caller; they do
 // not claim to reproduce the original Hancom font's metrics or appearance.
 const FONT_FILES=[
- ['NanumMyeongjo-Regular.ttf','serif'],['NanumMyeongjo-Bold.ttf','serif'],
- ['NanumGothic-Regular.ttf','sans'],['NanumGothic-Bold.ttf','sans'],
- ['SunriseSymbols.otf','symbol'],['SunriseMarks.ttf','symbol']
+ ['HakgyoansimBareonbatangR.ttf','serif'],['HakgyoansimBareonbatangB.ttf','serif'],
+ ['HakgyoansimBareondotumR.ttf','sans'],['HakgyoansimBareondotumB.ttf','sans'],
+ ['NotoSansSymbols2-Regular.ttf','symbol']
 ];
 const FAMILY_ALIASES={
- symbol:[],
- serif:['함초롬바탕','HCR Batang','HCR Batang Ext','HCR Batang ExtB','함초롬바탕 확장','함초롬바탕 확장B','바탕','Batang','Nanum Myeongjo','NanumMyeongjo','Noto Serif KR','Noto Serif CJK KR','AppleMyungjo','HY명조','휴먼명조','신명조','한컴바탕','HCR Batang ExtB'],
- sans:['함초롬돋움','HCR Dotum','돋움','Dotum','맑은 고딕','Malgun Gothic','Nanum Gothic','NanumGothic','Noto Sans KR','Noto Sans CJK KR','굴림','굴림체','Gulim','GulimChe','HY굴림체','Apple SD Gothic Neo','Pretendard','Noto Sans KR ExtraLight','Noto Sans Mono','D2Coding','한컴돋움','함초롬돋움체']
+ symbol:['Noto Sans Symbols 2','NotoSansSymbols2'],
+ serif:['학교안심 바른바탕','Hakgyoansim Bareonbatang','함초롬바탕','HCR Batang','HCR Batang Ext','HCR Batang ExtB','함초롬바탕 확장','함초롬바탕 확장B','바탕','Batang','Nanum Myeongjo','NanumMyeongjo','Noto Serif KR','Noto Serif CJK KR','AppleMyungjo','HY명조','휴먼명조','신명조','한컴바탕','HCR Batang ExtB'],
+ sans:['학교안심 바른돋움','Hakgyoansim Bareondotum','함초롬돋움','HCR Dotum','돋움','Dotum','맑은 고딕','Malgun Gothic','Nanum Gothic','NanumGothic','Noto Sans KR','Noto Sans CJK KR','굴림','굴림체','Gulim','GulimChe','HY굴림체','Apple SD Gothic Neo','Pretendard','Noto Sans KR ExtraLight','Noto Sans Mono','D2Coding','한컴돋움','함초롬돋움체']
 };
 let cached=null;
 export async function loadBundledFonts(parser,signal){

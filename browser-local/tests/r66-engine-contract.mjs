@@ -16,8 +16,8 @@ function fixture(){
   write('browser-local/src/converter.js',"import {} from '@rhwp/core'; tryProfessionalDocument(); allowRasterFallback:false");
   write('browser-local/src/svg-professional.js',"hwpDoc.renderPageSvgWithProfile(i,'print'); SVGtoPDF();");
   write('browser-local/src/pdfkit-backend.js',"const m=import('pdfkit');function toBlob(){}");
-  for(const name of ['NanumMyeongjo-Regular.ttf','NanumMyeongjo-Bold.ttf',
-   'NanumGothic-Regular.ttf','NanumGothic-Bold.ttf','SunriseSymbols.otf','SunriseMarks.ttf'])
+  for(const name of ['HakgyoansimBareonbatangR.ttf','HakgyoansimBareonbatangB.ttf',
+   'HakgyoansimBareondotumR.ttf','HakgyoansimBareondotumB.ttf','NotoSansSymbols2-Regular.ttf'])
    write('browser-local/public/fonts/'+name,'synthetic-test-font');
 
   return {dir,write,cleanup:()=>rmSync(dir,{recursive:true,force:true})};
@@ -91,8 +91,8 @@ test('DEV35 browser-only architecture check accepts optional font metadata helpe
 }));
 
 test('DEV35 missing mobile bundled font is a blocking architectural regression',()=>withFixture(f=>{
- rmSync(join(f.dir,'browser-local/public/fonts/NanumGothic-Regular.ttf'));
+ rmSync(join(f.dir,'browser-local/public/fonts/HakgyoansimBareondotumR.ttf'));
  const result=inspectEngineContract(f.dir);
  assert.equal(result.ok,false);
- assert.ok(result.issues.includes('MISSING_MOBILE_BUNDLED_FONT:NanumGothic-Regular.ttf'));
+ assert.ok(result.issues.includes('MISSING_MOBILE_BUNDLED_FONT:HakgyoansimBareondotumR.ttf'));
 }));

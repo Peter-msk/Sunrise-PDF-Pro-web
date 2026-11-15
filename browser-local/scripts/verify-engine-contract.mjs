@@ -52,9 +52,9 @@ export function inspectEngineContract(root){
   // Mobile browsers commonly lack Local Font Access. A missing self-hosted
   // fallback face must stop a build, not fail only at the user's document.
   for(const font of [
-   'NanumMyeongjo-Regular.ttf','NanumMyeongjo-Bold.ttf',
-   'NanumGothic-Regular.ttf','NanumGothic-Bold.ttf',
-   'SunriseSymbols.otf','SunriseMarks.ttf'
+   'HakgyoansimBareonbatangR.ttf','HakgyoansimBareonbatangB.ttf',
+   'HakgyoansimBareondotumR.ttf','HakgyoansimBareondotumB.ttf',
+   'NotoSansSymbols2-Regular.ttf'
   ]){
    if(!existsSync(resolve(root,'browser-local/public/fonts',font)))
     issues.push('MISSING_MOBILE_BUNDLED_FONT:'+font);

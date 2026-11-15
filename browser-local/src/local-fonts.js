@@ -12,7 +12,10 @@ const BILINGUAL_FAMILIES=[
  ['돋움','Dotum'],['돋움체','DotumChe'],['바탕','Batang'],
  ['바탕체','BatangChe'],['궁서','Gungsuh'],['궁서체','GungsuhChe'],
  ['함초롬바탕','HCR Batang'],['함초롬돋움','HCR Dotum'],
- ['나눔고딕','Nanum Gothic'],['나눔명조','Nanum Myeongjo']
+ ['나눔고딕','Nanum Gothic'],['나눔명조','Nanum Myeongjo'],
+ // Verified Unicode family-name records in KERIS school-safe OFL fonts.
+ ['학교안심 바른돋움','Hakgyoansim Bareondotum'],
+ ['학교안심 바른바탕','Hakgyoansim Bareonbatang']
 ];
 const bilingual=new Map();
 for(const [korean,english] of BILINGUAL_FAMILIES){

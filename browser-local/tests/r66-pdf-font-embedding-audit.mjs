@@ -13,8 +13,8 @@ import {loadDocumentLocalFonts} from '../src/local-fonts.js';
 import {JSDOM} from 'jsdom';
 
 globalThis.File ||= File;
-const regular=readFileSync(new URL('../public/fonts/NanumGothic-Regular.ttf',import.meta.url));
-const bold=readFileSync(new URL('../public/fonts/NanumGothic-Bold.ttf',import.meta.url));
+const regular=readFileSync(new URL('../public/fonts/HakgyoansimBareondotumR.ttf',import.meta.url));
+const bold=readFileSync(new URL('../public/fonts/HakgyoansimBareondotumB.ttf',import.meta.url));
 const postscript=fontkit.create(regular).postscriptName;
 async function outputPdf({embedded=true,text='한글 ABC',family='SelectedPC'}={}){
  const writer=new PDFKit({autoFirstPage:false,compress:false,margin:0});
@@ -33,15 +33,15 @@ async function outputPdf({embedded=true,text='한글 ABC',family='SelectedPC'}={
  await complete;
  return new Blob(chunks,{type:'application/pdf'});
 }
-test('real Korean Nanum font is verifiably embedded in PDF FontDescriptor and page resources',async()=>{
+test('real Korean KERIS school-safe OFL font is verifiably embedded in PDF FontDescriptor and page resources',async()=>{
  const pdf=await outputPdf();
  const result=await inspectPdfFontEmbedding(pdf);
  assert.equal(result.pageCount,1);
  assert.ok(result.fonts.length>0);
  assert.ok(result.fonts.some(x=>x.embedded),'FontFile2/3 must be present');
  assert.ok(result.fonts.some(x=>x.pages.includes(1)));
- assert.ok(result.fonts.some(x=>x.baseName.includes('Nanum')));
- const matched=compareSelectedAndEmbedded([{family:'Nanum Gothic',postscriptName:postscript}],result);
+ assert.ok(result.fonts.some(x=>x.baseName.includes(postscript)));
+ const matched=compareSelectedAndEmbedded([{family:'Hakgyoansim Bareondotum',postscriptName:postscript}],result);
  assert.equal(matched.length,1);
  assert.equal(matched[0].pdfResourcePresent,true);
  assert.equal(matched[0].embedded,true);
@@ -63,7 +63,7 @@ test('font inspection refuses malformed PDF, oversize files and already-cancelle
 test('a selected PC face is not called embedded when its PDF resource is absent',async()=>{
  const pdf=await outputPdf({embedded:false,text:'ASCII'});
  const audit=await inspectPdfFontEmbedding(pdf);
- const selected=compareSelectedAndEmbedded([{family:'Nanum Gothic',postscriptName:postscript}],audit);
+ const selected=compareSelectedAndEmbedded([{family:'Hakgyoansim Bareondotum',postscriptName:postscript}],audit);
  assert.equal(selected[0].pdfResourcePresent,false);
  assert.equal(selected[0].embedded,false);
 });
@@ -76,7 +76,7 @@ test('single-face PC TTF never receives a TTC selector, and mismatched PostScrip
  const seen=[];
  const parser={create(_bytes,...extra){
   seen.push(extra);
-  return {familyName:'Nanum Gothic',fullName:'Nanum Gothic',
+  return {familyName:'Hakgyoansim Bareondotum',fullName:'Hakgyoansim Bareondotum',
    postscriptName:postscript,subfamilyName:'Regular',characterSet:[0xac00,65]};
  }};
  const file=new File([regular],'local-font.ttf');
@@ -109,16 +109,16 @@ test('explicit PC font selected by bilingual HWP name is carried into a real emb
  globalThis.DOMParser=win.DOMParser;
  try{
   const os=[{
-   family:'Nanum Gothic',fullName:'Nanum Gothic',postscriptName:postscript,
+   family:'Hakgyoansim Bareondotum',fullName:'Hakgyoansim Bareondotum R',postscriptName:postscript,
    style:'Regular',blob:async()=>new Blob([regular])
   }];
   const document={renderPageSvgWithProfile:()=>
-   '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><text font-family="나눔고딕">한글</text></svg>'};
+   '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><text font-family="학교안심 바른돋움">한글</text></svg>'};
   const result=await loadDocumentLocalFonts(document,1,os,fontkit);
   assert.equal(result.faces.length,1,JSON.stringify({required:result.requestedFamilies,matched:result.matchedFontData,unreadable:result.unreadableFonts,unmatched:result.unmatchedNames,parsedName:postscript}));
   const selected=result.faces[0];
   assert.equal(selected.isLocal,true);
-  assert.ok(selected.aliases.includes('나눔고딕'));
+  assert.ok(selected.aliases.includes('학교안심바른돋움'));
   const pdf=await outputPdf({family:'SelectedPC'});
   const report=await inspectPdfFontEmbedding(pdf);
   assert.ok(compareSelectedAndEmbedded([selected],report)[0].embedded);
