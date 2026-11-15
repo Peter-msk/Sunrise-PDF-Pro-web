@@ -73,7 +73,7 @@ test('DEV37 all seven pinned font binaries parse and cover the eight reported mi
  assert.equal(registry.faces.length,7);
  assert.deepEqual(registry.faces.slice(0,4).map(f=>f.bold),[false,true,false,true]);
  const symbols=registry.faces[4];
- assert.match(symbols.family,/Noto Sans Symbols\\s*2/i);
+ assert.match(symbols.family,/Noto Sans Symbols\s*2/i);
  for(const c of ['◦','•','▸','∘'])
   assert.ok(symbols.characterSet.has(c.codePointAt(0)),'symbol fallback missing: '+c);
  // Restore the user's original U+002D hyphen, not U+2011.
