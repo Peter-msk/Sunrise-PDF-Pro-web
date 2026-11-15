@@ -110,7 +110,17 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
  // This removes the former 20MiB rejection without eliminating magic checks.
  const header=await file.slice(0,8).arrayBuffer();
  throwIfCancelled(signal);verifyFile(file,header);
- await prepareWasm();throwIfCancelled(signal);
+ // Distinguish first-use RHWP WASM compilation from the actual file read.
+ const wasmStarted=performance.now();
+ onProgress({stage:'load',detail:'wasm_init',loaded:0,total:1});
+ try{await prepareWasm();}
+ catch(error){
+  if(error?.name==='AbortError')throw error;
+  throw Error('WASM_INIT_FAILED: 브라우저 변환 엔진 초기화 실패. 네트워크와 사용 가능한 메모리를 확인하세요.');
+ }
+ throwIfCancelled(signal);
+ onProgress({stage:'load',detail:'wasm_ready',loaded:0,total:1,
+  elapsedMs:Math.max(0,Math.round(performance.now()-wasmStarted))});
  let buf;
  try{
   buf=await readDocumentBuffer(file,signal,progress=>
