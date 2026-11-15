@@ -12,12 +12,15 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dir=resolve(root,'public/fonts');
 const schoolCommit='13419fb816fb1a5fef1d05026b94355cf84bc392';
 const symbolsCommit='7213ed1f96266b95e22cd5645a07851c9c18298e';
+const notoCommit='ffebf8c1ee449e544955a7e813c54f9b73848eac';
 export const approvedFonts=Object.freeze([
  {name:'HakgyoansimBareonbatangR.ttf',size:1779920,sha256:'a7ab8757f6c02e2bd715639d289e792892a04f6771da7308a70b815d4bb415b3'},
  {name:'HakgyoansimBareonbatangB.ttf',size:1767012,sha256:'f262789f002803bdf4e55b82d34ac6ba1f5f1440bb1f49dbf4105961b5369199'},
  {name:'HakgyoansimBareondotumR.ttf',size:963020,sha256:'401d3da9631e7641c60c9273f12c571e759f6aefc66011afbcd3804c89c06efd'},
  {name:'HakgyoansimBareondotumB.ttf',size:949900,sha256:'1916434f685368e5398e9f723bb1e8cbb86950d8b57c4ccbf878c2828c8f272d'},
- {name:'NotoSansSymbols2-Regular.ttf',size:656852,gitBlobSha:'45df8301c7bdfaccff52e30a0973132e94b2e95d'}
+ {name:'NotoSansSymbols2-Regular.ttf',size:656852,gitBlobSha:'45df8301c7bdfaccff52e30a0973132e94b2e95d'},
+ {name:'NotoSans-Regular.ttf',size:393200,gitBlobSha:'c6cc9855aa3a615219f7864840e9c27a957201ed'},
+ {name:'NotoSansYi-Regular.ttf',size:182784,gitBlobSha:'f789f1b2c25ddeaae39fe86c2a2e7bbfda5a6ae1'}
 ]);
 const legacyFonts=[
  'NanumMyeongjo-Regular.ttf','NanumMyeongjo-Bold.ttf',
@@ -37,8 +40,12 @@ export function verifyApprovedFont(font,bytes){
  return true;
 }
 export function approvedSource(font){
- if(font.gitBlobSha)
+ if(font.name==='NotoSansSymbols2-Regular.ttf')
   return 'https://raw.githubusercontent.com/edwardkim/rhwp/'+symbolsCommit+'/assets/fonts/'+font.name;
+ if(font.name==='NotoSans-Regular.ttf'||font.name==='NotoSansYi-Regular.ttf'){
+  const folder=font.name==='NotoSans-Regular.ttf'?'NotoSans':'NotoSansYi';
+  return 'https://raw.githubusercontent.com/notofonts/noto-fonts/'+notoCommit+'/unhinted/ttf/'+folder+'/'+font.name;
+ }
  return 'https://media.githubusercontent.com/media/aaronlee09-max/datatronics/'+schoolCommit+'/fonts/'+font.name;
 }
 async function loadVerified(font){
