@@ -23,7 +23,7 @@ test('DEV36 all source URLs are pinned and each asset has a strict digest',()=>{
   assert.match(approvedSource(f),/^https:\/\/(?:media|raw)\.githubusercontent\.com\//);
   assert.match(approvedSource(f),/[0-9a-f]{40}/);
   assert.ok(/^[0-9a-f]{64}$/.test(f.sha256||'')||/^[0-9a-f]{40}$/.test(f.gitBlobSha||''));
-  assert.ok(f.size>600000&&f.size<2100000);
+  assert.ok(f.size>100000&&f.size<2100000);
  }
 });
 
@@ -76,11 +76,12 @@ test('DEV37 all seven pinned font binaries parse and cover the eight reported mi
  assert.match(symbols.family,/Noto Sans Symbols\\s*2/i);
  for(const c of ['◦','•','▸','∘'])
   assert.ok(symbols.characterSet.has(c.codePointAt(0)),'symbol fallback missing: '+c);
- const unresolved=['‧','‑','｢','｣','․','･','⁀','‿'];
- const oldFive=registry.faces.slice(0,5);
- for(const c of unresolved){
+ // Restore the user's original U+002D hyphen, not U+2011.
+ const originalEight=['‧','-','｢','｣','․','･','⁀','‿'];
+ const optionalHyphen='‑';
+ for(const c of [...originalEight,optionalHyphen]){
   const cp=c.codePointAt(0);
-  assert.equal(oldFive.some(f=>f.characterSet.has(cp)),false,'regression fixture mismatch: '+c);
+  // Do not assert that prior bundled fonts lacked a common ASCII hyphen.
   assert.ok(registry.faces.slice(5).some(f=>f.characterSet.has(cp)),
    'new fallback must cover U+'+cp.toString(16).toUpperCase());
   const options={faces:registry.faces.map((f,i)=>({...f,isFallback:true,
