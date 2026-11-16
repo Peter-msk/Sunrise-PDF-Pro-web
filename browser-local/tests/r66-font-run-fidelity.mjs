@@ -166,6 +166,8 @@ test('DEV39: a named bundled body face remains on Hangul, only unsupported punct
  assert.deepEqual(r.children.map(c=>[c.textContent,c.getAttribute('font-family')]),
   [['한글','학교안심 바른돋움'],['‧','보조 범용 서체']]);
  assert.ok(r.substitutes.includes('학교안심 바른돋움 → 보조 범용 서체'));
+ assert.equal(r.substitutes.some(x=>x==='학교안심 바른돋움 → 학교안심 바른돋움'),false,
+  'a retained named face must not be misreported as a substitution');
 });
 test('DEV39: do not split generic fallback text with no named source face',()=>{
  const named={name:'BodyFace',family:'학교안심 바른돋움',
