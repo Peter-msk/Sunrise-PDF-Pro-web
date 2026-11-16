@@ -230,7 +230,8 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
             span.setAttribute('font-weight',run.face.bold?'bold':'normal');
             span.setAttribute('font-style',run.face.italic?'italic':'normal');
             el.appendChild(span);
-            if(run.face.isFallback || !run.face.aliases?.includes(originalKey))
+            if((run.face.isFallback && run.face.name!==namedOriginal?.name) ||
+              !run.face.aliases?.includes(originalKey))
               substituteFamilies.add(familyName.slice(0,48)+' → '+(run.face.family||run.face.name));
           }
           changed=true;
