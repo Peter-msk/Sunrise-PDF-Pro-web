@@ -128,3 +128,28 @@ test('DEV38: unsupported glyph fails SVG preflight without silent substitution',
   window.close();
  }
 });
+
+test('DEV39 preflight preserves named bundled Hangul text with missing punctuation',()=>{
+ const old={DOMParser:globalThis.DOMParser,XMLSerializer:globalThis.XMLSerializer};
+ const window=new JSDOM('').window;
+ globalThis.DOMParser=window.DOMParser;globalThis.XMLSerializer=window.XMLSerializer;
+ try{
+  const body={name:'Body',family:'학교안심 바른돋움',aliases:['학교안심바른돋움'],
+   isFallback:true,bold:false,italic:false,genericFamily:'sans',
+   characterSet:new Set([...('한글')].map(c=>c.codePointAt(0)))};
+  const wide={name:'Wide',family:'WideFace',aliases:['wideface'],
+   isFallback:true,bold:false,italic:false,genericFamily:'symbol',
+   characterSet:new Set([...('한글‧')].map(c=>c.codePointAt(0)))};
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="260" height="80"><text x="12" y="38" font-family="학교안심 바른돋움">한글‧</text></svg>';
+  const result=preflightProfessionalSvg({svg,width:260,height:80},
+   {fontRegistry:{faces:[body,wide]}});
+  assert.equal(result.ok,true,result.reason);
+  const doc=new DOMParser().parseFromString(result.svg,'image/svg+xml');
+  assert.deepEqual([...doc.querySelectorAll('text > tspan')].map(n=>
+   [n.textContent,n.getAttribute('font-family')]),[
+   ['한글','학교안심 바른돋움'],['‧','WideFace']]);
+ }finally{
+  globalThis.DOMParser=old.DOMParser;globalThis.XMLSerializer=old.XMLSerializer;
+  window.close();
+ }
+});

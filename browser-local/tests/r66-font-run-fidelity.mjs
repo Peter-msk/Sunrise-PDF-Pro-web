@@ -12,7 +12,7 @@ const begin=source.indexOf('        const face=resolveFont(fontRegistry,currentF
 const end=source.indexOf('        // A PC font selected from a later declared family',begin);
 assert.ok(begin>=0 && end>begin,'R66_FONT_BRANCH_CONTEXT_MISSING');
 const core=source.slice(begin,end);
-assert.match(core,/const mixedOriginal=namedLocal/);
+assert.match(core,/const mixedOriginal=!!namedOriginal/);
 assert.match(core,/!\/\\p\{Mark\}\/u\.test\(value\)/);
 
 const key=s=>String(s||'').trim().replace(/^["']|["']$/g,'').replace(/\s+/g,'').toLocaleLowerCase('en-US');
@@ -151,4 +151,42 @@ test('DEV11: normal Hangul and missing star still split safely',()=>{
  const r=check('한글★가');
  assert.equal(r.changed,true);
  assert.equal(r.children.length,3);
+});
+
+test('DEV39: a named bundled body face remains on Hangul, only unsupported punctuation uses another face',()=>{
+ const named={name:'BodyFace',family:'학교안심 바른돋움',
+  aliases:['학교안심바른돋움'],isFallback:true,bold:false,italic:false,
+  characterSet:new Set([...('한글')].map(c=>c.codePointAt(0)))};
+ const wide={name:'FullFallback',family:'보조 범용 서체',
+  aliases:['보조범용서체'],isFallback:true,bold:false,italic:false,
+  characterSet:new Set([...('한글‧')].map(c=>c.codePointAt(0)))};
+ const fontRegistry={faces:[named,wide]};
+ const r=check('한글‧',{'font-family':'학교안심 바른돋움'},fontRegistry);
+ assert.equal(r.changed,true,'do not replace all original Hangul merely to support a punctuation glyph');
+ assert.deepEqual(r.children.map(c=>[c.textContent,c.getAttribute('font-family')]),
+  [['한글','학교안심 바른돋움'],['‧','보조 범용 서체']]);
+ assert.ok(r.substitutes.includes('학교안심 바른돋움 → 보조 범용 서체'));
+ assert.equal(r.substitutes.some(x=>x==='학교안심 바른돋움 → 학교안심 바른돋움'),false,
+  'a retained named face must not be misreported as a substitution');
+});
+test('DEV39: do not split generic fallback text with no named source face',()=>{
+ const named={name:'BodyFace',family:'학교안심 바른돋움',
+  aliases:['학교안심바른돋움'],isFallback:true,bold:false,italic:false,
+  characterSet:new Set([...('한글')].map(c=>c.codePointAt(0)))};
+ const wide={name:'FullFallback',family:'보조 범용 서체',
+  aliases:['보조범용서체'],isFallback:true,bold:false,italic:false,
+  characterSet:new Set([...('한글‧')].map(c=>c.codePointAt(0)))};
+ const r=check('한글‧',{'font-family':'미설치 서체'}, {faces:[named,wide]});
+ assert.equal(r.changed,false);
+ assert.equal(r.children.length,0);
+});
+test('DEV39: an explicit measured-width run is not split by font substitution',()=>{
+ const named={name:'BodyFace',family:'학교안심 바른돋움',
+  aliases:['학교안심바른돋움'],isFallback:true,bold:false,italic:false,
+  characterSet:new Set([...('한글')].map(c=>c.codePointAt(0)))};
+ const wide={name:'FullFallback',family:'보조 범용 서체',
+  aliases:['보조범용서체'],isFallback:true,bold:false,italic:false,
+  characterSet:new Set([...('한글‧')].map(c=>c.codePointAt(0)))};
+ const r=check('한글‧',{'font-family':'학교안심 바른돋움','textLength':'72'}, {faces:[named,wide]});
+ assert.equal(r.changed,false,'textLength geometry contract must not change');
 });
