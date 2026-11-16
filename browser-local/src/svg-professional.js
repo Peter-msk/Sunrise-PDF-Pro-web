@@ -191,17 +191,24 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
       if(value.trim()){
         hasText=true;textPages++;
         const face=resolveFont(fontRegistry,currentFamily,currentWeight,currentStyle,value);
-        // A single unsupported glyph must not replace an otherwise available
-        // locally installed source face for the entire text run.  Reuse the
-        // existing per-character run resolver only when an explicitly named
-        // local face can render part of the text. Other pages stay unchanged.
-        const namedLocal=!!face?.isFallback && splitFontFamilies(currentFamily)
-          .some(name=>fontRegistry.faces.some(candidate=>!candidate.isFallback &&
-            !candidate.standard && candidate.aliases?.includes(familyKey(name))));
-        const runs=(!face||namedLocal)
+        // Preserve the specified face (user/PC or bundled) for every glyph it
+        // supports. A wide substitute must not replace an entire paragraph
+        // merely because the specified face lacks one punctuation glyph.
+        // Only check mixed runs when another same-style named face actually
+        // supports part of this text; ordinary complete runs stay untouched.
+        const specifiedKeys=splitFontFamilies(currentFamily).map(familyKey);
+        const namedOriginal=face?.isFallback
+          ? fontRegistry.faces.find(candidate=>candidate.name!==face.name &&
+              !candidate.standard && candidate.bold===face.bold &&
+              candidate.italic===face.italic &&
+              specifiedKeys.some(key=>candidate.aliases?.includes(key)) &&
+              [...value].some(char=>!/\\s/u.test(char)&&
+                candidate.characterSet?.has(char.codePointAt(0))))
+          : null;
+        const runs=(!face||namedOriginal)
           ? resolveFontRuns(fontRegistry,currentFamily,currentWeight,currentStyle,value) : null;
-        const mixedOriginal=namedLocal && runs?.some(run=>
-          !run.face.isFallback && !run.face.standard);
+        const mixedOriginal=!!namedOriginal && runs?.some(run=>
+          run.face.name===namedOriginal.name);
         const canSplit=(!face||mixedOriginal) && runs?.length>1 && runs.length<=128 &&
           (el.localName==='text'||el.localName==='tspan') &&
           !el.children?.length && !el.hasAttribute('textLength') &&
