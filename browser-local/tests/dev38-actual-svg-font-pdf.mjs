@@ -15,8 +15,9 @@ import {loadPdfFonts,resolveFont} from '../src/pdf-fonts.js';
 import {preflightProfessionalSvg} from '../src/svg-professional.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from '../src/pdf-font-audit.mjs';
 
-const TARGET='‧-｢｣․･⁀‿';
-test('DEV38: real SVG->PDFKit retains all eight reported glyphs and embeds selected OFL faces',{timeout:45000},async()=>{
+const TARGET='한글◦•▸∘‧-｢문서｣․･⁀‿';
+const REQUIRED_SYMBOLS='◦•▸∘‧-｢｣․･⁀‿';
+test('DEV38: real SVG->PDFKit embeds Hangul and all 12 punctuation glyphs in vector PDF',{timeout:45000},async()=>{
  const old={DOMParser:globalThis.DOMParser,XMLSerializer:globalThis.XMLSerializer};
  const window=new JSDOM('').window;
  globalThis.DOMParser=window.DOMParser;
@@ -73,7 +74,7 @@ test('DEV38: real SVG->PDFKit retains all eight reported glyphs and embeds selec
   // PDFKit may expose an unused standard Helvetica resource; only faces
   // actually selected through fontCallback must be embedded.
   assert.ok(audit.fonts.some(f=>f.embedded),'selected custom font resource missing');
-  assert.ok(used.size>=2,'at least two distinct faces must be selected for eight mixed glyphs');
+  assert.ok(used.size>=4,'Hangul plus all 12 punctuation glyphs must exercise body and three symbol faces');
   const expectedFaces=registry.faces.filter(f=>used.has(f.name));
   const found=compareSelectedAndEmbedded(expectedFaces,audit);
   assert.equal(found.length,expectedFaces.length,'no selected face may disappear from the PDF audit');
@@ -90,7 +91,9 @@ test('DEV38: real SVG->PDFKit retains all eight reported glyphs and embeds selec
    const page=await document.getPage(1);
    const text=await page.getTextContent();
    const extracted=text.items.map(item=>String(item.str||'')).join('');
-   for(const character of TARGET)
+   assert.ok(extracted.includes('한글')&&extracted.includes('문서'),
+    'embedded Korean body text must remain searchable');
+   for(const character of REQUIRED_SYMBOLS)
     assert.ok(extracted.includes(character),
       'PDF ToUnicode/search text must preserve U+'+character.codePointAt(0).toString(16));
   }finally{await document.cleanup();}
