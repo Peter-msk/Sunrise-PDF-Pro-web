@@ -66,10 +66,18 @@ test('DEV38: real SVG->PDFKit retains all eight reported glyphs and embeds selec
   const audit=await inspectPdfFontEmbedding(blob);
   assert.equal(audit.pageCount,1);
   assert.ok(audit.fonts.length>0);
-  // PDFKit may expose an unused standard Helvetica resource; only the faces\n  // selected by fontCallback must be embedded (no false failure for unused fonts).\n  assert.ok(audit.fonts.some(f=>f.embedded),'selected custom font resource missing');
-  const found=compareSelectedAndEmbedded(registry.faces.filter(f=>used.has(f.name)),audit);
-  assert.ok(found.every(f=>f.embedded&&f.pdfResourcePresent),'all selected faces need embedded resources');
+  // PDFKit may expose an unused standard Helvetica resource; only faces
+  // actually selected through fontCallback must be embedded.
+  assert.ok(audit.fonts.some(f=>f.embedded),'selected custom font resource missing');
   assert.ok(used.size>=2,'at least two distinct faces must be selected for eight mixed glyphs');
+  const expectedFaces=registry.faces.filter(f=>used.has(f.name));
+  const found=compareSelectedAndEmbedded(expectedFaces,audit);
+  assert.equal(found.length,expectedFaces.length,'no selected face may disappear from the PDF audit');
+  for(const face of found){
+   assert.equal(face.pdfResourcePresent,true,'selected font resource missing: '+face.family);
+   assert.equal(face.embedded,true,'selected font has no FontFile: '+face.family);
+   assert.deepEqual(face.pages,[1],'selected font must be referenced by the output page: '+face.family);
+  }
   const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');
   pdfjsJob=pdfjs.getDocument({data:new Uint8Array(await blob.arrayBuffer()),
    useSystemFonts:false,disableFontFace:true});
@@ -81,7 +89,7 @@ test('DEV38: real SVG->PDFKit retains all eight reported glyphs and embeds selec
    for(const character of TARGET)
     assert.ok(extracted.includes(character),
       'PDF ToUnicode/search text must preserve U+'+character.codePointAt(0).toString(16));
-  }finally{await document.destroy();}
+  }finally{await document.cleanup();}
  }finally{
   if(pdfjsJob)await pdfjsJob.destroy().catch(()=>{});
   globalThis.DOMParser=old.DOMParser;
