@@ -74,3 +74,29 @@ npm run verify:dist
 4. 명시적 사용 승인 후에만 배포 검토.
 
 **DEV38 판정:** 신형 QA 도구 및 저장소 자동검증 코드 준비, 합성 PDF 검증 통과. 웹 실제 출력과 전체 사용자 원본 수락/정식 배포는 미완료.
+
+
+## R04 후속 점검 (2026-11-16)
+
+**DEV38 테스트 자체의 결함 수정:**
+- `tests/dev38-actual-svg-font-pdf.mjs`의 PDF `FontFile` 존재 검사가 문자 그대로의 `\\n` 때문에 주석에 흡수된 문제를 발견, 실제 실행되는 독립 assert로 복구.
+- fontCallback에서 선택한 각 PDF 서체를 `pdfResourcePresent`, `embedded`, `pages:[1]` 단위로 개별 검사. '선택 글꼴 없음'의 공허한 성공은 `used.size>=4`로 방지.
+- 이미지 XObject가 있으면 기본 전문 벡터 변환을 FAIL로 판정하는 검사 추가.
+- 검증 문자열을 원래 문제 문자 8개에 기존 Noto Symbols 2가 지원한 4개 `◦ • ▸ ∘` 및 한글 본문 `한글/문서`를 합친 **총 12개 특수문자+한글 혼합**으로 확장. 동일 글꼴 파일 각각의 이종 문자 선택이 실제로 작동해야 통과.
+- 전혀 지원하지 않는 문자 `🪼`가 포함된 SVG는 조용히 다른 문자로 바꾸지 않고 사전검사에서 FAIL 하는 회귀시험 추가. timeout 45초 설정.
+- 수정을 저장소에 반영하고 JS 구문 검사 및 비교 대상 소스 존재 확인. **Node 실제 `npm run test:dev38` 실행은 환경의 GitHub DNS/의존성 부재로 미실시.**
+
+**독립 PDF 생성기 검증:**
+- ReportLab + PyMuPDF + fontTools(브라우저 엔진과 별개)를 사용해 사용자 원본을 포함하지 않는 1페이지 합성 PDF 생성.
+- 최초 시험은 테스트용 글꼴 alias `Symbol`이 ReportLab 기본 `Symbol`과 충돌하여 `▸`와 `∘`가 `I`로 추출됨. 이 초기 시험을 실패로 기록하고 전용 이름 `Symbols2Test`로 교체.
+- 수정 후 **12/12 특수문자 PDF 텍스트 추출**, 한글 `한글`·`문서` 추출, **4개 글꼴 임베딩 프로그램 확인**, **0 이미지 XObject**, 1쪽 PNG 렌더 성공. 또한 생성 PDF의 텍스트가 추출 가능함을 확인.
+- 이는 **다른 버전의 공개 샘플 글꼴 + 별도 PDF 엔진**의 시험으로 **실제 Sunrise 브라우저 PDF 변환 PASS를 뜻하지 않음**. 글자 위치·서체 폭·표 일치·원본 대비 품질은 미검증.
+
+**추가로 실제 재실행한 독립 R03 CLI:**
+```
+FONT_AUDIT_GLYPH_COVERAGE_CANDIDATES_FOUND audit=COMPLETE fonts=2 faces=2 target_codepoints=8 uncovered=0 pdf_pages=1
+```
+- 위 검사는 임의 합성 ZIP의 정상 동작만 증명하며 사용자가 제공한 365종 글꼴 ZIP의 전수검사 결과가 아니다.
+- 사용자가 제출한 ZIP 원본 바이트 재접근 불가, 웹 앱 전체 npm 빌드 미실행, HWP/HWPX 원본 25개와 124페이지 시각 비교 미실시, GitHub Actions·main·Cloudflare 운영 배포 불변.
+
+**게이트 판정: DEV38 R04 테스트 코드 수정 완료 / 합성 PDF 별도 엔진 검증 PASS / 웹 정식 엔진과 원본 품질 PENDING.**
