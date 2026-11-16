@@ -100,3 +100,10 @@ FONT_AUDIT_GLYPH_COVERAGE_CANDIDATES_FOUND audit=COMPLETE fonts=2 faces=2 target
 - 사용자가 제출한 ZIP 원본 바이트 재접근 불가, 웹 앱 전체 npm 빌드 미실행, HWP/HWPX 원본 25개와 124페이지 시각 비교 미실시, GitHub Actions·main·Cloudflare 운영 배포 불변.
 
 **게이트 판정: DEV38 R04 테스트 코드 수정 완료 / 합성 PDF 별도 엔진 검증 PASS / 웹 정식 엔진과 원본 품질 PENDING.**
+
+
+## R04 추가 단일 PDF 전체 문자 검사
+- 1쪽 공개 글꼴 합성 PDF `한글◦•▸∘‧-｢문서｣․･⁀‿`를 ZIP에 담고, 공개 글꼴 4파일(Nanum Gothic, Noto Sans Symbols 2, Noto Sans, Noto Sans Yi)과 R03 오프라인 검사기를 실제 실행함.
+- **출력**: `FONT_AUDIT_GLYPH_COVERAGE_CANDIDATES_FOUND audit=COMPLETE fonts=4 faces=4 target_codepoints=34 uncovered=0 pdf_pages=1`.
+- PDF에서 추출되는 제목 및 실제 글을 포함해 서로 다른 문자 **34종/34종 후보 지원**. 프로그램이 글꼴 지원 후보를 정확히 탐색했음을 보여주지만 원본 HWP와의 글꼴 메트릭·레이아웃 동일성은 증명하지 않음.
+- 데이터는 사용자 원본이 아닌 합성 표본이며, 사용자 제공 글꼴 365종 전수 검사의 결과라고 표시하지 않음.
