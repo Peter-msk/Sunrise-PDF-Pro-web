@@ -16,7 +16,7 @@ import {preflightProfessionalSvg} from '../src/svg-professional.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from '../src/pdf-font-audit.mjs';
 
 const TARGET='‧-｢｣․･⁀‿';
-test('DEV38: real SVG->PDFKit retains all eight reported glyphs and embeds selected OFL faces',async()=>{
+test('DEV38: real SVG->PDFKit retains all eight reported glyphs and embeds selected OFL faces',{timeout:45000},async()=>{
  const old={DOMParser:globalThis.DOMParser,XMLSerializer:globalThis.XMLSerializer};
  const window=new JSDOM('').window;
  globalThis.DOMParser=window.DOMParser;
@@ -63,6 +63,10 @@ test('DEV38: real SVG->PDFKit retains all eight reported glyphs and embeds selec
   assert.deepEqual(warnings,[],'unexpected SVG-to-PDFKit glyph rendering warning');
   pdf.end();await completed;
   const blob=new Blob(chunks,{type:'application/pdf'});
+  // Default professional conversion may not silently replace vector text with a raster.
+  const rawPdf=Buffer.from(await blob.arrayBuffer()).toString('latin1');
+  assert.doesNotMatch(rawPdf,/\/Subtype\s*\/Image\b/,
+   'professional output unexpectedly contains an image XObject');
   const audit=await inspectPdfFontEmbedding(blob);
   assert.equal(audit.pageCount,1);
   assert.ok(audit.fonts.length>0);
@@ -92,6 +96,30 @@ test('DEV38: real SVG->PDFKit retains all eight reported glyphs and embeds selec
   }finally{await document.cleanup();}
  }finally{
   if(pdfjsJob)await pdfjsJob.destroy().catch(()=>{});
+  globalThis.DOMParser=old.DOMParser;
+  globalThis.XMLSerializer=old.XMLSerializer;
+  window.close();
+ }
+});
+
+
+test('DEV38: unsupported glyph fails SVG preflight without silent substitution',()=>{
+ const old={DOMParser:globalThis.DOMParser,XMLSerializer:globalThis.XMLSerializer};
+ const window=new JSDOM('').window;
+ globalThis.DOMParser=window.DOMParser;
+ globalThis.XMLSerializer=window.XMLSerializer;
+ try{
+  const original='A🪼B';
+  const checked={width:300,height:90,
+   svg:'<svg xmlns="http://www.w3.org/2000/svg" width="300" height="90"><text x="12" y="40" font-family="Uninstalled">'+original+'</text></svg>'};
+  const registry={faces:[{name:'AsciiFace',family:'AsciiFace',aliases:['asciiface'],
+   characterSet:new Set([65,66]),bold:false,italic:false,
+   isFallback:true,genericFamily:'sans'}]};
+  const output=preflightProfessionalSvg(checked,{fontRegistry:registry});
+  assert.equal(output.ok,false);
+  assert.match(output.reason,/FONT_(GLYPH|FAMILY|RUN_SPLIT)/);
+  assert.ok(checked.svg.includes(original),'rejected SVG input must remain unchanged');
+ }finally{
   globalThis.DOMParser=old.DOMParser;
   globalThis.XMLSerializer=old.XMLSerializer;
   window.close();
