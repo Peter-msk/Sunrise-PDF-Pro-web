@@ -202,7 +202,7 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
               !candidate.standard && candidate.bold===face.bold &&
               candidate.italic===face.italic &&
               specifiedKeys.some(key=>candidate.aliases?.includes(key)) &&
-              [...value].some(char=>!/\\s/u.test(char)&&
+              [...value].some(char=>!/\s/u.test(char)&&
                 candidate.characterSet?.has(char.codePointAt(0))))
           : null;
         const runs=(!face||namedOriginal)
