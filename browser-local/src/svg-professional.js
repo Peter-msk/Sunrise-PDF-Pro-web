@@ -507,7 +507,11 @@ export async function tryProfessionalDocument(hwpDoc,count,{
         return {family:face?.family||id,postscriptName:face?.postscriptName||'',
          bold:!!face?.bold,italic:!!face?.italic};
       }),manual:usedManual.size,bundled:usedBundled.size},
-      substituteFamilies:[...substituteFamilies]};
+      substituteFamilies:[...substituteFamilies],
+      // A structurally valid EOF is not proof of the original HWP layout.
+      warnings:streamProbe.validatedWithoutEnd
+        ?['PDF 종료 신호가 누락됐지만 PDF 구조 검증을 통과해 복구했습니다. 원본 페이지 수·내용·줄바꿈을 확인하세요.']
+        :[]};
   }catch(error){
     // Reject toBlob's pending collector and release all queued PDF chunks
     // before disposing the writer, even if this failure was not user-driven.
