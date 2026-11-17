@@ -408,6 +408,7 @@ $('convert').addEventListener('click',async()=>{
    fontStatus(access.status==='ready'?'PC 글꼴 '+localFonts.length+'개에 접근 확인 · 실제 PDF 사용 여부는 변환 결과를 확인하세요.':fontAccessNotice);}
   await runBatch(pending,async(file,item)=>{
    item._proDiagStage='load';
+   item._proSourcePages=null;item._proLastPage=null;
    const spec=recoverySpecs.get(item),itemEngine=spec?.engine||engine;
    item.lastEngine=itemEngine;
    item._proStartedMs=performance.now();
@@ -418,7 +419,13 @@ $('convert').addEventListener('click',async()=>{
     const phases=new Set(['svg_build','svg_normalize','image_gif','image_png',
      'image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done',
      'pdf_finalize','pdf_write','pdf_stream','pdf_done','compat_raster','compat_page_done','compat_save']);
-    item._proDiagStage=info.stage==='load'?(['wasm_init','wasm_ready','xlsx_package','xlsx_parse','xlsx_layout'].includes(info.detail)?info.detail:'load'):
+    if(info.detail==='hwp_page_count'&&Number.isSafeInteger(info.pages)&&info.pages>=1)
+     item._proSourcePages=info.pages;
+    if(['professional','professional-raster'].includes(info.stage)&&
+       Number.isSafeInteger(info.page)&&info.page>0)
+     item._proLastPage=info.page;
+    item._proDiagStage=info.stage==='document'&&info.detail==='hwp_page_count'?'hwp_page_count':
+     info.stage==='load'?(['wasm_init','wasm_ready','file_read','hwp_open','xlsx_package','xlsx_parse','xlsx_layout'].includes(info.detail)?info.detail:'load'):
      info.stage==='fonts'?(info.detail==='read'?'font_read':info.detail==='bundled'?'font_bundle':
       info.detail==='measure'?'font_measure':info.detail==='scan'?'font_scan':'fonts'):
      phases.has(info.detail)?info.detail:'render';
