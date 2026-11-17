@@ -153,7 +153,12 @@ export async function loadPdfFonts(fontFiles,parser,signal,{postscriptName=null}
     const subfamily=String(parsed.subfamilyName||'');
     // KERIS's OFL school fonts expose subfamily "B"/"R", rather than
     // "Bold"/"Regular". Do not mistake the B face for another regular face.
-    const bold=/(bold|semibold|demibold|heavy|black)/i.test(subfamily)||/^(?:B|Bd)$/i.test(subfamily.trim());
+    // Pinned KERIS B faces can report subfamily 'Regular' in fontkit. For
+    // this reviewed school-font family only, use the B filename identity.
+    const kerisBold=/^HakgyoansimBareon(?:batang|dotum)B\.ttf$/i.test(file.name)&&
+      familyKey(parsed.familyName).startsWith('hakgyoansimbareon');
+    const bold=kerisBold||/(bold|semibold|demibold|heavy|black)/i.test(subfamily)||
+      /^(?:B|Bd)$/i.test(subfamily.trim());
     const italic=/(italic|oblique)/i.test(subfamily)||Boolean(parsed.italicAngle);
     const aliases=[...new Set([parsed.familyName,parsed.fullName,parsed.postscriptName]
       .filter(Boolean).map(familyKey))];
