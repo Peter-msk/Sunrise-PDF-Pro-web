@@ -533,7 +533,7 @@ test('R37 unsupported stylesheet attributes fail closed instead of suppressing C
 test('stable/professional PDF reading uses cancellable local FileReader and progress',()=>{
  const normal=source.slice(source.indexOf('export async function convertToPdf('),source.indexOf('export async function renderNativePrintPages('));
  assert.match(normal,/readDocumentBuffer\(file,signal,progress=>/);
- assert.match(normal,/onProgress\(\{stage:'load',\.\.\.progress\}\)/);
+  assert.match(normal,/onProgress\(\{stage:'load',detail:'file_read',\.\.\.progress\}\)/);
  assert.doesNotMatch(normal,/buf=await file\.arrayBuffer\(\)/);
  assert.match(normal,/if\(e\?\.name==='AbortError'\)throw e/);
 });

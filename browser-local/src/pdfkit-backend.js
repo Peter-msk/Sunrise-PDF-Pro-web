@@ -114,6 +114,7 @@ export async function loadBrowserPdfBackend(importModule) {
           settle(abortError());
         };
         if(terminalProbe){
+          terminalProbe.lastValidationError='PDF_OUTPUT_VALIDATION_NOT_RUN';
           // Only the caller knows pdf.end() was invoked and bytes have been
           // idle long enough. Successful xref+%%EOF validation is mandatory;
           // never turn an incomplete PDF into a downloadable result.
@@ -121,11 +122,19 @@ export async function loadBrowserPdfBackend(importModule) {
             if(settled||signal?.aborted)return false;
             try{
               pdfGuard.finish(chunks);
+              terminalProbe.lastValidationError=null;
               reportBytes(true);
               if(streamProbe)streamProbe.validatedWithoutEnd=true;
               settle(null,new Blob(chunks,{type:'application/pdf'}));
               return true;
-            }catch{return false;}
+            }catch(error){
+              // A finite, allowlisted structural code; never retain exception
+              // text, document names, bytes or PDF contents in diagnostics.
+              const code=String(error?.message||'');
+              terminalProbe.lastValidationError=/^PDF_OUTPUT_(?:TRAILER_INCOMPLETE|HEADER_INVALID|XREF_TARGET_INVALID|XREF_OFFSET_INVALID|XREF_SOURCE_MISMATCH)$/.test(code)
+                ?code:'PDF_OUTPUT_UNVERIFIED';
+              return false;
+            }
           };
         }
         pdf.on('error', onError);

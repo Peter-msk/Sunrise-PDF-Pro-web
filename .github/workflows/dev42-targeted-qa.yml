@@ -1,0 +1,28 @@
+name: DEV42 expanded targeted QA regression
+on:
+  push:
+    branches:
+      - fix/dev42-retest-diagnostics-20261118
+    paths:
+      - .github/workflows/dev42-targeted-qa.yml
+permissions:
+  contents: read
+jobs:
+  targeted-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Install pinned Node dependencies
+        run: npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund
+      - name: Prepare seven checksum-verified mobile and browser fonts
+        run: node browser-local/scripts/install-safe-fonts.mjs
+      - name: Run actual DEV42 and affected DEV41 regressions
+        run: npm --prefix browser-local run test:dev42

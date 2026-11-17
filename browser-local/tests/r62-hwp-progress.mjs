@@ -7,8 +7,10 @@ const source=(url)=>readFileSync(new URL(url,import.meta.url),'utf8');
 test('R62 reuse a single HWP instance during font scan and PDF creation',()=>{
  const s=source('../src/converter.js');
  const convert=s.slice(s.indexOf('export async function convertToPdf'),s.indexOf('/** Prepare native browser-print'));
- assert.ok(convert.includes('doc=new HwpDocument(new Uint8Array(buf));'));
- assert.ok(convert.includes('if(!doc)doc=new HwpDocument(new Uint8Array(buf));'));
+ assert.ok(convert.includes('doc=openHwpDocument(buf);'));
+ assert.ok(s.includes('new HwpDocument(new Uint8Array(buffer))'));
+ assert.ok(convert.includes('readConversionPageCount(doc,onProgress)'));
+ assert.match(convert,/if\(!doc\)\{[\s\S]*?doc=openHwpDocument\(buf\);/);
  assert.ok(!convert.includes('const probe=new HwpDocument'));
  assert.match(convert,/finally\{releaseMeasureFonts\(\);\}/);
 });
