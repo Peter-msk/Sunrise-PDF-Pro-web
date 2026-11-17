@@ -20,6 +20,18 @@ import {MAX_CONVERSION_PAGES,MAX_NATIVE_PRINT_PAGES} from './page-limit.mjs';
 const MAX_PAGES=MAX_CONVERSION_PAGES,MAX_PIXELS=9_000_000,DETAIL_MAX_PIXELS=12_000_000;
 const TARGET_DPI=300,DETAIL_DPI=360;
 const OLE=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1];
+function openHwpDocument(buffer){
+ try{return new HwpDocument(new Uint8Array(buffer));}
+ catch(error){throw new Error('HWP_DOCUMENT_OPEN_FAILED: HWP 문서를 열 수 없습니다. 원본 형식과 사용 가능한 메모리를 확인하세요.',{cause:error});}
+}
+function verifyConversionPages(pages,onProgress){
+ if(!Number.isSafeInteger(pages)||pages<1)
+  throw Error('HWP_PAGE_COUNT_INVALID: 페이지 수를 읽을 수 없습니다.');
+ onProgress({stage:'document',detail:'hwp_page_count',pages,page:0,total:pages});
+ if(pages>MAX_CONVERSION_PAGES)
+  throw Error('HWP_PAGE_COUNT_LIMIT: 페이지 수 제한: 1~'+MAX_CONVERSION_PAGES+'쪽 (실제 '+pages+'쪽)');
+ return pages;
+}
 function throwIfCancelled(signal){
  if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
 }
@@ -124,11 +136,12 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
   elapsedMs:Math.max(0,Math.round(performance.now()-wasmStarted))});
  let buf;
  try{
+  onProgress({stage:'load',detail:'file_read',loaded:0,total:file.size});
   buf=await readDocumentBuffer(file,signal,progress=>
-   onProgress({stage:'load',...progress}));
+   onProgress({stage:'load',detail:'file_read',...progress}));
  }catch(e){
   if(e?.name==='AbortError')throw e;
-  throw Error('파일 읽기 실패: 브라우저 가용 메모리 또는 파일 접근 상태를 확인하세요. '+String(e?.message||e));
+  throw new Error('FILE_READ_FAILED: 파일 읽기 실패. 브라우저 가용 메모리 또는 파일 접근 상태를 확인하세요.',{cause:e});
  }
  throwIfCancelled(signal);
  let doc=null,releaseMeasureFonts=()=>{},pcFontStats=null;
@@ -146,9 +159,9 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    if(options.localFonts){
     // Reuse the same rhwp document for font discovery AND PDF generation.
     // A second HwpDocument could reparse hundreds of MB of input on the UI thread.
-    doc=new HwpDocument(new Uint8Array(buf));
-    const pages=doc.pageCount();
-    if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~'+MAX_PAGES+'쪽');
+    onProgress({stage:'load',detail:'hwp_open',loaded:1,total:1});
+    doc=openHwpDocument(buf);
+    const pages=verifyConversionPages(doc.pageCount(),onProgress);
     local=await loadDocumentLocalFonts(doc,pages,options.localFonts,fontkit,signal,onProgress);
    }
    onProgress({stage:'fonts',page:1,total:1,detail:'bundled'});
@@ -180,9 +193,11 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     undefined,undefined,{skipUnavailable:true,maxTotalMs:18000,perFaceMs:3500});
    onProgress({stage:'fonts',page:1,total:1,detail:'complete'});
   }
-  if(!doc)doc=new HwpDocument(new Uint8Array(buf));
-  const count=doc.pageCount();
-  if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~'+MAX_PAGES+'쪽');
+  if(!doc){
+   onProgress({stage:'load',detail:'hwp_open',loaded:1,total:1});
+   doc=openHwpDocument(buf);
+  }
+  const count=verifyConversionPages(doc.pageCount(),onProgress);
   if(options.engine==='compat-raster'){
    // This option must be explicitly selected in the UI. It is never an
    // automatic downgrade of the original object-preserving PDF route.
