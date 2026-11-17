@@ -127,9 +127,12 @@ export function createPdfOutputGuard(maxBytes=MAX_BYTES){
   * No duplicate full-document copy is made for the target inspection. */
  function finish(source){
   if(finished)throw Error('PDF_OUTPUT_ALREADY_FINISHED');
-  finished=true;
+  // A terminal probe may run before the last PDFKit chunk is emitted.
+  // Failed validation must remain retryable without discarding the buffer
+  // or marking an incomplete/truncated PDF as successful.
   const pointer=pdfEnvelope(first.subarray(0,leading),tail.subarray(0,trailing),size);
   const xrefKind=verifyXrefAt(source,pointer,size);
+  finished=true;
   return {bytes:size,xrefOffset:pointer,xrefKind};
  }
  return {append,finish,get bytes(){return size;}};
