@@ -23,11 +23,15 @@ export async function loadBrowserPdfBackend(importModule) {
     throw new Error('전문 PDF 엔진 모듈 인터페이스가 일치하지 않습니다.');
   return {
     PDFDocument, SVGtoPDF, registerStdFonts, Helvetica,
-    toBlob(pdf, signal, onByteProgress=()=>{}, maxOutputBytes=512*1024*1024, streamProbe=null) {
+    toBlob(pdf, signal, onByteProgress=()=>{}, maxOutputBytes=512*1024*1024, streamProbe=null, terminalProbe=null) {
       // An ephemeral, local-only primitive state snapshot. Never forward this
       // object to telemetry, server storage, or output PDF metadata.
       if(streamProbe!==null&&(typeof streamProbe!=='object'||Array.isArray(streamProbe)))
         return Promise.reject(new Error('PDF_STREAM_PROBE_INVALID'));
+      // Opt-in only: the professional caller may accept structurally validated
+      // final bytes after pdf.end() if the Readable never emits "end".
+      if(terminalProbe!==null&&(typeof terminalProbe!=='object'||Array.isArray(terminalProbe)))
+        return Promise.reject(new Error('PDF_STREAM_TERMINAL_PROBE_INVALID'));
       const abortError = () => new DOMException('PDF 변환이 취소되었습니다.', 'AbortError');
       if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1)
         return Promise.reject(new Error('PDF_STREAM_BUDGET_INVALID'));
@@ -41,7 +45,8 @@ export async function loadBrowserPdfBackend(importModule) {
         let emittedBytes = 0;
         const pdfGuard = createPdfOutputGuard(maxOutputBytes);
         if(streamProbe)Object.assign(streamProbe,{
-          bytes:0,chunks:0,endSeen:false,errorSeen:false,abortSeen:false,lastChunkAt:0
+          bytes:0,chunks:0,endSeen:false,errorSeen:false,abortSeen:false,
+          lastChunkAt:0,validatedWithoutEnd:false
         });
         let lastReportedBytes = 0;
         let lastReportedAt = 0;
@@ -61,6 +66,7 @@ export async function loadBrowserPdfBackend(importModule) {
           // callback with a shared no-op, not a closure retaining its buffers.
           pdf.off('error',onError);
           if(error)pdf.on('error',ignoreDisposedWriterError);
+          if(terminalProbe)delete terminalProbe.tryFinish;
           chunks.length = 0;
         };
         const settle = (error, blob) => {
@@ -107,6 +113,21 @@ export async function loadBrowserPdfBackend(importModule) {
           if(streamProbe)streamProbe.abortSeen=true;
           settle(abortError());
         };
+        if(terminalProbe){
+          // Only the caller knows pdf.end() was invoked and bytes have been
+          // idle long enough. Successful xref+%%EOF validation is mandatory;
+          // never turn an incomplete PDF into a downloadable result.
+          terminalProbe.tryFinish=()=>{
+            if(settled||signal?.aborted)return false;
+            try{
+              pdfGuard.finish(chunks);
+              reportBytes(true);
+              if(streamProbe)streamProbe.validatedWithoutEnd=true;
+              settle(null,new Blob(chunks,{type:'application/pdf'}));
+              return true;
+            }catch{return false;}
+          };
+        }
         pdf.on('error', onError);
         if (signal?.aborted) { onAbort(); return; }
         pdf.on('data', onData);
