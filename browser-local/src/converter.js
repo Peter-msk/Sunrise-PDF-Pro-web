@@ -24,6 +24,12 @@ function openHwpDocument(buffer){
  try{return new HwpDocument(new Uint8Array(buffer));}
  catch(error){throw new Error('HWP_DOCUMENT_OPEN_FAILED: HWP 문서를 열 수 없습니다. 원본 형식과 사용 가능한 메모리를 확인하세요.',{cause:error});}
 }
+function readConversionPageCount(doc,onProgress){
+ let count;
+ try{count=doc.pageCount();}
+ catch(error){throw new Error('HWP_PAGE_COUNT_FAILED: HWP 페이지 수를 확인할 수 없습니다.',{cause:error});}
+ return verifyConversionPages(count,onProgress);
+}
 function verifyConversionPages(pages,onProgress){
  if(!Number.isSafeInteger(pages)||pages<1)
   throw Error('HWP_PAGE_COUNT_INVALID: 페이지 수를 읽을 수 없습니다.');
@@ -161,7 +167,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     // A second HwpDocument could reparse hundreds of MB of input on the UI thread.
     onProgress({stage:'load',detail:'hwp_open',loaded:1,total:1});
     doc=openHwpDocument(buf);
-    const pages=verifyConversionPages(doc.pageCount(),onProgress);
+    const pages=readConversionPageCount(doc,onProgress);
     local=await loadDocumentLocalFonts(doc,pages,options.localFonts,fontkit,signal,onProgress);
    }
    onProgress({stage:'fonts',page:1,total:1,detail:'bundled'});
@@ -197,7 +203,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    onProgress({stage:'load',detail:'hwp_open',loaded:1,total:1});
    doc=openHwpDocument(buf);
   }
-  const count=verifyConversionPages(doc.pageCount(),onProgress);
+  const count=readConversionPageCount(doc,onProgress);
   if(options.engine==='compat-raster'){
    // This option must be explicitly selected in the UI. It is never an
    // automatic downgrade of the original object-preserving PDF route.
