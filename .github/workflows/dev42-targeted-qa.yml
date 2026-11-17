@@ -1,4 +1,4 @@
-name: DEV42 targeted real QA regression
+name: DEV42 expanded targeted QA regression
 on:
   push:
     branches:
