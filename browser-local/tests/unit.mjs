@@ -37,7 +37,8 @@ const checked={svg:'<svg/>',width:794,height:1123};
 test('no hard size limit at file input or HWP decoder entry',()=>{
  for(const s of [source,main,html])assert.doesNotMatch(s,/MAX_FILE\s*=|file\.size\s*>\s*20\s*\*|최대\s*20MiB|20MiB 이하/);
  assert.match(source,/file\.slice\(0,8\)\.arrayBuffer\(\)/);
- assert.match(source,/MAX_PAGES=120/);
+ assert.match(source,/const MAX_PAGES=MAX_CONVERSION_PAGES/);
+ assert.match(source,/MAX_NATIVE_PRINT_PAGES/);
  assert.match(source,/DETAIL_MAX_PIXELS=12_000_000/);
  assert.match(main,/fontFiles,engine/);
  assert.match(html,/<input id="pdf-font"[^>]*multiple/);

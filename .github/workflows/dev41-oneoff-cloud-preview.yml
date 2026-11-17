@@ -1,0 +1,75 @@
+# DEV41 cloud candidate: rebuilt after legacy-test updates and KERIS Bold fix
+name: DEV41 isolated cloud QA deployment
+on:
+  push:
+    branches:
+      - fix/dev41-real-10file-qa-remediation-20261117
+    paths:
+      - .github/workflows/dev41-oneoff-cloud-preview.yml
+permissions:
+  contents: read
+concurrency:
+  group: sunrise-pdf-dev41-qa-once
+  cancel-in-progress: false
+jobs:
+  build-and-staging-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      CI: 'true'
+      CLOUDFLARE_ACCOUNT_ID: '569c0b66d1f480e577ca67cd68592203'
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify staging-only target
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const qa=JSON.parse(fs.readFileSync('wrangler.dev41.qa.jsonc','utf8'));
+          const prod=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          if(qa.name!=='sunrise-pdf-pro-web-dev41-qa'||qa.name===prod.name)process.exit(1);
+          if(qa.main!==prod.main||qa.assets?.directory!==prod.assets?.directory)process.exit(2);
+          if(qa.d1_databases||qa.vars||qa.routes)process.exit(3);
+          console.log('DEV41 STAGING ONLY; NO D1 OR ADMIN SECRETS');
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Fresh install, full source and Node regressions, Vite build
+        run: npm run build
+      - name: Ensure expected approved fonts and pinned WASM are packaged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s browser-local/dist/rhwp_bg.wasm
+          test -s browser-local/dist/assets/local-bundle.js
+          test -s browser-local/dist/fonts/NotoSans-Regular.ttf
+          test -s browser-local/dist/fonts/NotoSansYi-Regular.ttf
+          test -s browser-local/dist/app.html
+      - name: Dry-run isolated Worker code bundle without modifying cloud
+        run: npx --yes wrangler@4 deploy --dry-run --config wrangler.dev41.qa.jsonc --outdir /tmp/dev41-worker-check
+      - name: Require Cloudflare API secret only after build passes
+        shell: bash
+        run: |
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo 'MISSING_CLOUDFLARE_DEPLOY_SECRET: build validated but cloud upload blocked.'
+            exit 3
+          fi
+      - name: Upload DEV41 only to separate staging Worker
+        run: npx --yes wrangler@4 deploy --config wrangler.dev41.qa.jsonc
+      - name: Check staging health, WASM, both new font URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          host='https://sunrise-pdf-pro-web-dev41-qa.ko-pg.workers.dev'
+          for route in '/local/health' '/local/' '/local/rhwp_bg.wasm' '/local/assets/local-bundle.js' '/local/fonts/NotoSans-Regular.ttf' '/local/fonts/NotoSansYi-Regular.ttf'; do
+            curl --fail --location --silent --show-error --retry 5 --retry-delay 2 --head "$host$route"
+          done
+          echo 'DEV41_STAGING_CLOUD_ASSETS_PASS'
