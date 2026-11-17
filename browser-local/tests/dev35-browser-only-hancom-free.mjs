@@ -18,7 +18,9 @@ test('mobile browser with no OS font API is still eligible for self-hosted WASM 
  const converter=readFileSync(new URL('../src/converter.js',import.meta.url),'utf8');
  assert.match(converter,/import init, \{ HwpDocument \} from '@rhwp\/core'/);
  assert.match(converter,/prepareWasm\(\)/);
- assert.match(converter,/new HwpDocument\(new Uint8Array\(buf\)\)/);
+ assert.match(converter,/function openHwpDocument\(buffer\)/);
+  assert.match(converter,/new HwpDocument\(new Uint8Array\(buffer\)\)/);
+  assert.match(converter,/doc=openHwpDocument\(buf\)/);
  assert.match(converter,/loadBundledFonts\(fontkit,signal\)/);
  assert.match(converter,/tryProfessionalDocument\(doc,count/);
 });
