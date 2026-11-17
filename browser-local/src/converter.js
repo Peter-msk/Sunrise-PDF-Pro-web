@@ -13,10 +13,11 @@ import { normalizeEmbeddedPngSvg } from './svg-embedded-raster-budget.mjs';
 import { normalizeSvgGrayscale } from './svg-safe-grayscale.mjs';
 import { buildRasterCompatibilityPdf } from './raster-compat-pdf.mjs';
 import {normalizeSvgForPdf} from './svg-filter-hybrid.mjs';
+import {MAX_CONVERSION_PAGES,MAX_NATIVE_PRINT_PAGES} from './page-limit.mjs';
 
 // File-size limits are intentionally absent. Runtime memory and page pixels
 // remain bounded by the browser/device; those are not upload-size limits.
-const MAX_PAGES=120,MAX_PIXELS=9_000_000,DETAIL_MAX_PIXELS=12_000_000;
+const MAX_PAGES=MAX_CONVERSION_PAGES,MAX_PIXELS=9_000_000,DETAIL_MAX_PIXELS=12_000_000;
 const TARGET_DPI=300,DETAIL_DPI=360;
 const OLE=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1];
 function throwIfCancelled(signal){
@@ -147,7 +148,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     // A second HwpDocument could reparse hundreds of MB of input on the UI thread.
     doc=new HwpDocument(new Uint8Array(buf));
     const pages=doc.pageCount();
-    if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
+    if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~'+MAX_PAGES+'쪽');
     local=await loadDocumentLocalFonts(doc,pages,options.localFonts,fontkit,signal,onProgress);
    }
    onProgress({stage:'fonts',page:1,total:1,detail:'bundled'});
@@ -181,7 +182,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
   }
   if(!doc)doc=new HwpDocument(new Uint8Array(buf));
   const count=doc.pageCount();
-  if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
+  if(!Number.isInteger(count)||count<1||count>MAX_PAGES)throw Error('페이지 수 제한: 1~'+MAX_PAGES+'쪽');
   if(options.engine==='compat-raster'){
    // This option must be explicitly selected in the UI. It is never an
    // automatic downgrade of the original object-preserving PDF route.
@@ -340,7 +341,7 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
    let local={faces:[]};
    if(localFonts){
     const probe=new HwpDocument(new Uint8Array(buffer));
-    try{const pages=probe.pageCount();if(!Number.isInteger(pages)||pages<1||pages>MAX_PAGES)throw Error('페이지 수 제한: 1~120쪽');
+    try{const pages=probe.pageCount();if(!Number.isInteger(pages)||pages<1||pages>MAX_NATIVE_PRINT_PAGES)throw Error('인쇄 준비 페이지 수 제한: 1~'+MAX_NATIVE_PRINT_PAGES+'쪽');
      local=await loadDocumentLocalFonts(probe,pages,localFonts,fontkit,signal,onProgress);
     }finally{probe.free();}
    }
@@ -353,8 +354,8 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
   throwIfCancelled(signal);
   doc=new HwpDocument(new Uint8Array(buffer));
   const count=doc.pageCount();
-  if(!Number.isInteger(count)||count<1||count>MAX_PAGES)
-   throw Error('페이지 수 제한: 1~120쪽');
+  if(!Number.isInteger(count)||count<1||count>MAX_NATIVE_PRINT_PAGES)
+   throw Error('인쇄 준비 페이지 수 제한: 1~'+MAX_NATIVE_PRINT_PAGES+'쪽');
   const pages=[];
   for(let i=0;i<count;i++){
    throwIfCancelled(signal);
