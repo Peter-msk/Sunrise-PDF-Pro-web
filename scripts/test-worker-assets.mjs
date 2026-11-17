@@ -24,7 +24,7 @@ const requested=[];
 const assets={fetch:async request=>{
  const path=new URL(request.url).pathname;
  requested.push(path);
- const types={'/app.html':'text/html','/pdf-worker.mjs':'application/javascript','/pdf-worker-legacy.mjs':'application/javascript','/assets/local-bundle.js':'application/javascript','/assets/local-chunk-Engine_01.js':'application/javascript','/rhwp_bg.wasm':'application/wasm','/fonts/HakgyoansimBareonbatangR.ttf':'font/ttf','/fonts/HakgyoansimBareonbatangB.ttf':'font/ttf','/fonts/HakgyoansimBareondotumR.ttf':'font/ttf','/fonts/HakgyoansimBareondotumB.ttf':'font/ttf','/fonts/NotoSansSymbols2-Regular.ttf':'font/ttf'};
+ const types={'/app.html':'text/html','/pdf-worker.mjs':'application/javascript','/pdf-worker-legacy.mjs':'application/javascript','/assets/local-bundle.js':'application/javascript','/assets/local-chunk-Engine_01.js':'application/javascript','/rhwp_bg.wasm':'application/wasm','/fonts/HakgyoansimBareonbatangR.ttf':'font/ttf','/fonts/HakgyoansimBareonbatangB.ttf':'font/ttf','/fonts/HakgyoansimBareondotumR.ttf':'font/ttf','/fonts/HakgyoansimBareondotumB.ttf':'font/ttf','/fonts/NotoSansSymbols2-Regular.ttf':'font/ttf','/fonts/NotoSans-Regular.ttf':'font/ttf','/fonts/NotoSansYi-Regular.ttf':'font/ttf'};
  if(!(path in types))return new Response('Not Found',{status:404});
  return new Response(request.method==='HEAD'?null:'test-asset',{status:200,headers:{'Content-Type':types[path]}});
 }};
@@ -40,7 +40,9 @@ for(const [route,assetPath,contentType] of [
  ['/local/fonts/HakgyoansimBareonbatangB.ttf','/fonts/HakgyoansimBareonbatangB.ttf','font/ttf'],
  ['/local/fonts/HakgyoansimBareondotumR.ttf','/fonts/HakgyoansimBareondotumR.ttf','font/ttf'],
  ['/local/fonts/HakgyoansimBareondotumB.ttf','/fonts/HakgyoansimBareondotumB.ttf','font/ttf'],
- ['/local/fonts/NotoSansSymbols2-Regular.ttf','/fonts/NotoSansSymbols2-Regular.ttf','font/ttf']
+ ['/local/fonts/NotoSansSymbols2-Regular.ttf','/fonts/NotoSansSymbols2-Regular.ttf','font/ttf'],
+ ['/local/fonts/NotoSans-Regular.ttf','/fonts/NotoSans-Regular.ttf','font/ttf'],
+ ['/local/fonts/NotoSansYi-Regular.ttf','/fonts/NotoSansYi-Regular.ttf','font/ttf']
 ]){
  for(const method of ['GET','HEAD']){
   const response=await worker.fetch(new Request('https://sunrise.example'+route,{method}),env);
