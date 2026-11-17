@@ -472,6 +472,12 @@ export async function tryProfessionalDocument(hwpDoc,count,{
       blob=await waitForImageOperation(pending,signal,finalizeTimeoutMs,'PDF_STREAM_TIMEOUT');
     }catch(error){
       if(error?.message==='PDF_STREAM_TIMEOUT'){
+        // Background-tab timer clamping can fire the timeout before the
+        // 1-second terminal probe runs. One final synchronous structural
+        // validation is safe: it cannot accept a truncated xref or missing EOF.
+        if(terminalProbe.tryFinish?.()){
+          blob=await pending;
+        }else{
         const bytes=streamProbe.bytes||0;
         const finalBytes=Math.max(0,bytes-bytesBeforeEnd);
         const finalChunks=Math.max(0,(streamProbe.chunks||0)-chunksBeforeEnd);
@@ -481,9 +487,11 @@ export async function tryProfessionalDocument(hwpDoc,count,{
           ?Math.max(0,Date.now()-streamProbe.lastChunkAt):null;
         error.message='PDF_STREAM_TIMEOUT ('+reason+', emitted='+bytes+
           'B, final='+finalBytes+'B/'+finalChunks+'chunks'+
-          (sinceLast===null?'':', idle='+sinceLast+'ms')+')';
-      }
-      throw error;
+          (sinceLast===null?'':', idle='+sinceLast+'ms')+')'+
+          ' [integrity='+(terminalProbe.lastValidationError||'PDF_OUTPUT_VALIDATION_NOT_RUN')+']';
+        throw error;
+        }
+      }else throw error;
     }finally{
       if(terminalCheckTimer!==null)clearInterval(terminalCheckTimer);
     }
