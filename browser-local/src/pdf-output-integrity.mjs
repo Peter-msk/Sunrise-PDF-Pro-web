@@ -1,3 +1,4 @@
+import {MAX_CONVERSION_PAGES} from './page-limit.mjs';
 /** R66-DEV22: bounded PDF output structure validation.
  * Checks header, final startxref, EOF and the actual referenced xref target.
  * Both classic xref tables and PDF 1.5+ xref streams are supported.
@@ -89,7 +90,7 @@ export async function assertCompletePdfBlob(blob,signal,maxBytes=MAX_BYTES){
  * complete PDF Blob and self-consistent page/byte counts before UI marks done.
  * This does not claim text fidelity or that all declared pages are rendered. */
 export async function assertConvertedPdfResult(result,signal){
- if(!Number.isSafeInteger(result?.pages)||result.pages<1||result.pages>120)
+ if(!Number.isSafeInteger(result?.pages)||result.pages<1||result.pages>MAX_CONVERSION_PAGES)
   throw Error('PDF_RESULT_PAGE_COUNT_INVALID');
  if(!(result?.pdf instanceof Blob))throw Error('PDF_OUTPUT_BLOB_REQUIRED');
  if(!Number.isSafeInteger(result.bytes)||result.bytes!==result.pdf.size)
