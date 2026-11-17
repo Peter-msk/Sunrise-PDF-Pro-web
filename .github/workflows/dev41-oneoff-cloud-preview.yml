@@ -1,3 +1,4 @@
+# DEV41 cloud candidate: rebuilt after legacy-test updates and KERIS Bold fix
 name: DEV41 isolated cloud QA deployment
 on:
   push:
