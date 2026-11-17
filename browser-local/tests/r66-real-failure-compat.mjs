@@ -69,7 +69,7 @@ test('compat is strictly opt-in; default vector engine does not silently rasteri
 test('compat output is bounded and per-page processing yields to cancellation',async()=>{
  const x=setup({count:0});
  await assert.rejects(buildRasterCompatibilityPdf(x.doc,x.count,x.options),/COMPAT_PAGE_COUNT_INVALID/);
- const y=setup({count:121});
+ const y=setup({count:201});
  await assert.rejects(buildRasterCompatibilityPdf(y.doc,y.count,y.options),/COMPAT_PAGE_COUNT_INVALID/);
 });
 
