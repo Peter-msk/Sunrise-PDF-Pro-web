@@ -8,10 +8,11 @@
  * No file bytes are uploaded to the server.
  */
 import {cooperativeYield} from './cooperative-yield.mjs';
+import {MAX_CONVERSION_PAGES} from './page-limit.mjs';
 import {assertCompletePdfBytes} from './pdf-output-integrity.mjs';
 import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 
-const MAX_PAGES=120;
+const MAX_PAGES=MAX_CONVERSION_PAGES;
 const MAX_OUTPUT_BYTES=512*1024*1024;
 const PDF_SAVE_TIMEOUT_MS=120_000;
 const cancelled=signal=>{
