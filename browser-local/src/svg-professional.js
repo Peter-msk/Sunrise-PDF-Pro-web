@@ -335,7 +335,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
   // Aborting only pdf.destroy() leaves toBlob listeners and queued chunks alive.
   const writerAbort=linkPdfWriterAbort(signal);
   let pending;
-  const streamProbe={};
+  const streamProbe={},terminalProbe={};
   try{
     pending=toBlob(pdf,writerAbort.signal,({bytes})=>{
       // PDFKit can emit bytes while drawing a page, before pdf.end().
@@ -345,7 +345,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
         page:reportingFinalStream?count:(currentPdfPage||1),total:count,
         detail:reportingFinalStream?'pdf_stream':'pdf_write',bytes});}
       catch{/* A UI observer must not corrupt the PDF stream. */}
-    },undefined,streamProbe);
+    },undefined,streamProbe,terminalProbe);
   }catch(error){
     writerAbort.abort();
     writerAbort.close();
@@ -450,7 +450,25 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     // or finalization bytes without PDFKit's end event. Report only aggregate
     // counters in the local error; never include original document content.
     let blob;
+    let terminalCheckTimer=null,lastAttemptBytes=-1;
     try{
+      // PDFKit can write a fully valid xref+%%EOF trailer yet omit its
+      // Readable 'end' event. Wait for 2.5s of zero new bytes AFTER pdf.end()
+      // before asking the byte collector to validate the entire PDF structure.
+      // Never synthesize a successful result for a missing/corrupt trailer.
+      if(typeof terminalProbe.tryFinish==='function'){
+        terminalCheckTimer=setInterval(()=>{
+          try{
+            if(writerAbort.signal.aborted||streamProbe.endSeen)return;
+            const bytes=streamProbe.bytes||0;
+            const idle=Date.now()-(streamProbe.lastChunkAt||Date.now());
+            if(bytes>0&&bytes!==lastAttemptBytes&&idle>=2500){
+              lastAttemptBytes=bytes;
+              terminalProbe.tryFinish();
+            }
+          }catch{/* Original timeout/abort remains authoritative. */}
+        },1000);
+      }
       blob=await waitForImageOperation(pending,signal,finalizeTimeoutMs,'PDF_STREAM_TIMEOUT');
     }catch(error){
       if(error?.message==='PDF_STREAM_TIMEOUT'){
@@ -466,6 +484,8 @@ export async function tryProfessionalDocument(hwpDoc,count,{
           (sinceLast===null?'':', idle='+sinceLast+'ms')+')';
       }
       throw error;
+    }finally{
+      if(terminalCheckTimer!==null)clearInterval(terminalCheckTimer);
     }
     cancel();
     if(!(blob instanceof Blob)||blob.size<100)throw Error('PROFESSIONAL_PDF_EMPTY');
