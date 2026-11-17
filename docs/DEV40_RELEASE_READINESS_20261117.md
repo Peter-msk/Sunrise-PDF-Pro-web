@@ -31,10 +31,13 @@ git fetch origin
 git switch fix/dev40-original-pdf-acceptance-20261116
 git pull --ff-only origin fix/dev40-original-pdf-acceptance-20261116
 # 25문서 및 124쪽 수락 자료/실물 비교를 담당자가 먼저 확인할 것
+# 빌드·검증만 원하는 경우 (배포하지 않음)
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Release-SunrisePDFProWeb.ps1
-# 앞 단계가 전부 PASS이고 배포 승인 증거를 확인한 경우:
+# 위 명령 대신, 실제 수락 후 최종 배포할 때는 한 명령으로 검사와 배포 실행
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Release-SunrisePDFProWeb.ps1 -Deploy
 ```
+
+두 명령을 순차 실행하면 불필요하게 모든 테스트를 두 번 수행하므로 **목적에 맞는 하나만 선택**한다.
 
 위 스크립트의 GitHub 경로는 `scripts/Release-SunrisePDFProWeb.ps1`. 이전 버전의 `scripts/verify-browser-build.mjs`와 `scripts/test-worker-assets.mjs`를 재사용하고 기존 테스트 게이트를 우회하지 않는다. `wrangler.jsonc` 구조 유지, GitHub Actions 설정 변경·D1 migration·secret 교체·main 병합 없음.
 
