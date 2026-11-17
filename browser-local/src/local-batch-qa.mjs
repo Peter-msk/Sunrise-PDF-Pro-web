@@ -6,12 +6,16 @@ const EXTENSIONS=new Set(['hwp','hwpx','xls','xlsx','jpg','jpeg','png']);
 const STATES=new Set(['ready','working','done','failed','cancelled','invalid']);
 const ENGINES=new Set(['professional','hybrid-filter','compat-raster']);
 const PHASES=new Set(['load','xlsx_package','xlsx_parse','xlsx_layout','font_read',
- 'font_bundle','font_measure','font_scan','fonts','svg_build','svg_normalize',
+ 'font_bundle','font_measure','font_scan','fonts','file_read','hwp_open','hwp_page_count','svg_build','svg_normalize',
  'image_gif','image_png','image_filter','svg_sanitize','svg_preflight',
  'svg_vector','svg_vector_done','pdf_finalize','pdf_write','pdf_stream',
  'pdf_done','compat_raster','compat_page_done','compat_save','render']);
 const ERROR_CODES=[
- 'SVG_FILTER_EFFECT_UNSUPPORTED','PDF_STREAM_TIMEOUT','FONT_GLYPH_MISSING',
+ 'SVG_FILTER_EFFECT_UNSUPPORTED','SVG_RENDER_SOURCE_CHARS_LIMIT',
+ 'SVG_RENDER_SINGLE_PATH_LIMIT','SVG_RENDER_PAGE_PATH_LIMIT',
+ 'PDF_STREAM_TIMEOUT','FONT_GLYPH_MISSING',
+ 'HWP_PAGE_COUNT_LIMIT','HWP_PAGE_COUNT_INVALID','HWP_PAGE_COUNT_FAILED',
+ 'HWP_DOCUMENT_OPEN_FAILED','FILE_READ_FAILED',
  'FONT_FAMILY_OR_VARIANT_UNAVAILABLE','FONT_RUN_SPLIT_UNSUPPORTED',
  'XLSX_PARSE_FAILED','XLSX_ENGINE_UNAVAILABLE','XLSX_INPUT_BYTES_LIMIT',
  'XLS_INPUT_BYTES_LIMIT','FILE_READ_IDLE_TIMEOUT','PDF_RESULT_PAGE_COUNT_INVALID',
@@ -20,6 +24,20 @@ const ERROR_CODES=[
  'PDF_OUTPUT_XREF_OFFSET_INVALID','PDF_OUTPUT_BYTES_LIMIT',
  'PDF_RESULT_BYTES_MISMATCH'
 ];
+const STREAM_REASONS=new Set(['NO_BYTES','NO_FINAL_BYTES','FINAL_BYTES_NO_END','END_SEEN_NO_COMPLETION']);
+const PDF_INTEGRITY=new Set(['PDF_OUTPUT_HEADER_INVALID','PDF_OUTPUT_TRAILER_INCOMPLETE',
+ 'PDF_OUTPUT_XREF_TARGET_INVALID','PDF_OUTPUT_XREF_OFFSET_INVALID',
+ 'PDF_OUTPUT_XREF_SOURCE_MISMATCH','PDF_OUTPUT_UNVERIFIED',
+ 'PDF_OUTPUT_VALIDATION_NOT_RUN']);
+export function localQaStreamReason(error){
+ const match=/\bPDF_STREAM_TIMEOUT \((NO_BYTES|NO_FINAL_BYTES|FINAL_BYTES_NO_END|END_SEEN_NO_COMPLETION)\b/.exec(String(error||''));
+ return match&&STREAM_REASONS.has(match[1])?match[1]:null;
+}
+export function localQaStreamIntegrity(error){
+ if(!localQaStreamReason(error))return null;
+ const match=/\bintegrity=(PDF_OUTPUT_[A-Z_]+)\b/.exec(String(error||''));
+ return match&&PDF_INTEGRITY.has(match[1])?match[1]:null;
+}
 const FILTER_CATEGORIES=[
  ['unsafe-identity-target','합성·불투명도·클리핑 안전성'],
  ['css-or-external','미지원 CSS 또는 외부 필터 참조'],
@@ -72,6 +90,10 @@ export function buildLocalBatchQaReport(items,{generatedAt=new Date().toISOStrin
    index:i+1,format:extension(item?.file),state,engine,
    duration_ms:safeDuration(item?._proDurationMs),phase,
    error_code:state==='failed'?localQaErrorCode(item?.error):null,
+   stream_reason:state==='failed'?localQaStreamReason(item?.error):null,
+   stream_integrity:state==='failed'?localQaStreamIntegrity(item?.error):null,
+   source_pages:safeCount(item?._proSourcePages),
+   last_page:safeCount(item?._proLastPage),
    filter_category:state==='failed'?localQaFilterCategory(item?.error):null,
    pages:safeCount(result?.pages),
    vector_pages:safeCount(result?.vectorPages),
