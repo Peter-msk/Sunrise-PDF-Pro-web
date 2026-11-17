@@ -24,7 +24,7 @@
     "prebuild": "node scripts/install-safe-fonts.mjs",
     "test:dev38": "node --test tests/dev38-actual-svg-font-pdf.mjs",
     "test:dev41": "node --test tests/dev41-real-qa-regressions.mjs tests/r66-real-failure-compat.mjs tests/r66-pdf-stream-diagnostics.mjs tests/r66-pdf-early-stream.mjs",
-    "test:dev42": "node --test tests/dev42-qa-error-remediation.mjs tests/dev32-local-batch-qa.mjs tests/r66-pdf-stream-diagnostics.mjs tests/r66-pdf-early-stream.mjs tests/dev41-real-qa-regressions.mjs"
+    "test:dev42": "node --test tests/dev42-qa-error-remediation.mjs tests/dev32-local-batch-qa.mjs tests/r66-pdf-stream-diagnostics.mjs tests/r66-pdf-early-stream.mjs tests/dev41-real-qa-regressions.mjs tests/dev28-live-error-policy.mjs tests/dev35-browser-only-hancom-free.mjs tests/r62-hwp-progress.mjs tests/unit.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "1.1.1",
