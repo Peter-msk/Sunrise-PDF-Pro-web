@@ -61,15 +61,25 @@ try{
  assert.equal(label,'DEV44 (local)');
  const evidence=[];
  for(let i=0;i<samples.length;i++){
-  const probe=await page.evaluate(async data=>{
+  const probe=await page.evaluate(async ({data,verifyBlackwhite})=>{
    const {inspectPublicFixture}=await import('/tests/dev44-engine-probe.mjs');
-   return inspectPublicFixture(data);
-  },Array.from(samples[i].buffer));
+   return inspectPublicFixture(data,verifyBlackwhite);
+  },{data:Array.from(samples[i].buffer),verifyBlackwhite:variants[i].name==='blackwhite'});
   evidence.push({name:variants[i].name,altered:samples[i].altered,crops:samples[i].crops,...probe});
  }
  console.log('RHWP_ENGINE_EVIDENCE '+JSON.stringify(evidence));
  assert.ok(evidence[0].effects.includes('rhwp-img-grayscale'));
- assert.ok(evidence[1].effects.includes('rhwp-img-blackwhite'));
+ // The exact pinned engine deliberately bakes zero-adjustment BMP BlackWhite.
+ // Absence of a filter is not enough: require every original pixel, dimensions,
+ // alpha, image count, both output levels and a nontrivial source transformation.
+ const bw=evidence[1].baked;
+ assert.ok(bw,'missing baked blackwhite evidence');
+ assert.equal(evidence[1].effects.includes('rhwp-img-blackwhite'),false,'double application of baked blackwhite');
+ assert.equal(bw.images,evidence[1].altered,'image count mismatch');
+ assert.equal(bw.pngImages,bw.images,'baked image is not PNG');
+ assert.ok(bw.pixels>0&&bw.black>0&&bw.white>0&&bw.changed>0,JSON.stringify(bw));
+ assert.equal(bw.mismatched,0,JSON.stringify(bw));
+ assert.equal(bw.alphaMismatch,0,JSON.stringify(bw));
  assert.ok(evidence[2].effects.includes('rhwp-img-bc-b10c20'));
  assert.ok(evidence[3].effects.includes('rhwp-img-grayscale'));
  assert.ok(evidence[3].cropViewports>0,'RHWP did not actually emit an inner crop viewport');
