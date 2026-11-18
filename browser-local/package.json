@@ -28,7 +28,11 @@
     "test:dev43": "node --test tests/dev43-rhwp-image-effects.mjs tests/r66-svg-filter-vector-safe.mjs tests/r66-hybrid-svg-filter.mjs tests/r66-hybrid-vector-integration.mjs tests/dev32-local-batch-qa.mjs tests/dev42-qa-error-remediation.mjs tests/r66-pdf-stream-diagnostics.mjs",
     "test:dev43:browser": "node tests/dev43-browser-image-effects.mjs",
     "test:dev44": "node --test tests/dev43-rhwp-image-effects.mjs tests/r66-svg-filter-vector-safe.mjs tests/r66-hybrid-svg-filter.mjs tests/r66-hybrid-vector-integration.mjs tests/dev32-local-batch-qa.mjs tests/dev42-qa-error-remediation.mjs tests/r66-pdf-stream-diagnostics.mjs tests/dev45-blackwhite-pixels.test.mjs",
-    "test:dev44:browser": "node tests/dev44-real-hwpx-browser.mjs"
+    "test:dev44:browser": "node tests/dev44-real-hwpx-browser.mjs",
+    "inspect:rhwp090": "node scripts/inspect-rhwp-090-package.mjs",
+    "qa:compare-dev46": "node scripts/compare-dev46-qa.mjs",
+    "test:dev46:package": "node --test tests/dev46-inspect-rhwp-090.mjs",
+    "test:dev46:real-qa": "node --test tests/dev46-compare-real-qa.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "1.1.1",
