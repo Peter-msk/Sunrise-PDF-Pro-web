@@ -40,3 +40,21 @@ Official release https://github.com/edwardkim/rhwp/releases/tag/v0.9.0 and https
 - Font substitutions are not full fidelity. Compare original PDF or Hancom-generated reference locally, correct mismatched families and measure line wrapping. Do not distribute unauthorized fonts.
 - Preserve 15 previous successes; compare page counts, vector output, font layout, crop and visual parity. 25/25 completed with no regression is structural acceptance only; all 25 visual and text-search/selection reviews plus PC/mobile acceptance and actual build identity required before separate production approval.
 - Regression fixture tests/dev46-real-qa-baseline.mjs records this failure distribution but is not evidence of repaired conversion.
+
+
+## DEV46 continued work — verification tooling
+- New `browser-local/scripts/inspect-rhwp-090-package.mjs`: obtains official registry dist metadata and npm archive in a temporary directory without lifecycle scripts; verifies SHA-512 before extracting only named files, verifies package identity and WASM validity, emits SHA-256 and byte count; no source modifications or deployment. Registry signature/provenance and browser tests are separately NOT_RUN. Node 24 and tar are target prerequisites.
+- New `browser-local/scripts/compare-dev46-qa.mjs`: local-only structural comparison of the original and current 25-file JSON; rejects missing declared DEV46+ / 0.9.0 / local or QA channel identity, stale report, mismatched format/order, failed or invalid outputs, false summaries, page-count regressions and full-page raster output. Reports unmet diagnostics and font review by anonymous index. Declared identity and same-order comparison alone cannot authenticate the actual engine or original document identity. Successful structural comparison means VISUAL_REVIEW_REQUIRED only.
+- Local Node 22.16.0/Linux targeted tests: 14 PASS, 0 FAIL (9 comparison cases against actual uploaded JSON; 5 synthetic archive cases). All four source/test Git blob SHAs matched remote. Comparing original JSON to itself intentionally returns BLOCKED (exit 1): 10 remaining failures, 15 font-review cases, 10 missing diagnostics. This is NOT a new document conversion test.
+- Actual npm acquisition attempt blocked (DNS resolution failure in this environment); no verified 0.9.0 archive, no new WASM digest, dependency remains 0.8.7. No GitHub Actions run or production deployment in this continuation. Windows Node 24 execution and actual browser validation remain open.
+- In internet-enabled Windows CMD, from repository root:
+  ```cmd
+  git switch fix/dev46-rhwp-090-real-qa-20261118
+  git pull --ff-only
+  cd browser-local
+  npm run inspect:rhwp090
+  npm run test:dev46:package
+  set "DEV46_QA_BASELINE=C:\path\Sunrise_PDF_PRO_Web_QA_20261118104100.json"
+  npm run test:dev46:real-qa
+  ```
+  After verified migration and actual retest export: `npm run qa:compare-dev46 -- "<baseline.json>" "<new-report.json>"`. The new report must include the actual verified engine/build identity; do not fabricate it in JSON. The current report generator does not yet emit rhwp_version; add it as part of the real engine migration, with independent runtime verification. The two opt-in tests are not added to general npm test; no duplicate or mandatory private-file test in build.
