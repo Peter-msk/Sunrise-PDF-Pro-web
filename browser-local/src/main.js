@@ -21,7 +21,7 @@ const $=id=>document.getElementById(id);
 // Mark the actually executing JS bundle, not the HTML shell or the saved report date.
 const buildLabel=QA_BUILD_REVISION+' ('+qaDeploymentChannel()+')';
 $('qa-export').textContent='실기 검증 보고서 저장 · '+buildLabel;
-$('build-revision').textContent=buildLabel;
+if($('build-revision'))$('build-revision').textContent=buildLabel;
 document.title+=' · '+buildLabel;
 const conversionClock=createConversionClock();
 const viewer=createPdfViewer($);
