@@ -1,0 +1,42 @@
+# DEV46 — RHWP 0.9.0 migration / real-document QA gate
+Date: 2026-11-18 KST. Base: 1fba442f6b74adfd7da882440ae43ee65c525032 (DEV45).
+Status: HOLD — registry binary unavailable in current execution environment; no new runtime, lock, or hash has been claimed or deployed.
+
+## Evidence
+Anonymous local QA JSON generated 2026-11-18T10:41:00.816Z: 25 queued, 15 done, 10 failed; 134 vector pages and zero raster pages in successes. HWP 7/12, HWPX 8/13. All 15 successes reported font substitution (3–8 families) and unmatched PC families (8–16). SVG_FILTER_EFFECT_UNSUPPORTED / other-primitive: #3,4,9,10,11,12,13,14. PDF_STREAM_TIMEOUT: #24,25 (134732 / 129993 ms). Report lacks build_revision, deployment_channel, stream_reason, stream_pending_refs and filter_primitive; it cannot establish which deployed build was tested or root cause. Original files/PDFs are not available. Do not upload originals, do not label fixture runs real conversion.
+
+## P0 migration (internet-connected dev machine; never production)
+Official release https://github.com/edwardkim/rhwp/releases/tag/v0.9.0 and https://www.npmjs.com/package/@rhwp/core/v/0.9.0 confirm public 0.9.0. Use core only, not editor. The PDF import feature is not proof of improved HWP-to-PDF export.
+
+1. Checkout this branch, verify clean tree, confirm no deploy hook. Use Node 24.
+2. From browser-local, run:
+   ```cmd
+   npm view @rhwp/core@0.9.0 version dist --json --registry=https://registry.npmjs.org/
+   npm install --save-exact --ignore-scripts --no-audit --no-fund @rhwp/core@0.9.0 --registry=https://registry.npmjs.org/
+   node -e "const fs=require('node:fs'),c=require('node:crypto'),p='node_modules/@rhwp/core/rhwp_bg.wasm',b=fs.readFileSync(p); console.log(JSON.stringify({bytes:b.length,sha256:c.createHash('sha256').update(b).digest('hex')}))"
+   ```
+   Validate package metadata, npm integrity and available upstream signature/provenance. Reinstall with npm ci from updated lock; verify independently installed WASM hash again. Do not use a calculated hash from an untrusted binary as proof of authenticity.
+3. Update runtime pins, verified byte count and hash together. Known owners: browser-local/package.json, package-lock.json, scripts/copy-wasm.mjs, scripts/verify-engine-contract.mjs, scripts/diagnose-local.mjs, scripts/verify-local-build.mjs, tests/r66-engine-contract.mjs. Search **all active build/runtime/test/deployment** sources for old values, not historical records. No guessed digest or weakened check. Reversed test fixture must use 0.8.7 as rejected drift, not 0.9.0.
+   ```cmd
+   git grep -n -e 0.8.7 -e 11821756 -e 54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989
+   ```
+4. Check actual API compatibility: default init, HwpDocument, pageCount, renderPageSvgWithProfile(print), font measurement and disposal, and real HWP and HWPX fixture output. Preserve self-hosted WASM and local-only privacy. Add actual engine version and build identity to UI/report; use verified build metadata, not an unverified string. Do not retain DEV44 UI marker on DEV46.
+5. Update stale fixture expectations only from real 0.9.0 engine output; validate effects, original pixels, dimensions, alpha, crop, SVG geometry and PDF visual/structural integrity. If 0.9.0 differs from 0.8.7, analyze rather than silence assertions. Preserve object-preserving output; no automatic full-page raster conversion.
+6. Run existing source/engine checks, targeted tests (including new DEV46 test), actual-browser gate and local build:
+   ```cmd
+   npm run check:source
+   npm run check:engine
+   npm run test:dev44
+   node --test tests/dev46-real-qa-baseline.mjs
+   npm run test:dev44:browser
+   npm run build
+   npm run verify:dist
+   ```
+   Chromium setup if missing: npx playwright install chromium. Browser test label and version-specific fixture must use verified DEV46 build. No production deployment.
+
+## P0 real failures
+- Re-run exactly same 25 originals in identical queue order, on identified local or isolated QA build. #3,4,9–14: record safe filter primitive/category, inspect actual SVG structure, support proven compatible image-only effects with exact appearance; unsupported effects must fail closed. Do not delete arbitrary filters or silently flatten text.
+- #24,25: identify stream reason (NO_BYTES, NO_FINAL_BYTES, FINAL_BYTES_NO_END, END_SEEN_NO_COMPLETION), integrity state, refs pending, source pages, last page, cancellation and cleanup. Existing diagnostics in local-batch-qa.mjs and svg-professional.js must be used first. No unconditional timeout increase; only publish PDF after actual header/trailer/xref/page validation.
+- Font substitutions are not full fidelity. Compare original PDF or Hancom-generated reference locally, correct mismatched families and measure line wrapping. Do not distribute unauthorized fonts.
+- Preserve 15 previous successes; compare page counts, vector output, font layout, crop and visual parity. 25/25 completed with no regression is structural acceptance only; all 25 visual and text-search/selection reviews plus PC/mobile acceptance and actual build identity required before separate production approval.
+- Regression fixture tests/dev46-real-qa-baseline.mjs records this failure distribution but is not evidence of repaired conversion.
