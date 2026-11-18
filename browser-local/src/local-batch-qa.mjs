@@ -2,6 +2,14 @@
  * Local-only PDF PRO Web acceptance snapshot. Never reads original document
  * bytes, PDF contents, font names or complete filenames. No network access.
  */
+// Explicit app marker: older v1 reports lack this field, even if saved later.
+export const QA_BUILD_REVISION='DEV43';
+export function qaDeploymentChannel(host=globalThis.location?.hostname){
+ if(host==='sunrise-pdf-pro-web-dev41-qa.ko-pg.workers.dev')return 'qa';
+ if(host==='sunrise-pdf-pro-web.ko-pg.workers.dev')return 'production';
+ if(['localhost','127.0.0.1','::1','[::1]'].includes(host))return 'local';
+ return 'other';
+}
 const EXTENSIONS=new Set(['hwp','hwpx','xls','xlsx','jpg','jpeg','png']);
 const STATES=new Set(['ready','working','done','failed','cancelled','invalid']);
 const ENGINES=new Set(['professional','hybrid-filter','compat-raster']);
@@ -37,6 +45,17 @@ export function localQaStreamIntegrity(error){
  if(!localQaStreamReason(error))return null;
  const match=/\bintegrity=(PDF_OUTPUT_[A-Z_]+)\b/.exec(String(error||''));
  return match&&PDF_INTEGRITY.has(match[1])?match[1]:null;
+}
+export function localQaWriterPendingRefs(error){
+ if(!localQaStreamReason(error))return null;
+ const m=/\bref_waiting=(\d{1,6})\b/.exec(String(error||''));
+ return m?safeCount(Number(m[1])):null;
+}
+const FILTER_PRIMITIVES=new Set(['color-matrix','component-transfer','chain','blur','blend','composite','displacement','other']);
+export function localQaFilterPrimitive(error){
+ if(!/\bSVG_FILTER_EFFECT_UNSUPPORTED\b/.test(String(error||'')))return null;
+ const m=/\bprimitive=([a-z-]+)\b/.exec(String(error||''));
+ return m&&FILTER_PRIMITIVES.has(m[1])?m[1]:null;
 }
 const FILTER_CATEGORIES=[
  ['unsafe-identity-target','합성·불투명도·클리핑 안전성'],
@@ -92,9 +111,11 @@ export function buildLocalBatchQaReport(items,{generatedAt=new Date().toISOStrin
    error_code:state==='failed'?localQaErrorCode(item?.error):null,
    stream_reason:state==='failed'?localQaStreamReason(item?.error):null,
    stream_integrity:state==='failed'?localQaStreamIntegrity(item?.error):null,
+   stream_pending_refs:state==='failed'?localQaWriterPendingRefs(item?.error):null,
    source_pages:safeCount(item?._proSourcePages),
    last_page:safeCount(item?._proLastPage),
    filter_category:state==='failed'?localQaFilterCategory(item?.error):null,
+   filter_primitive:state==='failed'?localQaFilterPrimitive(item?.error):null,
    pages:safeCount(result?.pages),
    vector_pages:safeCount(result?.vectorPages),
    raster_pages:safeCount(result?.rasterPages),
@@ -119,6 +140,7 @@ export function buildLocalBatchQaReport(items,{generatedAt=new Date().toISOStrin
  }
  return {
   schema:'sunrise-pdf-pro-web-local-qa/v1',
+  build_revision:QA_BUILD_REVISION,deployment_channel:qaDeploymentChannel(),
   generated_at:generated.toISOString(),
   privacy:'브라우저에서 직접 저장. 원본 파일명·경로·본문·글꼴·PDF 바이트를 포함하지 않음. 자동 전송 없음.',
   totals,failures_by_code:failureCodes,files:records
