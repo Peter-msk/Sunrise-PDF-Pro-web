@@ -20,7 +20,7 @@ export function inspectEngineContract(root){
   catch{issues.push('PACKAGE_JSON_INVALID');}
   if(pkg){
     for(const [name,version] of Object.entries({
-      '@rhwp/core':'0.8.7','pdfkit':'0.20.2','svg-to-pdfkit':'0.1.8'
+      '@rhwp/core':'0.9.0','pdfkit':'0.20.2','svg-to-pdfkit':'0.1.8'
     })) if(pkg.dependencies?.[name]!==version)
       issues.push('BROWSER_ENGINE_DEPENDENCY_DRIFT:'+name);
   }

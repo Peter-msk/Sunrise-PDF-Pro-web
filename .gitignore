@@ -11,3 +11,5 @@ browser-local/public/fonts/HakgyoansimBareonbatangB.ttf
 browser-local/public/fonts/HakgyoansimBareondotumR.ttf
 browser-local/public/fonts/HakgyoansimBareondotumB.ttf
 browser-local/public/fonts/NotoSansSymbols2-Regular.ttf
+
+browser-local/public/rhwp-*-part*.bin

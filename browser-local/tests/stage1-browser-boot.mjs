@@ -9,6 +9,7 @@ import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright';
+import {RHWP_PARTS} from '../src/rhwp-engine.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const evidence = join(root, 'local-evidence');
@@ -62,7 +63,7 @@ async function launchInstalledBrowser() {
 
 try {
   if (!existsSync(join(root, 'dist/index.html')) ||
-      !existsSync(join(root, 'dist/rhwp_bg.wasm'))) {
+      !RHWP_PARTS.every(p=>existsSync(join(root,'dist',p.name)))) {
     throw Error('Vite dist assets are missing; run npm run build first');
   }
   server = spawn(process.execPath, [
@@ -83,7 +84,7 @@ try {
   const wasmResponses = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
   page.on('response', response => {
-    if (new URL(response.url()).pathname.endsWith('/rhwp_bg.wasm'))
+    if (RHWP_PARTS.some(p=>new URL(response.url()).pathname.endsWith('/'+p.name)))
       wasmResponses.push({ status: response.status(), url: response.url() });
   });
   await page.route('**/*', route => {
@@ -103,7 +104,7 @@ try {
     throw Error('Real rhwp WASM failed to initialize: ' + result.appStatus);
   result.assertions.push('real rhwp WASM initialization succeeded');
   result.wasmResponses = wasmResponses;
-  if (!wasmResponses.some(r => r.status === 200 && new URL(r.url).origin === origin))
+  if (!RHWP_PARTS.every(p=>wasmResponses.some(r=>r.status===200 && new URL(r.url).origin===origin && new URL(r.url).pathname.endsWith('/'+p.name))))
     throw Error('WASM was not fetched successfully from localhost');
   result.assertions.push('WASM asset fetched from localhost with HTTP 200');
   if (pageErrors.length) throw Error('Browser JS error: ' + pageErrors.join(' | '));

@@ -1,20 +1,18 @@
-import { copyFileSync, mkdirSync, readFileSync, statSync } from 'node:fs';
-import { createHash } from 'node:crypto';
-import { resolve } from 'node:path';
-
+import {mkdirSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {resolve} from 'node:path';
+import {RHWP_VERSION,RHWP_WASM_BYTES,RHWP_WASM_SHA256,RHWP_PARTS} from '../src/rhwp-engine.mjs';
+import {verifyRhwpAssets} from './rhwp-assets.mjs';
 const root=resolve(import.meta.dirname,'..');
-const source=resolve(root,'node_modules/@rhwp/core/rhwp_bg.wasm');
-const dest=resolve(root,'public/rhwp_bg.wasm');
-const EXPECTED_BYTES=11821756;
-const EXPECTED_SHA256='54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989';
-
-if(statSync(source).size!==EXPECTED_BYTES)throw Error('Pinned rhwp v0.8.7 WASM size mismatch');
-const sha=createHash('sha256').update(readFileSync(source)).digest('hex');
-if(sha!==EXPECTED_SHA256)throw Error('Pinned rhwp v0.8.7 WASM SHA-256 mismatch');
-mkdirSync(resolve(root,'public'),{recursive:true});
-copyFileSync(source,dest);
-console.log('Verified and bundled official rhwp WASM:',EXPECTED_BYTES,'bytes, SHA-256',sha);
-
+const pkg=JSON.parse(readFileSync(resolve(root,'node_modules/@rhwp/core/package.json'),'utf8'));
+if(pkg.name!=='@rhwp/core'||pkg.version!==RHWP_VERSION)throw Error('RHWP_PACKAGE_VERSION_MISMATCH');
+const bytes=readFileSync(resolve(root,'node_modules/@rhwp/core/rhwp_bg.wasm'));
+if(bytes.length!==RHWP_WASM_BYTES||createHash('sha256').update(bytes).digest('hex')!==RHWP_WASM_SHA256)throw Error('RHWP_WASM_PIN_MISMATCH');
+const dest=resolve(root,'public');mkdirSync(dest,{recursive:true});
+rmSync(resolve(dest,'rhwp_bg.wasm'),{force:true});
+let at=0;for(const part of RHWP_PARTS){writeFileSync(resolve(dest,part.name),bytes.subarray(at,at+part.bytes));at+=part.bytes;}
+verifyRhwpAssets(dest);
+console.log('Verified and split official RHWP WASM:',RHWP_VERSION,RHWP_WASM_BYTES,RHWP_WASM_SHA256);
 // Self-host PDF renderer: no document or font is sent to a third party.
 const fs=await import('node:fs/promises');
 await fs.copyFile(new URL('../node_modules/pdfjs-dist/build/pdf.worker.mjs',import.meta.url),

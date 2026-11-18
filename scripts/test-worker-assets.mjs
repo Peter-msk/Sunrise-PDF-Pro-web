@@ -24,7 +24,7 @@ const requested=[];
 const assets={fetch:async request=>{
  const path=new URL(request.url).pathname;
  requested.push(path);
- const types={'/app.html':'text/html','/pdf-worker.mjs':'application/javascript','/pdf-worker-legacy.mjs':'application/javascript','/assets/local-bundle.js':'application/javascript','/assets/local-chunk-Engine_01.js':'application/javascript','/rhwp_bg.wasm':'application/wasm','/fonts/HakgyoansimBareonbatangR.ttf':'font/ttf','/fonts/HakgyoansimBareonbatangB.ttf':'font/ttf','/fonts/HakgyoansimBareondotumR.ttf':'font/ttf','/fonts/HakgyoansimBareondotumB.ttf':'font/ttf','/fonts/NotoSansSymbols2-Regular.ttf':'font/ttf','/fonts/NotoSans-Regular.ttf':'font/ttf','/fonts/NotoSansYi-Regular.ttf':'font/ttf'};
+ const types={'/app.html':'text/html','/pdf-worker.mjs':'application/javascript','/pdf-worker-legacy.mjs':'application/javascript','/assets/local-bundle.js':'application/javascript','/assets/local-chunk-Engine_01.js':'application/javascript','/rhwp-0.9.0-part1.bin':'application/octet-stream','/rhwp-0.9.0-part2.bin':'application/octet-stream','/fonts/HakgyoansimBareonbatangR.ttf':'font/ttf','/fonts/HakgyoansimBareonbatangB.ttf':'font/ttf','/fonts/HakgyoansimBareondotumR.ttf':'font/ttf','/fonts/HakgyoansimBareondotumB.ttf':'font/ttf','/fonts/NotoSansSymbols2-Regular.ttf':'font/ttf','/fonts/NotoSans-Regular.ttf':'font/ttf','/fonts/NotoSansYi-Regular.ttf':'font/ttf'};
  if(!(path in types))return new Response('Not Found',{status:404});
  return new Response(request.method==='HEAD'?null:'test-asset',{status:200,headers:{'Content-Type':types[path]}});
 }};
@@ -35,7 +35,8 @@ for(const [route,assetPath,contentType] of [
  ['/local/pdf-worker-legacy.mjs','/pdf-worker-legacy.mjs','application/javascript'],
  ['/local/assets/local-bundle.js','/assets/local-bundle.js','application/javascript'],
  ['/local/assets/local-chunk-Engine_01.js','/assets/local-chunk-Engine_01.js','application/javascript'],
- ['/local/rhwp_bg.wasm','/rhwp_bg.wasm','application/wasm'],
+ ['/local/rhwp-0.9.0-part1.bin','/rhwp-0.9.0-part1.bin','application/octet-stream'],
+ ['/local/rhwp-0.9.0-part2.bin','/rhwp-0.9.0-part2.bin','application/octet-stream'],
  ['/local/fonts/HakgyoansimBareonbatangR.ttf','/fonts/HakgyoansimBareonbatangR.ttf','font/ttf'],
  ['/local/fonts/HakgyoansimBareonbatangB.ttf','/fonts/HakgyoansimBareonbatangB.ttf','font/ttf'],
  ['/local/fonts/HakgyoansimBareondotumR.ttf','/fonts/HakgyoansimBareondotumR.ttf','font/ttf'],
@@ -68,9 +69,11 @@ assert.equal(health.document_upload,false);
 assert.equal(health.external_conversion_api,false);
 assert.equal(health.quality_target_dpi,300);
 assert.equal(health.wasm_delivery,'cloudflare-static-assets');
-const missing=await worker.fetch(new Request('https://sunrise.example/local/rhwp_bg.wasm'),{});
+assert.equal(health.rhwp_version,'0.9.0');
+assert.equal(health.wasm_bytes,26835482);
+const missing=await worker.fetch(new Request('https://sunrise.example/local/rhwp-0.9.0-part1.bin'),{});
 assert.equal(missing.status,503,'Missing static asset binding must fail closed');
-const disallowed=await worker.fetch(new Request('https://sunrise.example/local/rhwp_bg.wasm',{method:'POST'}),env);
+const disallowed=await worker.fetch(new Request('https://sunrise.example/local/rhwp-0.9.0-part1.bin',{method:'POST'}),env);
 assert.equal(disallowed.status,405);
 console.log('Worker static-assets routing, fail-closed and health contract: PASS');
 

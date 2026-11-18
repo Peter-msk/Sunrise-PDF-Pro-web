@@ -1,5 +1,6 @@
 /** Offline-only diagnostic. Never calls registries or starts deployment. */
-import {createHash} from 'node:crypto';
+import {verifyRhwpAssets} from './rhwp-assets.mjs';
+import {RHWP_PARTS} from '../src/rhwp-engine.mjs';
 import {existsSync,readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 
@@ -24,11 +25,8 @@ if(existsSync(lockPath)){
       lock.packages?.['node_modules/'+name]?.version===version);
   }catch{ /* corrupt lock must never be counted as ready */ }
 }
-const wasm=resolve(root,'public/rhwp_bg.wasm');
-const expectedSha='54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989';
-const wasmPresent=existsSync(wasm);
-const actualSha=wasmPresent?createHash('sha256').update(readFileSync(wasm)).digest('hex'):null;
-const wasmValid=actualSha===expectedSha;
+const wasmPresent=RHWP_PARTS.every(p=>existsSync(resolve(root,'public',p.name)));
+let wasmValid=false;try{verifyRhwpAssets(resolve(root,'public'));wasmValid=true;}catch{}
 const ready=packagesReady&&lockValid&&(packagesOnly||wasmValid);
 const report={offline:true,packagesOnly,node:process.version,packages,
   packageLock:{present:existsSync(lockPath),valid:lockValid},

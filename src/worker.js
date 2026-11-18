@@ -62,8 +62,7 @@ async function relay(request,env,target) {
 }
 
 /* R29 browser-only PDF. No document leaves the browser. */
-const LOCAL_RHWP_WASM_SHA256="54cf95014312e605c51b98eb9021247ea79ef2bbd0a7080e11c011d0246e3989";
-const LOCAL_RHWP_WASM_BYTES=11821756;
+import {RHWP_VERSION,RHWP_WASM_SHA256 as LOCAL_RHWP_WASM_SHA256,RHWP_WASM_BYTES as LOCAL_RHWP_WASM_BYTES,RHWP_PARTS} from '../browser-local/src/rhwp-engine.mjs';
 const LOCAL_POLICY={...POLICY,
  'Permissions-Policy':'camera=(), microphone=(), geolocation=(), local-fonts=(self)',
  'Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self' blob:; frame-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
@@ -81,8 +80,9 @@ async function localAsset(request, env, assetPath, method, contentType) {
     const headers = new Headers(assetResponse.headers);
     for(const [name,value] of Object.entries(LOCAL_POLICY)) headers.set(name,value);
     headers.set('Content-Type',contentType);
-    headers.set('Cache-Control',contentType==='application/wasm'?'public,max-age=86400':'no-store');
-    if(contentType==='application/wasm')headers.set('X-Rhwp-Version','0.8.7');
+    const wasmPart=RHWP_PARTS.some(p=>assetPath==='/'+p.name);
+    headers.set('Cache-Control',wasmPart?'public,max-age=86400':'no-store');
+    if(wasmPart)headers.set('X-Rhwp-Version',RHWP_VERSION);
     return new Response(method==='HEAD'?null:assetResponse.body,{status:200,headers});
   } catch {
     return new Response('LOCAL_STATIC_ASSET_FETCH_FAILED',{status:503,headers:LOCAL_POLICY});
@@ -144,11 +144,11 @@ export default {
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       return localAsset(request,env,'/fonts/'+fontPath[1],method,fontPath[1].endsWith('.otf')?'font/otf':'font/ttf');
     }
-    if(path==='/local/rhwp_bg.wasm'){
+    if(RHWP_PARTS.some(p=>path==='/local/'+p.name)){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
-      return localAsset(request,env,'/rhwp_bg.wasm',method,'application/wasm');
+      return localAsset(request,env,path.slice('/local'.length),method,'application/octet-stream');
     }
-    if(path==='/local/health'&&['GET','HEAD'].includes(method))return new Response(method==='HEAD'?null:JSON.stringify({rhwp_version:'0.8.7',wasm_sha256:LOCAL_RHWP_WASM_SHA256,wasm_bytes:LOCAL_RHWP_WASM_BYTES,converter:'browser-local-pdf',default_output:'professional',optional_outputs:['native-print'],quality_target_dpi:300,wasm_delivery:'cloudflare-static-assets',external_conversion_api:false,document_upload:false}),{headers:{...LOCAL_POLICY,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
+    if(path==='/local/health'&&['GET','HEAD'].includes(method))return new Response(method==='HEAD'?null:JSON.stringify({rhwp_version:RHWP_VERSION,wasm_sha256:LOCAL_RHWP_WASM_SHA256,wasm_bytes:LOCAL_RHWP_WASM_BYTES,converter:'browser-local-pdf',default_output:'professional',optional_outputs:['native-print'],quality_target_dpi:300,wasm_delivery:'cloudflare-static-assets',external_conversion_api:false,document_upload:false}),{headers:{...LOCAL_POLICY,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
     if(path==='/api/edge-health'&&['GET','HEAD'].includes(method))
       return json({service:'sunrise-pdf-pro-web',edge:'cloudflare-worker',backend_configured:Boolean(target),real_conversion_verified:false},200,method);
     if(path.startsWith('/api/')){

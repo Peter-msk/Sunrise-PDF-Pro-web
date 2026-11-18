@@ -11,7 +11,7 @@ function fixture(){
   const write=(rel,data)=>{
     const path=join(dir,rel);mkdirSync(dirname(path),{recursive:true});writeFileSync(path,data);
   };
-  const pkg={dependencies:{'@rhwp/core':'0.8.7',pdfkit:'0.20.2','svg-to-pdfkit':'0.1.8'}};
+  const pkg={dependencies:{'@rhwp/core':'0.9.0',pdfkit:'0.20.2','svg-to-pdfkit':'0.1.8'}};
   write('browser-local/package.json',JSON.stringify(pkg));
   write('browser-local/src/converter.js',"import {} from '@rhwp/core'; tryProfessionalDocument(); allowRasterFallback:false");
   write('browser-local/src/svg-professional.js',"hwpDoc.renderPageSvgWithProfile(i,'print'); SVGtoPDF();");
@@ -29,7 +29,7 @@ test('original browser-only pipeline passes contract',()=>withFixture(f=>{
   assert.equal(inspectEngineContract(f.dir).ok,true);
 }));
 test('original WASM parser dependency must be pinned',()=>withFixture(f=>{
-  f.write('browser-local/package.json',JSON.stringify({dependencies:{'@rhwp/core':'0.9.0',pdfkit:'0.20.2','svg-to-pdfkit':'0.1.8'}}));
+  f.write('browser-local/package.json',JSON.stringify({dependencies:{'@rhwp/core':'0.8.7',pdfkit:'0.20.2','svg-to-pdfkit':'0.1.8'}}));
   assert.ok(inspectEngineContract(f.dir).issues.includes('BROWSER_ENGINE_DEPENDENCY_DRIFT:@rhwp/core'));
 }));
 test('missing HWP WASM integration is rejected',()=>withFixture(f=>{

@@ -3,7 +3,8 @@
  * bytes, PDF contents, font names or complete filenames. No network access.
  */
 // Explicit app marker: older v1 reports lack this field, even if saved later.
-export const QA_BUILD_REVISION='DEV44';
+import {getVerifiedRhwpVersion} from './rhwp-wasm-loader.mjs';
+export const QA_BUILD_REVISION='DEV46';
 export function qaDeploymentChannel(host=globalThis.location?.hostname){
  if(host==='sunrise-pdf-pro-web-dev41-qa.ko-pg.workers.dev')return 'qa';
  if(host==='sunrise-pdf-pro-web.ko-pg.workers.dev')return 'production';
@@ -140,6 +141,7 @@ export function buildLocalBatchQaReport(items,{generatedAt=new Date().toISOStrin
  }
  return {
   schema:'sunrise-pdf-pro-web-local-qa/v1',
+  rhwp_version:getVerifiedRhwpVersion(),
   build_revision:QA_BUILD_REVISION,deployment_channel:qaDeploymentChannel(),
   generated_at:generated.toISOString(),
   privacy:'브라우저에서 직접 저장. 원본 파일명·경로·본문·글꼴·PDF 바이트를 포함하지 않음. 자동 전송 없음.',

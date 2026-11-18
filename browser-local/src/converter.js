@@ -1,5 +1,6 @@
 import {cooperativeYield} from './cooperative-yield.mjs';
 import init, { HwpDocument } from '@rhwp/core';
+import {initializeRhwp} from './rhwp-wasm-loader.mjs';
 import { tryProfessionalDocument } from './svg-professional.js';
 import { loadPdfFonts, installMeasureFonts, familyKey } from './pdf-fonts.js';
 import { readDocumentBuffer } from './file-reader.js';
@@ -54,7 +55,6 @@ export function verifyFile(file,buf){
  }else throw Error('HWP/HWPX만 지원합니다.');
  return true;
 }
-export function wasmSource(){return new URL('rhwp_bg.wasm',document.baseURI).href;}
 export async function prepareWasm(){
  if(!wasmPromise){
   let ctx=null,last='';
@@ -64,7 +64,7 @@ export async function prepareWasm(){
    if(font!==last){ctx.font=font;last=font;}
    return ctx.measureText(txt).width;
   };
-  wasmPromise=init({module_or_path:wasmSource()}).catch(e=>{wasmPromise=null;throw e;});
+  wasmPromise=initializeRhwp(init,document.baseURI).catch(e=>{wasmPromise=null;throw e;});
  }
  await wasmPromise;
 }
