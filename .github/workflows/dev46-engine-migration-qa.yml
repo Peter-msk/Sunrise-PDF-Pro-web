@@ -1,0 +1,50 @@
+name: DEV46 RHWP 0.9.0 migration QA
+on:
+  push:
+    branches:
+      - fix/dev46-rhwp-090-real-qa-20261118
+    paths:
+      - .github/workflows/dev46-engine-migration-qa.yml
+permissions:
+  contents: read
+jobs:
+  candidate-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install exact lock
+        run: npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund
+      - name: Verify pinned engine, build and static-asset limit
+        run: |
+          npm --prefix browser-local run check:source
+          npm --prefix browser-local run check:engine
+          npm --prefix browser-local run build
+          npm --prefix browser-local run verify:dist
+          node scripts/verify-browser-build.mjs
+          node scripts/test-worker-assets.mjs
+      - name: Targeted migration regression
+        run: |
+          npm --prefix browser-local run test:dev44
+          node --test browser-local/tests/r66-engine-contract.mjs browser-local/tests/dev46-real-qa-baseline.mjs
+      - name: Install Chromium
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Real pinned WASM boot and HWPX conversion
+        working-directory: browser-local
+        run: |
+          npm run test:wasm
+          npm run test:dev44:browser
+      - name: Upload local browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev46-local-browser-evidence
+          path: browser-local/local-evidence/
+          if-no-files-found: ignore
+          retention-days: 7
