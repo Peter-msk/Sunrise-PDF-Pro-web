@@ -1,3 +1,4 @@
+import {localQaFilterReason} from './svg-filter-diagnostics.mjs';
 /**
  * Local-only PDF PRO Web acceptance snapshot. Never reads original document
  * bytes, PDF contents, font names or complete filenames. No network access.
@@ -117,6 +118,7 @@ export function buildLocalBatchQaReport(items,{generatedAt=new Date().toISOStrin
    last_page:safeCount(item?._proLastPage),
    filter_category:state==='failed'?localQaFilterCategory(item?.error):null,
    filter_primitive:state==='failed'?localQaFilterPrimitive(item?.error):null,
+   filter_reason:state==='failed'?localQaFilterReason(item?.error):null,
    pages:safeCount(result?.pages),
    vector_pages:safeCount(result?.vectorPages),
    raster_pages:safeCount(result?.rasterPages),

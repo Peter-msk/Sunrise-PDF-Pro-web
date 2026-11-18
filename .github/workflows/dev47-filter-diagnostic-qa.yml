@@ -1,0 +1,24 @@
+name: DEV47 filter reason targeted QA
+on:
+  push:
+    branches:
+      - fix/dev46-rhwp-090-real-qa-20261118
+    paths:
+      - .github/workflows/dev47-filter-diagnostic-qa.yml
+permissions:
+  contents: read
+jobs:
+  filter-reasons:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund
+      - name: Only affected SVG and QA report regressions
+        working-directory: browser-local
+        run: node --test tests/dev47-filter-diagnostics.mjs tests/dev43-rhwp-image-effects.mjs tests/dev32-local-batch-qa.mjs tests/r66-svg-filter-vector-safe.mjs

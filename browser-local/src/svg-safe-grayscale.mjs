@@ -1,3 +1,4 @@
+import {safeFilterReason} from './svg-filter-diagnostics.mjs';
 import {cooperativeYield} from './cooperative-yield.mjs';
 /**
  * Sunrise PDF PRO — R48 DEV2, local-only SVG filter normalization.
@@ -65,9 +66,10 @@ function fail(reason){throw Error(reason);}
 const FILTER_KIND=new Set(['unsafe-identity-target','css-or-external','missing-definition',
  'multi-primitive','blur','blend','composite','displacement','other-primitive']);
 /** The category is a fixed vocabulary: no SVG markup, IDs, text or URLs. */
-function unsupportedFilter(category,definition=null){
+function unsupportedFilter(category,definition=null,reason=null){
  const error=Error('SVG_FILTER_EFFECT_UNSUPPORTED');
  error.filterCategory=FILTER_KIND.has(category)?category:'other-primitive';
+ error.filterReason=safeFilterReason(reason);
  // A bounded primitive family only; do not expose arbitrary markup or IDs.
  if(definition?.localName==='filter'){
   const kinds={feColorMatrix:'color-matrix',feComponentTransfer:'component-transfer',feGaussianBlur:'blur',feDropShadow:'blur',feBlend:'blend',feComposite:'composite',feDisplacementMap:'displacement'};
@@ -288,11 +290,12 @@ function isRhwpCropViewport(node){
  return box.length===4&&box.every(Number.isFinite)&&box[2]>0&&box[3]>0&&
   [x,y,w,h].every(Number.isFinite)&&w>0&&h>0;
 }
-function planRhwpImage(target,definitions){
- if(target.closest('defs,mask,clipPath,pattern,marker'))return null;
+function planRhwpImage(target,definitions,onReject=()=>{}){
+ const reject=reason=>{onReject(reason);return null;};
+ if(target.closest('defs,mask,clipPath,pattern,marker'))return reject('resource-context');
  for(let p=target.parentElement;p;p=p.parentElement){
-  if(getFilter(p).value&&getFilter(p).value!=='none')return null;
-  if(['class','style','mask','mix-blend-mode','isolation','color-interpolation-filters'].some(a=>p.hasAttribute(a)))return null;
+  if(getFilter(p).value&&getFilter(p).value!=='none')return reject('ancestor-filter');
+  if(['class','style','mask','mix-blend-mode','isolation','color-interpolation-filters'].some(a=>p.hasAttribute(a)))return reject('ancestor-style');
  }
  const descriptors=[],operations=[];
  let node=target;
@@ -300,24 +303,25 @@ function planRhwpImage(target,definitions){
   const descriptor=getFilter(node);
   if(descriptor.value){
    const ref=LOCAL_FILTER.exec(descriptor.value),spec=ref&&identifyRhwpImageEffect(definitions.get(ref[1]));
-   if(!descriptor.attr||!spec)return null;
+   if(!descriptor.attr)return reject('filter-declaration');
+   if(!spec)return reject('effect-definition');
    descriptors.push({el:node,descriptor});
    operations.unshift(...spec);
   }
   if(node.hasAttribute('opacity')){
-   const opacity=numeric(node.getAttribute('opacity'));if(!(opacity>=0&&opacity<=1))return null;
+   const opacity=numeric(node.getAttribute('opacity'));if(!(opacity>=0&&opacity<=1))return reject('opacity');
   }
   if(node.localName==='image'){
-   if(node.children.length||!onlyAttrs(node,['x','y','width','height','preserveAspectRatio','href','xlink:href','filter','opacity']))return null;
+   if(node.children.length||!onlyAttrs(node,['x','y','width','height','preserveAspectRatio','href','xlink:href','filter','opacity']))return reject('image-attributes');
    const attrs=Array.from(node.attributes).filter(a=>a.localName==='href');
-   if(attrs.length!==1||!descriptors.length)return null;
+   if(attrs.length!==1||!descriptors.length)return reject('image-source');
    return {attr:attrs[0],descriptors,operations};
   }
   if(!isRhwpCropViewport(node)&&
-     (node.localName!=='g'||node.children.length!==1||!onlyAttrs(node,['filter','opacity'])))return null;
+     (node.localName!=='g'||node.children.length!==1||!onlyAttrs(node,['filter','opacity'])))return reject('wrapper-shape');
   node=node.children[0];
  }
- return null;
+ return reject('nesting-limit');
 }
 export async function applyRhwpImageEffectsRGBA(pixels,width,height,operations,signal,{
  yieldControl=defaultYield,chunkPixels=PIXELS_PER_TICK
@@ -616,12 +620,12 @@ export async function normalizeSvgGrayscale(svg,signal,{
  if(root.querySelector('style'))fail('SVG_FILTER_STYLESHEET_UNSUPPORTED');
  let sequence=0,filtersApplied=0,imagesChanged=0,grayImagePixels=0,grayImageBytes=0;
  const imageCache=new Map(),chargedImageKeys=new Set();
- const handled=new Set();
+ const handled=new Set(),rejections=new Map();
  // Process the outer wrapper first and bake nested colour operations in their
  // actual inner-to-outer order. Reuse the existing image budgets and decoder.
  for(const {el} of targets){
   if(handled.has(el))continue;
-  const plan=planRhwpImage(el,definitions);if(!plan)continue;
+  const plan=planRhwpImage(el,definitions,reason=>rejections.set(el,reason));if(!plan)continue;
   const raw=rasterUrl(plan.attr.value);if(!raw)fail('SVG_FILTER_IMAGE_EXTERNAL_RESOURCE');
   const mode='rhwp:'+JSON.stringify(plan.operations),key=mode+'\0'+raw;
   let preflight;
@@ -656,7 +660,12 @@ export async function normalizeSvgGrayscale(svg,signal,{
    const match=LOCAL_FILTER.exec(descriptor.value);
    if(!match)unsupportedFilter('css-or-external');
    const def=definitions.get(match[1]);const spec=identifyGrayFilter(def);
-   if(!spec)unsupportedFilter(unsupportedDefinition(def),def);
+   if(!spec){
+    const known=identifyRhwpImageEffect(def);
+    const reason=known?(rejections.get(el)||'recognized-target'):
+     def?.localName==='filter'&&/^rhwp-img-/.test(def.getAttribute('id')||'')?'rhwp-definition-mismatch':'unsupported-definition';
+    unsupportedFilter(unsupportedDefinition(def),def,reason);
+   }
    mode=spec.mode;
   }
   // Paint inherited from outside the filtered object remains coloured.
