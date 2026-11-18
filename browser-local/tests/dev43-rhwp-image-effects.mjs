@@ -70,7 +70,7 @@ test('unsupported regions, multiple drawables, wrong definitions and external so
 });
 test('QA build provenance and numeric PDFKit references never export private details',()=>{
  const r=buildLocalBatchQaReport([{file:{name:'private.hwp'},state:'failed',error:'PDF_STREAM_TIMEOUT (FINAL_BYTES_NO_END, emitted=1B) [integrity=PDF_OUTPUT_TRAILER_INCOMPLETE] [ref_waiting=3]'}]);
- assert.equal(r.build_revision,'DEV43');
+ assert.equal(r.build_revision,'DEV44');
  assert.equal(r.files[0].stream_pending_refs,3);
  assert.equal(localQaWriterPendingRefs('PDF_STREAM_TIMEOUT (NO_BYTES) [ref_waiting=999999]'),null);
  assert.equal(localQaFilterPrimitive('SVG_FILTER_EFFECT_UNSUPPORTED [primitive=component-transfer]'),'component-transfer');
@@ -83,4 +83,30 @@ test('QA build provenance and numeric PDFKit references never export private det
 test('bounded image transformation cancels without publishing PNG',async()=>{
  const ctrl=new AbortController(),pixels=new Uint8ClampedArray(8);
  await assert.rejects(applyRhwpImageEffectsRGBA(pixels,2,1,[{kind:'gray'}],ctrl.signal,{chunkPixels:1,yieldControl:async()=>ctrl.abort()}),e=>e.name==='AbortError');
+});
+
+test('DEV44 RHWP exact crop viewport preserves coordinates and neighboring vectors',async()=>{
+ const f=fakeImage();
+ const crop='<svg x="11" y="12" width="14" height="15" viewBox="0.25 0 0.5 1" preserveAspectRatio="none" overflow="hidden">'+image+'</svg>';
+ const result=await normalizeSvgGrayscale(svg(fx+bc,'<text>보존</text>'+wrap('rhwp-img-grayscale',wrap('rhwp-img-bc-b10c20',crop))),undefined,f.deps);
+ assert.equal(result.filtersApplied,2);assert.equal(result.imagesChanged,1);
+ const out=parse(result.svg),viewport=out.querySelector('svg svg');
+ assert.ok(viewport);assert.equal(viewport.getAttribute('viewBox'),'0.25 0 0.5 1');
+ assert.equal(viewport.getAttribute('overflow'),'hidden');
+ assert.deepEqual(['x','y','width','height'].map(k=>viewport.getAttribute(k)),['11','12','14','15']);
+ assert.equal(out.querySelector('text').textContent,'보존');
+ assert.equal(out.querySelectorAll('[filter],filter').length,0);
+ assert.deepEqual(f.stats(),{decoded:1,encoded:1,closed:1});
+});
+test('DEV44 non-RHWP viewports stay fail closed; no bitmap decode',async()=>{
+ for(const bad of [
+ '<svg x="0" y="0" width="10" height="10" viewBox="0 0 1 0" preserveAspectRatio="none">'+image+'</svg>',
+ '<svg x="0" y="0" width="10" height="10" viewBox="0 0 1 1" preserveAspectRatio="none" overflow="visible">'+image+'</svg>',
+ '<svg x="0" y="0" width="10" height="10" viewBox="0 0 1 1" preserveAspectRatio="none">'+image+'<rect width="1" height="1"/></svg>',
+ '<svg x="0" y="0" width="10" height="10" viewBox="0 0 1 1" preserveAspectRatio="none" style="color:red">'+image+'</svg>'
+ ]){
+  const f=fakeImage();
+  await assert.rejects(normalizeSvgGrayscale(svg(fx,wrap('rhwp-img-grayscale',bad)),undefined,f.deps),/SVG_FILTER_EFFECT_UNSUPPORTED/);
+  assert.equal(f.stats().decoded,0);
+ }
 });
