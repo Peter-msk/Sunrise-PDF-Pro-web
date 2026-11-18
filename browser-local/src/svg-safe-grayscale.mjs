@@ -65,9 +65,15 @@ function fail(reason){throw Error(reason);}
 const FILTER_KIND=new Set(['unsafe-identity-target','css-or-external','missing-definition',
  'multi-primitive','blur','blend','composite','displacement','other-primitive']);
 /** The category is a fixed vocabulary: no SVG markup, IDs, text or URLs. */
-function unsupportedFilter(category){
+function unsupportedFilter(category,definition=null){
  const error=Error('SVG_FILTER_EFFECT_UNSUPPORTED');
  error.filterCategory=FILTER_KIND.has(category)?category:'other-primitive';
+ // A bounded primitive family only; do not expose arbitrary markup or IDs.
+ if(definition?.localName==='filter'){
+  const kinds={feColorMatrix:'color-matrix',feComponentTransfer:'component-transfer',feGaussianBlur:'blur',feDropShadow:'blur',feBlend:'blend',feComposite:'composite',feDisplacementMap:'displacement'};
+  error.filterPrimitive=definition.children.length===1
+   ?(Object.hasOwn(kinds,definition.children[0].localName)?kinds[definition.children[0].localName]:'other'):'chain';
+ }
  throw error;
 }
 function unsupportedDefinition(def){
@@ -226,6 +232,102 @@ export function identifyIdentitySvgFilter(element){
    (dy===null||svgZero.test(dy.trim())&&Number(dy)===0);
  }
  return false;
+}
+// RHWP 0.8.7 svg.rs ensure_image_effect_filter / ensure_brightness_contrast_filter.
+// Recognize emitted specifications, not arbitrary SVG filter code or filter IDs alone.
+// Preserve the exact Rec.601 coefficients, default linearRGB and original alpha.
+const RHWP_GRAY=[.299,.587,.114,0,0,.299,.587,.114,0,0,.299,.587,.114,0,0,0,0,0,1,0];
+const DECIMAL=/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+const numeric=v=>typeof v==='string'&&DECIMAL.test(v.trim())?Number(v):NaN;
+const onlyAttrs=(el,names)=>Array.from(el.attributes||[]).every(a=>names.includes(a.name));
+function exactGray(node){
+ if(node?.localName!=='feColorMatrix'||node.children.length||!onlyAttrs(node,['type','values'])||node.getAttribute('type')!=='matrix')return false;
+ const a=(node.getAttribute('values')||'').trim().split(/[\s,]+/).map(numeric);
+ return a.length===20&&a.every((v,i)=>v===RHWP_GRAY[i]);
+}
+function rhwpTransfer(node,discrete){
+ if(node?.localName!=='feComponentTransfer'||node.attributes.length||node.children.length!==3)return null;
+ const kids=Array.from(node.children);
+ if(kids.map(k=>k.localName).join(',')!=='feFuncR,feFuncG,feFuncB'||kids.some(k=>k.children.length))return null;
+ if(discrete)return kids.every(k=>onlyAttrs(k,['type','tableValues'])&&k.getAttribute('type')==='discrete'&&
+  (k.getAttribute('tableValues')||'').trim().split(/[\s,]+/).join(' ')==='0 1')?{kind:'threshold'}:null;
+ if(kids.some(k=>!onlyAttrs(k,['type','slope','intercept'])||k.getAttribute('type')!=='linear'))return null;
+ const slope=numeric(kids[0].getAttribute('slope')),intercept=numeric(kids[0].getAttribute('intercept'));
+ if(!(slope>=0&&slope<=2&&intercept>=-1.5&&intercept<=1.5)||
+  kids.some(k=>numeric(k.getAttribute('slope'))!==slope||numeric(k.getAttribute('intercept'))!==intercept))return null;
+ return {kind:'linear',slope,intercept};
+}
+export function identifyRhwpImageEffect(def){
+ if(def?.localName!=='filter'||!onlyAttrs(def,['id']))return null;
+ const id=def.getAttribute('id')||'',kids=Array.from(def.children);
+ if(id==='rhwp-img-grayscale'&&kids.length===1&&exactGray(kids[0]))return [{kind:'gray'}];
+ if(id==='rhwp-img-blackwhite'&&kids.length===2&&exactGray(kids[0])&&rhwpTransfer(kids[1],true))
+  return [{kind:'gray'},{kind:'threshold'}];
+ const m=/^rhwp-img-bc-b(-?\d{1,3})c(-?\d{1,3})$/.exec(id);
+ if(!m||kids.length!==1)return null;
+ const b=Number(m[1]),c=Number(m[2]),effect=rhwpTransfer(kids[0],false);
+ if(!effect||Math.abs(b)>100||Math.abs(c)>100||
+  Math.abs(effect.slope-(100+c)/100)>1e-9||
+  Math.abs(effect.intercept-(.5-.5*(100+c)/100+b/100))>1e-9)return null;
+ return [effect];
+}
+// The source is one existing raster image, not a page or vector object.
+// Only an unstyled one-child chain of RHWP filter / opacity wrappers is
+// accepted. No custom regions, clip/mask, use, blend, CSS or additional
+// drawable siblings can be simplified by this path.
+function planRhwpImage(target,definitions){
+ if(target.closest('defs,mask,clipPath,pattern,marker'))return null;
+ for(let p=target.parentElement;p;p=p.parentElement){
+  if(getFilter(p).value&&getFilter(p).value!=='none')return null;
+  if(['class','style','mask','mix-blend-mode','isolation','color-interpolation-filters'].some(a=>p.hasAttribute(a)))return null;
+ }
+ const descriptors=[],operations=[];
+ let node=target;
+ for(let depth=0;depth<12;depth++){
+  const descriptor=getFilter(node);
+  if(descriptor.value){
+   const ref=LOCAL_FILTER.exec(descriptor.value),spec=ref&&identifyRhwpImageEffect(definitions.get(ref[1]));
+   if(!descriptor.attr||!spec)return null;
+   descriptors.push({el:node,descriptor});
+   operations.unshift(...spec);
+  }
+  if(node.hasAttribute('opacity')){
+   const opacity=numeric(node.getAttribute('opacity'));if(!(opacity>=0&&opacity<=1))return null;
+  }
+  if(node.localName==='image'){
+   if(node.children.length||!onlyAttrs(node,['x','y','width','height','preserveAspectRatio','href','xlink:href','filter','opacity']))return null;
+   const attrs=Array.from(node.attributes).filter(a=>a.localName==='href');
+   if(attrs.length!==1||!descriptors.length)return null;
+   return {attr:attrs[0],descriptors,operations};
+  }
+  if(node.localName!=='g'||node.children.length!==1||!onlyAttrs(node,['filter','opacity']))return null;
+  node=node.children[0];
+ }
+ return null;
+}
+export async function applyRhwpImageEffectsRGBA(pixels,width,height,operations,signal,{
+ yieldControl=defaultYield,chunkPixels=PIXELS_PER_TICK
+}={}){
+ if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||width*height>PIXEL_CAP||
+  pixels?.length!==width*height*4||!Number.isSafeInteger(chunkPixels)||chunkPixels<1||
+  !Array.isArray(operations)||!operations.length||operations.length>24||
+  operations.some(o=>!['gray','threshold','linear'].includes(o?.kind)||(o.kind==='linear'&&
+   (!(o.slope>=0&&o.slope<=2)||!(o.intercept>=-1.5&&o.intercept<=1.5)))))fail('SVG_FILTER_IMAGE_DATA_INVALID');
+ const clamp=v=>Math.max(0,Math.min(1,v));
+ for(let start=0;start<pixels.length;start+=4*chunkPixels){
+  checkAbort(signal);const end=Math.min(start+4*chunkPixels,pixels.length);
+  for(let i=start;i<end;i+=4){
+   let r=LINEAR_LUT[pixels[i]],g=LINEAR_LUT[pixels[i+1]],b=LINEAR_LUT[pixels[i+2]];
+   for(const op of operations){
+    if(op.kind==='gray')r=g=b=.299*r+.587*g+.114*b;
+    else if(op.kind==='threshold'){r=r>=.5?1:0;g=g>=.5?1:0;b=b>=.5?1:0;}
+    else {r=clamp(r*op.slope+op.intercept);g=clamp(g*op.slope+op.intercept);b=clamp(b*op.slope+op.intercept);}
+   }
+   pixels[i]=toSrgb(r);pixels[i+1]=toSrgb(g);pixels[i+2]=toSrgb(b);
+  }
+  if(end<pixels.length){await yieldControl();checkAbort(signal);}
+ }
+ return pixels;
 }
 const IDENTITY_LEAVES=new Set(['rect','circle','ellipse','path','polygon','text']);
 function isSafeIdentityTarget(el){
@@ -409,7 +511,7 @@ export async function grayscaleImageDataRGBA(pixels,width,height,mode,signal,{
 }
 
 async function grayImage(data,mode,{
- signal,decode,makeCanvas,toDataURL,cache,preflight,
+ signal,decode,makeCanvas,toDataURL,cache,preflight,effects=null,
  decodeTimeoutMs=IMAGE_DECODE_TIMEOUT_MS,encodeTimeoutMs=IMAGE_ENCODE_TIMEOUT_MS,
  yieldControl=defaultYield
 }){
@@ -429,7 +531,8 @@ async function grayImage(data,mode,{
   canvas=makeCanvas();canvas.width=w;canvas.height=h;
   const ctx=canvas.getContext('2d',{willReadFrequently:true});if(!ctx)fail('SVG_FILTER_CANVAS_UNAVAILABLE');
   ctx.drawImage(bitmap,0,0);const img=ctx.getImageData(0,0,w,h);
-  await grayscaleImageDataRGBA(img.data,w,h,mode,signal,{yieldControl});
+  if(effects)await applyRhwpImageEffectsRGBA(img.data,w,h,effects,signal,{yieldControl});
+  else await grayscaleImageDataRGBA(img.data,w,h,mode,signal,{yieldControl});
   checkAbort(signal);ctx.putImageData(img,0,0);
   const blob=await waitForImageOperation(new Promise((ok,bad)=>
    canvas.toBlob(x=>x?ok(x):bad(Error('SVG_FILTER_IMAGE_ENCODE_FAILED')),'image/png')),
@@ -499,8 +602,31 @@ export async function normalizeSvgGrayscale(svg,signal,{
  if(root.querySelector('style'))fail('SVG_FILTER_STYLESHEET_UNSUPPORTED');
  let sequence=0,filtersApplied=0,imagesChanged=0,grayImagePixels=0,grayImageBytes=0;
  const imageCache=new Map(),chargedImageKeys=new Set();
+ const handled=new Set();
+ // Process the outer wrapper first and bake nested colour operations in their
+ // actual inner-to-outer order. Reuse the existing image budgets and decoder.
+ for(const {el} of targets){
+  if(handled.has(el))continue;
+  const plan=planRhwpImage(el,definitions);if(!plan)continue;
+  const raw=rasterUrl(plan.attr.value);if(!raw)fail('SVG_FILTER_IMAGE_EXTERNAL_RESOURCE');
+  const mode='rhwp:'+JSON.stringify(plan.operations),key=mode+'\0'+raw;
+  let preflight;
+  if(!chargedImageKeys.has(key)){
+   preflight=inspectEmbeddedRaster(raw);
+   grayImagePixels=accumulateGrayImagePixels(grayImagePixels,preflight.width,preflight.height);
+   grayImageBytes=accumulateGrayImageBytes(grayImageBytes,preflight.byteLength);
+   chargedImageKeys.add(key);
+  }
+  if(imagesChanged>=IMAGE_LIMIT)fail('SVG_FILTER_IMAGE_COUNT_LIMIT');
+  plan.attr.value=await grayImage(raw,mode,{signal,decode,makeCanvas,
+   toDataURL:imageToDataURL,cache:imageCache,preflight,effects:plan.operations});
+  for(const entry of plan.descriptors){setNoFilter(entry.el,entry.descriptor);handled.add(entry.el);filtersApplied++;}
+  imagesChanged++;
+ }
+
  // Commit is atomic: mutations are only serialized if all targets succeeded.
  for(const {el,descriptor} of targets){
+  if(handled.has(el))continue;
   checkAbort(signal);
   if(descriptor.value==='none'){setNoFilter(el,descriptor);continue;}
   const reference=LOCAL_FILTER.exec(descriptor.value);
@@ -516,7 +642,7 @@ export async function normalizeSvgGrayscale(svg,signal,{
    const match=LOCAL_FILTER.exec(descriptor.value);
    if(!match)unsupportedFilter('css-or-external');
    const def=definitions.get(match[1]);const spec=identifyGrayFilter(def);
-   if(!spec)unsupportedFilter(unsupportedDefinition(def));
+   if(!spec)unsupportedFilter(unsupportedDefinition(def),def);
    mode=spec.mode;
   }
   // Paint inherited from outside the filtered object remains coloured.

@@ -7,7 +7,7 @@ import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
-import {buildLocalBatchQaReport} from './local-batch-qa.mjs';
+import {buildLocalBatchQaReport,QA_BUILD_REVISION,qaDeploymentChannel} from './local-batch-qa.mjs';
 import {canRecoverFile,planConversion,planBulkRecovery,planSingleRetry,localFailureAdvice,recoveryEngine,recoveryCode} from './conversion-recovery.mjs';
 import {requestLocalFontAccess} from './local-fonts.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
@@ -18,6 +18,8 @@ const USE_PC_FONTS_BY_DEFAULT=true;
 // success must not be thrown away and queried again after the tab is hidden.
 let verifiedPcFontData=null;
 const $=id=>document.getElementById(id);
+// Mark the actually executing JS bundle, not the HTML shell or the saved report date.
+$('qa-export').textContent='실기 검증 보고서 저장 · '+QA_BUILD_REVISION+' ('+qaDeploymentChannel()+')';
 const conversionClock=createConversionClock();
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;

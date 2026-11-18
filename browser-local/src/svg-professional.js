@@ -488,7 +488,9 @@ export async function tryProfessionalDocument(hwpDoc,count,{
         error.message='PDF_STREAM_TIMEOUT ('+reason+', emitted='+bytes+
           'B, final='+finalBytes+'B/'+finalChunks+'chunks'+
           (sinceLast===null?'':', idle='+sinceLast+'ms')+')'+
-          ' [integrity='+(terminalProbe.lastValidationError||'PDF_OUTPUT_VALIDATION_NOT_RUN')+']';
+          ' [integrity='+(terminalProbe.lastValidationError||'PDF_OUTPUT_VALIDATION_NOT_RUN')+']'+
+          (Number.isSafeInteger(pdf._waiting)&&pdf._waiting>=0&&pdf._waiting<=100000
+           ?' [ref_waiting='+pdf._waiting+']':'');
         throw error;
         }
       }else throw error;

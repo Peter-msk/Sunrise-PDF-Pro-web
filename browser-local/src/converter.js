@@ -263,7 +263,8 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
        };
        const category=Object.hasOwn(names,error?.filterCategory)
          ?names[error.filterCategory]:'미확인 효과';
-       throw Error((meta.page||1)+'쪽에서 미지원 SVG 필터가 발견됐습니다 (SVG_FILTER_EFFECT_UNSUPPORTED; 분류: '+category+'). 혼합 출력 또는 이미지 PDF를 명시적으로 선택하세요.');
+       const primitive=['color-matrix','component-transfer','chain','blur','blend','composite','displacement','other'].includes(error.filterPrimitive)?' [primitive='+error.filterPrimitive+']':'';
+       throw Error((meta.page||1)+'쪽에서 미지원 SVG 필터가 발견됐습니다 (SVG_FILTER_EFFECT_UNSUPPORTED; 분류: '+category+'). 혼합 출력 또는 이미지 PDF를 명시적으로 선택하세요.'+primitive);
       }
       throw error;
      }

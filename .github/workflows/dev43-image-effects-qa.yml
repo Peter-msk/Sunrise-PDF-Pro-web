@@ -1,0 +1,31 @@
+name: DEV43 actual RHWP image effect QA
+on:
+  push:
+    branches:
+      - fix/dev43-rhwp-image-effects-20261118
+    paths:
+      - .github/workflows/dev43-image-effects-qa.yml
+permissions:
+  contents: read
+jobs:
+  selected-node-and-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Install pinned dependencies
+        run: npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund
+      - name: Targeted Node regression
+        run: npm --prefix browser-local run test:dev43
+      - name: Install Chromium
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Real browser pixels and PDFKit completion
+        run: npm --prefix browser-local run test:dev43:browser
