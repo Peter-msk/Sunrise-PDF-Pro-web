@@ -3,7 +3,7 @@
  * bytes, PDF contents, font names or complete filenames. No network access.
  */
 // Explicit app marker: older v1 reports lack this field, even if saved later.
-export const QA_BUILD_REVISION='DEV43';
+export const QA_BUILD_REVISION='DEV44';
 export function qaDeploymentChannel(host=globalThis.location?.hostname){
  if(host==='sunrise-pdf-pro-web-dev41-qa.ko-pg.workers.dev')return 'qa';
  if(host==='sunrise-pdf-pro-web.ko-pg.workers.dev')return 'production';
