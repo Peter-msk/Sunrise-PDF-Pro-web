@@ -1,0 +1,34 @@
+name: DEV46 RHWP 0.9.0 baked tone browser QA
+on:
+  push:
+    branches:
+      - fix/dev46-rhwp-090-real-qa-20261118
+    paths:
+      - .github/workflows/dev46-baked-tone-qa.yml
+permissions:
+  contents: read
+jobs:
+  actual-effects:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned dependencies
+        run: npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund
+      - name: New tone oracle only
+        run: node --test browser-local/tests/dev46-baked-tone.test.mjs
+      - name: Prepare verified engine parts and approved fonts
+        working-directory: browser-local
+        run: |
+          node scripts/copy-wasm.mjs
+          node scripts/install-safe-fonts.mjs
+      - name: Install Chromium
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Actual four HWPX effects and PDF output
+        run: npm --prefix browser-local run test:dev44:browser

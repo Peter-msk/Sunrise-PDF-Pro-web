@@ -61,10 +61,10 @@ try{
  assert.equal(label,'DEV46 (local)');
  const evidence=[];
  for(let i=0;i<samples.length;i++){
-  const probe=await page.evaluate(async ({data,verifyBlackwhite})=>{
+  const probe=await page.evaluate(async ({data,mode})=>{
    const {inspectPublicFixture}=await import('/tests/dev44-engine-probe.mjs');
-   return inspectPublicFixture(data,verifyBlackwhite);
-  },{data:Array.from(samples[i].buffer),verifyBlackwhite:variants[i].name==='blackwhite'});
+   return inspectPublicFixture(data,mode);
+  },{data:Array.from(samples[i].buffer),mode:['blackwhite','brightness-contrast'].includes(variants[i].name)?variants[i].name:null});
   evidence.push({name:variants[i].name,altered:samples[i].altered,crops:samples[i].crops,...probe});
  }
  console.log('RHWP_ENGINE_EVIDENCE '+JSON.stringify(evidence));
@@ -80,13 +80,21 @@ try{
  assert.ok(bw.pixels>0&&bw.black>0&&bw.white>0&&bw.changed>0,JSON.stringify(bw));
  assert.equal(bw.mismatched,0,JSON.stringify(bw));
  assert.equal(bw.alphaMismatch,0,JSON.stringify(bw));
- assert.ok(evidence[2].effects.includes('rhwp-img-bc-b10c20'));
+ // RHWP 0.9.0 bakes this RealPic tone into PNG, rather than emitting an SVG filter.
+ const tone=evidence[2].baked;
+ assert.ok(tone,'missing baked brightness/contrast evidence');
+ assert.deepEqual(evidence[2].effects,[],'double application of baked tone');
+ assert.equal(tone.images,evidence[2].altered,'tone image count mismatch');
+ assert.equal(tone.pngImages,tone.images,'baked tone is not PNG');
+ assert.ok(tone.visible>0&&tone.changed>0,JSON.stringify(tone));
+ assert.equal(tone.mismatched,0,JSON.stringify(tone));
+ assert.equal(tone.alphaMismatch,0,JSON.stringify(tone));
  assert.ok(evidence[3].effects.includes('rhwp-img-grayscale'));
  assert.ok(evidence[3].cropViewports>0,'RHWP did not actually emit an inner crop viewport');
  await page.locator('#source').setInputFiles(samples.map(({name,mimeType,buffer})=>({name,mimeType,buffer})));
  assert.equal(await page.locator('#pdf-engine').inputValue(),'professional');
  await page.locator('#convert').click();
- await page.waitForFunction(()=>Number(document.querySelector('#done-count')?.textContent||0)+Number(document.querySelector('#failed-count')?.textContent||0)===4,null,{timeout:60000}).catch(()=>{});
+ await page.waitForFunction(()=>Number(document.querySelector('#done-count')?.textContent||0)+Number(document.querySelector('#failed-count')?.textContent||0)===4,null,{timeout:180000});
  const exported=page.waitForEvent('download');
  await page.locator('#qa-export').click();
  const qaDownload=await exported;
@@ -110,5 +118,5 @@ try{
   output.push({name:variants[i].name,pages:pdf.getPageCount(),bytes:bytes.length});
  }
  assert.deepEqual(errors,[]);
- console.log('DEV44_FULL_BROWSER_PASS '+JSON.stringify(output));
+ console.log('DEV46_FULL_BROWSER_PASS '+JSON.stringify(output));
 }finally{await browser?.close();await server.close();}
