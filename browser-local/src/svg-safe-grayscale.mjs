@@ -65,9 +65,15 @@ function fail(reason){throw Error(reason);}
 const FILTER_KIND=new Set(['unsafe-identity-target','css-or-external','missing-definition',
  'multi-primitive','blur','blend','composite','displacement','other-primitive']);
 /** The category is a fixed vocabulary: no SVG markup, IDs, text or URLs. */
-function unsupportedFilter(category){
+function unsupportedFilter(category,definition=null){
  const error=Error('SVG_FILTER_EFFECT_UNSUPPORTED');
  error.filterCategory=FILTER_KIND.has(category)?category:'other-primitive';
+ // A bounded primitive family only; do not expose arbitrary markup or IDs.
+ if(definition?.localName==='filter'){
+  const kinds={feColorMatrix:'color-matrix',feComponentTransfer:'component-transfer',feGaussianBlur:'blur',feDropShadow:'blur',feBlend:'blend',feComposite:'composite',feDisplacementMap:'displacement'};
+  error.filterPrimitive=definition.children.length===1
+   ?(Object.hasOwn(kinds,definition.children[0].localName)?kinds[definition.children[0].localName]:'other'):'chain';
+ }
  throw error;
 }
 function unsupportedDefinition(def){
@@ -636,7 +642,7 @@ export async function normalizeSvgGrayscale(svg,signal,{
    const match=LOCAL_FILTER.exec(descriptor.value);
    if(!match)unsupportedFilter('css-or-external');
    const def=definitions.get(match[1]);const spec=identifyGrayFilter(def);
-   if(!spec)unsupportedFilter(unsupportedDefinition(def));
+   if(!spec)unsupportedFilter(unsupportedDefinition(def),def);
    mode=spec.mode;
   }
   // Paint inherited from outside the filtered object remains coloured.
