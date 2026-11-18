@@ -1,14 +1,15 @@
 /**
  * Stage-1 LOCAL E2E: start the freshly built Vite output, boot the actual
  * @rhwp/core WASM in a headless Chromium-compatible browser, verify that no
- * request leaves localhost. Does NOT load or transmit any user document.
+ * request leaves localhost using the public MIT HWPX fixture only.
  * Use after `npm run build`: `npm run test:wasm`.
  */
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright';
+import {PDFDocument} from 'pdf-lib';
 import {RHWP_PARTS} from '../src/rhwp-engine.mjs';
 
 const root = resolve(import.meta.dirname, '..');
@@ -77,7 +78,7 @@ try {
   const launched = await launchInstalledBrowser();
   browser = launched.instance;
   result.browser = launched.channel;
-  context = await browser.newContext({ serviceWorkers: 'block' });
+  context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads:true });
   const page = await context.newPage();
   const blocked = [];
   const pageErrors = [];
@@ -95,14 +96,28 @@ try {
     return route.abort('blockedbyclient');
   });
   await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.waitForFunction(() => {
-    const status = document.getElementById('status')?.textContent || '';
-    return /초기화 (완료|실패)/.test(status);
-  }, null, { timeout: 90000 });
-  result.appStatus = await page.locator('#status').innerText();
-  if (!result.appStatus.includes('초기화 완료'))
-    throw Error('Real rhwp WASM failed to initialize: ' + result.appStatus);
-  result.assertions.push('real rhwp WASM initialization succeeded');
+  await page.waitForFunction(()=>document.querySelector('#status')?.textContent.includes('변환 준비 완료'),null,{timeout:30000});
+  if (!await page.locator('#convert').isDisabled())throw Error('Convert enabled without a selected input');
+  result.assertions.push('UI booted with safe initial state');
+  if(wasmResponses.length)throw Error('Unexpected eager WASM fetch before selection');
+  // DEV36 intentionally lazy-initializes WASM on the first conversion.
+  const fixture=Buffer.from(readFileSync(new URL('./fixtures/dev44-rhwp-test-image.hwpx.b64',import.meta.url),'utf8').trim(),'base64');
+  await page.locator('#source').setInputFiles({name:'public-fixture.hwpx',mimeType:'application/zip',buffer:fixture});
+  await page.locator('#convert').click();
+  await page.waitForFunction(()=>Number(document.querySelector('#done-count')?.textContent||0)+Number(document.querySelector('#failed-count')?.textContent||0)===1,null,{timeout:90000});
+  const exported=page.waitForEvent('download');
+  await page.locator('#qa-export').click();
+  const qa=JSON.parse(readFileSync(await (await exported).path(),'utf8'));
+  result.appStatus=await page.locator('#status').innerText();
+  result.qa={build_revision:qa.build_revision,rhwp_version:qa.rhwp_version,totals:qa.totals,files:qa.files};
+  if(qa.rhwp_version!=='0.9.0')throw Error('Verified RHWP 0.9.0 failed to initialize');
+  result.assertions.push('real RHWP 0.9.0 initialization succeeded');
+  if(qa.totals.done!==1||qa.totals.failed!==0)throw Error('Built app public fixture conversion failed: '+JSON.stringify(result.qa));
+  const downloaded=page.waitForEvent('download');
+  await page.locator('#file-list a.download').click();
+  const pdf=await PDFDocument.load(readFileSync(await (await downloaded).path()));
+  if(pdf.getPageCount()!==qa.files[0].pages||qa.files[0].raster_pages!==0)throw Error('Built app PDF page/engine mismatch');
+  result.assertions.push('built app converted public HWPX and downloaded PDF with matching vector page count');
   result.wasmResponses = wasmResponses;
   if (!RHWP_PARTS.every(p=>wasmResponses.some(r=>r.status===200 && new URL(r.url).origin===origin && new URL(r.url).pathname.endsWith('/'+p.name))))
     throw Error('WASM was not fetched successfully from localhost');
@@ -110,9 +125,6 @@ try {
   if (pageErrors.length) throw Error('Browser JS error: ' + pageErrors.join(' | '));
   if (blocked.length) throw Error('Unexpected external request: ' + [...new Set(blocked)].join(', '));
   result.assertions.push('no browser JavaScript exceptions or external network requests');
-  if (!await page.locator('#convert').isDisabled())
-    throw Error('Convert button is enabled without a selected input document');
-  result.assertions.push('UI booted with safe initial state');
   result.status = 'PASS';
 } catch (error) {
   result.error = String(error?.message || error).slice(0,1500);

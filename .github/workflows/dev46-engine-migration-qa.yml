@@ -35,7 +35,7 @@ jobs:
       - name: Install Chromium
         working-directory: browser-local
         run: npx playwright install --with-deps chromium
-      - name: Real pinned WASM boot and HWPX conversion
+      - name: Real pinned WASM boot at first conversion and HWPX output
         working-directory: browser-local
         run: |
           npm run test:wasm
