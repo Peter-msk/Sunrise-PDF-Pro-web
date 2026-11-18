@@ -1,0 +1,31 @@
+name: DEV46 RHWP 0.9.0 official package evidence
+on:
+  push:
+    branches:
+      - fix/dev46-rhwp-090-real-qa-20261118
+    paths:
+      - .github/workflows/dev46-engine-acquisition.yml
+permissions:
+  contents: read
+jobs:
+  official-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Acquire and verify official package (no deploy)
+        working-directory: browser-local
+        run: |
+          set -o pipefail
+          npm run inspect:rhwp090 | tee /tmp/rhwp090-evidence.txt
+      - name: Upload package metadata only
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev46-rhwp090-evidence
+          path: /tmp/rhwp090-evidence.txt
+          retention-days: 7
