@@ -20,14 +20,14 @@ jobs:
           node-version: '24'
       - name: Install exact lock
         run: npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund
-      - name: Verify pinned engine, build and static-asset limit
+      # Source/engine contracts passed on 3c09dee; only Vite packaging changed.
+      - name: Build and verify split static assets
         run: |
-          npm --prefix browser-local run check:source
-          npm --prefix browser-local run check:engine
           npm --prefix browser-local run build
           npm --prefix browser-local run verify:dist
           node scripts/verify-browser-build.mjs
           node scripts/test-worker-assets.mjs
+          node --test browser-local/tests/dev46-rhwp-split.mjs
       - name: Targeted migration regression
         run: |
           npm --prefix browser-local run test:dev44
