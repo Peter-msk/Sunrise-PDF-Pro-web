@@ -19,7 +19,10 @@ const USE_PC_FONTS_BY_DEFAULT=true;
 let verifiedPcFontData=null;
 const $=id=>document.getElementById(id);
 // Mark the actually executing JS bundle, not the HTML shell or the saved report date.
-$('qa-export').textContent='실기 검증 보고서 저장 · '+QA_BUILD_REVISION+' ('+qaDeploymentChannel()+')';
+const buildLabel=QA_BUILD_REVISION+' ('+qaDeploymentChannel()+')';
+$('qa-export').textContent='실기 검증 보고서 저장 · '+buildLabel;
+$('build-revision').textContent=buildLabel;
+document.title+=' · '+buildLabel;
 const conversionClock=createConversionClock();
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
@@ -346,7 +349,7 @@ $('qa-export').addEventListener('click',()=>{
    {type:'application/json'}));
   const link=document.createElement('a');
   link.href=url;
-  link.download='Sunrise_PDF_PRO_Web_QA_'+
+  link.download='Sunrise_PDF_PRO_Web_QA_'+QA_BUILD_REVISION+'_'+qaDeploymentChannel()+'_' +
    report.generated_at.replace(/[-:T]/g,'').slice(0,14)+'.json';
   document.body.append(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
