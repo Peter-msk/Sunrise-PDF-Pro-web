@@ -1,0 +1,36 @@
+name: DEV44 actual HWPX image and crop QA
+on:
+  push:
+    branches:
+      - fix/dev44-rhwp-crop-and-build-identity-20261118
+    paths:
+      - .github/workflows/dev44-real-hwpx.yml
+permissions:
+  contents: read
+jobs:
+  regression-and-real-hwpx:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Install pinned dependencies
+        run: npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund
+      - name: Targeted regression
+        run: npm --prefix browser-local run test:dev44
+      - name: Prepare pinned WASM and bundled fonts
+        working-directory: browser-local
+        run: |
+          node scripts/copy-wasm.mjs
+          node scripts/install-safe-fonts.mjs
+      - name: Install Chromium
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Actual HWPX to browser UI to PDF downloads
+        run: npm --prefix browser-local run test:dev44:browser

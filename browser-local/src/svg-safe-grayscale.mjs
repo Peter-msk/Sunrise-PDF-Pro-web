@@ -272,9 +272,22 @@ export function identifyRhwpImageEffect(def){
  return [effect];
 }
 // The source is one existing raster image, not a page or vector object.
-// Only an unstyled one-child chain of RHWP filter / opacity wrappers is
-// accepted. No custom regions, clip/mask, use, blend, CSS or additional
-// drawable siblings can be simplified by this path.
+// Only an unstyled one-child chain of RHWP filter / opacity wrappers and
+// the exact single-image crop viewport is accepted. No custom filters,
+// masks, external resources, CSS or additional drawable siblings.
+// RHWP 0.8.7 emits an inner viewport for a cropped picture (render_image).
+// It contains exactly one image. Do not flatten the viewBox, remove clipping,
+// or broaden the filter path to arbitrary SVG groups or rendered vector nodes.
+function isRhwpCropViewport(node){
+ if(node.localName!=='svg'||node.children.length!==1||node.children[0].localName!=='image'||
+  !onlyAttrs(node,['x','y','width','height','viewBox','preserveAspectRatio','overflow'])||
+  node.getAttribute('preserveAspectRatio')!=='none'||
+  (node.hasAttribute('overflow')&&node.getAttribute('overflow')!=='hidden'))return false;
+ const box=(node.getAttribute('viewBox')||'').trim().split(/[\s,]+/).map(numeric);
+ const [x,y,w,h]=['x','y','width','height'].map(k=>numeric(node.getAttribute(k)));
+ return box.length===4&&box.every(Number.isFinite)&&box[2]>0&&box[3]>0&&
+  [x,y,w,h].every(Number.isFinite)&&w>0&&h>0;
+}
 function planRhwpImage(target,definitions){
  if(target.closest('defs,mask,clipPath,pattern,marker'))return null;
  for(let p=target.parentElement;p;p=p.parentElement){
@@ -300,7 +313,8 @@ function planRhwpImage(target,definitions){
    if(attrs.length!==1||!descriptors.length)return null;
    return {attr:attrs[0],descriptors,operations};
   }
-  if(node.localName!=='g'||node.children.length!==1||!onlyAttrs(node,['filter','opacity']))return null;
+  if(!isRhwpCropViewport(node)&&
+     (node.localName!=='g'||node.children.length!==1||!onlyAttrs(node,['filter','opacity'])))return null;
   node=node.children[0];
  }
  return null;
