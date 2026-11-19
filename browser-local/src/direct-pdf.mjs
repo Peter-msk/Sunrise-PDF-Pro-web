@@ -1,9 +1,10 @@
 /** DEV52 experimental direct PageLayerTree adapter. No SVG and no network.
  * Verified against rhwp v0.9.0 source c9095c5f67632e6721e800ccc7fb43ea49d26682.
- * This is an intentionally narrow geometry-only prototype, NOT a production
+ * DEV53 adds opt-in narrow text replay. NOT a production
  * renderer. Unknown operations never become blank or partial successful PDFs.
  */
 import {MAX_CONVERSION_PAGES} from './page-limit.mjs';
+import {planDirectText,prepareDirectText} from './direct-text.mjs';
 const SCHEMA_MINOR=35,RESOURCE_MINOR=6,PT=.75;
 const MAX_JSON=32*1024*1024,MAX_NODES=60000,MAX_OPS=100000,MAX_DEPTH=128;
 const error=code=>{throw Error('DIRECT_PDF_'+code);};
@@ -32,9 +33,10 @@ export function readDirectPage(doc,index){
 // Streaming traversal: preserve upstream child/operation order. Collect
 // paint planes separately; no arbitrary z-order interpretation. Clip geometry
 // deliberately blocks the prototype until clipping replay is implemented.
-export function inspectDirectPage(tree){
+export function inspectDirectPage(tree,{allowText=false}={}){
  let nodes=0,operations=0,textRuns=0,clips=0,svgReferences=0;
- const types=new Map(), fonts=new Set(), blockers=new Set(),rectangles=[];
+ const types=new Map(), fonts=new Set(), blockers=new Set(),rectangles=[],paint=[];
+ let glyphCount=0;
  const stack=[{node:tree.root,depth:0,layer:null}];
  while(stack.length){
   const {node,depth,layer}=stack.pop();
@@ -60,18 +62,24 @@ export function inspectDirectPage(tree){
       textRuns++;
       const family=op.style?.fontFamily;
       if(typeof family==='string'&&family.length<=256&&fonts.size<1024)fonts.add(family);
+      if(allowText){
+       try{const plan=planDirectText(op);glyphCount+=plan.glyphs.length;
+        if(glyphCount>50000)error('TEXT_BUDGET');paint.push(plan);
+       }catch(e){if(!String(e.message).startsWith('DIRECT_PDF_TEXT_'))throw e;blockers.add(e.message);}
+       continue;
+      }
      }
      if(op.type!=='rectangle'&&op.type!=='pageBackground'){blockers.add('operation');continue;}
      const rectangle=rectanglePlan(op);
      if(!rectangle){blockers.add('rectangle-style');continue;}
-     rectangles.push(rectangle);
+     rectangles.push(rectangle);paint.push({...rectangle,kind:'rectangle'});
     }
     break;
    default:error('NODE_KIND');
   }
  }
  return {width:tree.pageWidth,height:tree.pageHeight,nodes,operations,textRuns,clips,svgReferences,
-  operationCounts:Object.fromEntries(types),fontFamilies:[...fonts],blockers:[...blockers],rectangles};
+  operationCounts:Object.fromEntries(types),fontFamilies:[...fonts],blockers:[...blockers],rectangles,paint,glyphCount};
 }
 const color=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
 function rectanglePlan(op){
@@ -92,20 +100,35 @@ function rectanglePlan(op){
 }
 // DEV52: caller-owned RHWP document; do not free or mutate it. Reject ALL
 // unsupported pages before returning bytes. PDF-lib is already a dependency.
-export async function buildDirectGeometryPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib')}={}){
+export async function buildDirectGeometryPdf(doc,options={}){
+ return buildDirectPdf(doc,{...options,resolveFont:undefined});
+}
+// DEV53 remains opt-in. The production converter is not connected.
+export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
  const count=pageCount(doc);cancel(signal);
  const {PDFDocument,rgb}=await loadPdf();
  const pdf=await PDFDocument.create();
  const toColor=hex=>rgb(...[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255));
- let rendered=0;
+ const allowText=typeof resolveFont==='function',cache=new Map();
+ let fontkit,rendered=0,textRuns=0,glyphCount=0;
  for(let i=0;i<count;i++){
   cancel(signal);
-  const plan=inspectDirectPage(readDirectPage(doc,i));
+  const plan=inspectDirectPage(readDirectPage(doc,i),{allowText});
+  if(glyphCount+plan.glyphCount>200000)error('DOCUMENT_TEXT_BUDGET');
   if(plan.blockers.length)error('UNSUPPORTED_PAGE_'+(i+1)+':'+plan.blockers.join(','));
   const page=pdf.addPage([plan.width*PT,plan.height*PT]);
   // Stable order inside each plane. Coordinate conversion once, at PDF boundary.
-  for(const plane of [0,1])for(const r of plan.rectangles){
-   if(r.plane!==plane||(!r.fill&&!r.stroke))continue;
+  for(const plane of [0,1])for(const r of plan.paint){
+   if(r.plane!==plane)continue;
+   if(r.kind==='text'){
+    cancel(signal);
+    if(!fontkit){fontkit=await loadFontkit();pdf.registerFontkit(fontkit);}
+    const font=await prepareDirectText(pdf,r,resolveFont,fontkit,cache);
+    cancel(signal);
+    for(const g of r.glyphs)page.drawText(g.ch,{font,size:r.size*PT,x:g.x*PT,y:(plan.height-g.y)*PT,color:toColor(r.color)});
+    textRuns++;glyphCount+=r.glyphs.length;continue;
+   }
+   if(!r.fill&&!r.stroke)continue;
    const options={x:r.x*PT,y:(plan.height-r.y-r.height)*PT,width:r.width*PT,height:r.height*PT,
     borderWidth:r.stroke?r.strokeWidth*PT:0,color:r.fill?toColor(r.fill):undefined,
     ...(r.stroke?{borderColor:toColor(r.stroke)}:{})};
@@ -116,5 +139,5 @@ export async function buildDirectGeometryPdf(doc,{signal,onProgress=()=>{},loadP
  cancel(signal);
  const bytes=await pdf.save();cancel(signal);
  if(!(bytes instanceof Uint8Array)||bytes.length===0||bytes.length>512*1024*1024)error('OUTPUT_BYTES');
- return {bytes,pages:count,rectangles:rendered,experimental:true};
+ return {bytes,pages:count,rectangles:rendered,textRuns,glyphCount,experimental:true};
 }
