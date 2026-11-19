@@ -42,6 +42,7 @@ test('writer and font reason classification, fixed taxonomy and privacy',()=>{
  const font='FONT_FAMILY_OR_VARIANT_UNAVAILABLE [font_reason=glyph-not-in-registry]';
  assert.equal(localQaErrorCode(raw),'PDF_WRITER_SVG_RENDER_FAILED');
  assert.equal(localQaWriterStep(raw),'svg-render');
+ assert.equal(localQaWriterStep(('[writer_step=svg-render] '+'x'.repeat(800)).slice(0,500)),'svg-render');
  assert.equal(localQaErrorCode('PNG_PDF_IDAT_CHECKSUM [writer_step=svg-render]'),'PNG_PDF_IDAT_CHECKSUM');
  assert.equal(localQaErrorCode('PROFESSIONAL_SVG_WARNING_private text'),'PROFESSIONAL_SVG_WARNING');
  assert.equal(localQaFontReason(font),'glyph-not-in-registry');

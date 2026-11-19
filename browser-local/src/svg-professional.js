@@ -564,7 +564,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     }catch{/* Keep the primary failure reason and fail closed. */}
     // Fixed stage marker only; raw message remains local and never in QA.
     if(writerStep&&error?.name!=='AbortError'&&!(error instanceof RangeError)){
-      throw Error(String(error?.message||error)+' [writer_step='+writerStep+']',{cause:error});
+      throw Error('[writer_step='+writerStep+'] '+String(error?.message||error),{cause:error});
     }
     throw error;
   }finally{

@@ -72,6 +72,8 @@ try{
  await page.locator('#source').setInputFiles(samples.map(({name,mimeType,buffer})=>({name,mimeType,buffer})));
  await page.locator('#convert').click();
  await page.waitForFunction(()=>Number(document.querySelector('#done-count')?.textContent||0)+Number(document.querySelector('#failed-count')?.textContent||0)===4,null,{timeout:180000});
+ // Completion counts may settle before the final archive/UI redraw.
+ await page.waitForFunction(()=>document.querySelector('#cancel')?.disabled===true,null,{timeout:60000});
  const exportWait=page.waitForEvent('download');await page.locator('#qa-export').click();
  const qa=JSON.parse(readFileSync(await (await exportWait).path(),'utf8'));
  console.log('RELEASE_QA '+JSON.stringify(qa));
