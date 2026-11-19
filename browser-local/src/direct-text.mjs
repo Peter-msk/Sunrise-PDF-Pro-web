@@ -2,14 +2,14 @@
  * RHWP v0.9.0 json.rs: textRun placement, scalar positions and clusters.
  * No claim of general shaping, fallback or production readiness.
  */
+import {directFamilyKey as key,validateDirectFace} from './direct-font.mjs';
 const fail=code=>{throw Error('DIRECT_PDF_TEXT_'+code);};
 const finite=n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=1e7;
 const near=(a,b)=>finite(a)&&finite(b)&&Math.abs(a-b)<=.002;
 const range=(r,start,end)=>r?.start===start&&r?.end===end;
-const key=s=>typeof s==='string'?s.trim().normalize('NFC').toLowerCase():'';
 const plain=o=>o!==null&&typeof o==='object'&&!Array.isArray(o);
 const unsafe=/[^\uAC00-\uD7A3A-Za-z0-9 .,!?():;+\-\/]/u;
-const MAX_RUN=4096,MAX_FONT=32*1024*1024;
+const MAX_RUN=4096;
 export function planDirectText(op){
  const t=op.text,s=op.style,p=op.placement,m=p?.runToPage;
  if(typeof t!=='string'||!t.length||t.length>MAX_RUN||unsafe.test(t))fail('UNICODE_SCOPE');
@@ -27,7 +27,7 @@ export function planDirectText(op){
  if(Object.keys(s).some(k=>!styleKeys.has(k)))fail('STYLE_EXTENSION');
  if(typeof s.fontFamily!=='string'||!key(s.fontFamily)||s.fontFamily.length>256||
    !finite(s.fontSize)||s.fontSize<=0||s.fontSize>1024||!/^#[0-9a-f]{6}$/i.test(s.color)||
-   s.bold!==false||s.italic!==false||s.ratio!==1||s.underline!=='none'||
+   typeof s.bold!=='boolean'||s.italic!==false||s.ratio!==1||s.underline!=='none'||
    s.strikethrough!==false||s.outlineType!==0||s.shadowType!==0||s.emboss!==false||
    s.engrave!==false||s.superscript!==false||s.subscript!==false||
    s.emphasisDot!==0||typeof s.shadeColor!=='string'||s.shadeColor.toLowerCase()!=='#ffffff'||
@@ -54,31 +54,11 @@ export function planDirectText(op){
    glyphs.push({ch,x:m.e+c.origin.x,y:m.f});utf8=end;
  }
  if(op.positions.length>t.length&&op.positions[t.length]<=op.positions[t.length-1])fail('ADVANCE');
- return {plane:1,kind:'text',text:t,family:s.fontFamily,size:s.fontSize,color:s.color,glyphs};
+ return {plane:1,kind:'text',text:t,family:s.fontFamily,size:s.fontSize,color:s.color,bold:s.bold,glyphs};
 }
-// The caller must supply an explicitly approved local font face and its
-// expected PostScript identity. DEV54 owns general font resolution/rights.
-export function validateDirectFont(fontkit,face,family){
- if(!plain(face)||face.embeddingAllowed!==true||!(face.bytes instanceof Uint8Array)||
-   face.bytes.length<12||face.bytes.length>MAX_FONT||typeof face.postscriptName!=='string'||
-   !face.postscriptName||face.bytes[0]!==0||face.bytes[1]!==1||face.bytes[2]!==0||face.bytes[3]!==0)fail('FONT_INPUT');
- const font=fontkit.create(face.bytes);
- if(!font||key(font.familyName)!==key(family)||font.postscriptName!==face.postscriptName||
-   !['regular','normal','book'].includes(key(font.subfamilyName))||
-   Object.keys(font.variationAxes??{}).length)fail('FONT_IDENTITY');
- // Read the static SFNT OS/2 embedding bits directly: fontkit may expose
- // them as a decoded flag object instead of a numeric field.
- const view=new DataView(face.bytes.buffer,face.bytes.byteOffset,face.bytes.byteLength);
- const count=view.getUint16(4);let rights=null;
- if(!count||count>256||12+16*count>view.byteLength)fail('FONT_TABLE');
- for(let i=0;i<count;i++){
-   const p=12+16*i;if(view.getUint32(p)!==0x4f532f32)continue;
-   const offset=view.getUint32(p+8),length=view.getUint32(p+12);
-   if(rights!==null||length<10||offset>view.byteLength-length)fail('FONT_TABLE');
-   rights=view.getUint16(offset+8);
- }
- if(rights===null||(rights&0x0202))fail('FONT_RESTRICTED');
- return font;
+// Preserve DEV53 validation API; DEV54 checks actual SFNT style and rights.
+export function validateDirectFont(fontkit,face,family,bold=false){
+ return validateDirectFace(fontkit,face,family,bold).font;
 }
 // Legacy scalar replay is only valid where the font's actual whole-run
 // layout equals isolated glyph layout, including positioning.
@@ -96,14 +76,15 @@ export function validateIndependentGlyphs(font,plan){
  }
 }
 export async function prepareDirectText(pdf,plan,resolveFont,fontkit,cache){
- const name=key(plan.family);let entry=cache.get(name);
+ const name=key(plan.family)+'|'+(plan.bold?'bold':'regular');let entry=cache.get(name);
  if(!entry){
    if(cache.size>=16)fail('FONT_BUDGET');
-   const face=await resolveFont({family:plan.family,bold:false,italic:false});
-   const bytes=face?.bytes instanceof Uint8Array?face.bytes.slice():null;
-   const font=validateDirectFont(fontkit,{...face,bytes},plan.family);
+   const face=await resolveFont({family:plan.family,bold:plan.bold===true,italic:false});
+   if(!(face?.bytes instanceof Uint8Array)||face.bytes.length>32*1024*1024)fail('FONT_INPUT');
+   const {font,bytes}=validateDirectFace(fontkit,{...face,bytes:face.bytes.slice()},plan.family,plan.bold===true);
    const total=[...cache.values()].reduce((n,x)=>n+x.bytes,0)+bytes.length;
    if(total>64*1024*1024)fail('FONT_BUDGET');
+   validateIndependentGlyphs(font,plan);
    const embedded=await pdf.embedFont(bytes,{subset:false});
    entry={font,embedded,bytes:bytes.length};cache.set(name,entry);
  }
