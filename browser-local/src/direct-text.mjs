@@ -8,11 +8,11 @@ const near=(a,b)=>finite(a)&&finite(b)&&Math.abs(a-b)<=.002;
 const range=(r,start,end)=>r?.start===start&&r?.end===end;
 const key=s=>typeof s==='string'?s.trim().normalize('NFC').toLowerCase():'';
 const plain=o=>o!==null&&typeof o==='object'&&!Array.isArray(o);
-const safe=/^[\uAC00-\uD7A3A-Za-z0-9 .,!?():;+\-\/]+$/u;
+const unsafe=/[^\uAC00-\uD7A3A-Za-z0-9 .,!?():;+\-\/]/u;
 const MAX_RUN=4096,MAX_FONT=32*1024*1024;
 export function planDirectText(op){
  const t=op.text,s=op.style,p=op.placement,m=p?.runToPage;
- if(typeof t!=='string'||t.length>MAX_RUN||!safe.test(t))fail('UNICODE_SCOPE');
+ if(typeof t!=='string'||!t.length||t.length>MAX_RUN||unsafe.test(t))fail('UNICODE_SCOPE');
  if(op.rotation!==0||op.isVertical!==false||op.orientation!=='horizontal'||
    op.projectionKind!=='verbatim'||op.clusterBasis!=='legacyPosition'||
    op.displayText!=null||op.displayPositions!=null||op.paintTransform!=null||
@@ -30,7 +30,7 @@ export function planDirectText(op){
    s.bold!==false||s.italic!==false||s.ratio!==1||s.underline!=='none'||
    s.strikethrough!==false||s.outlineType!==0||s.shadowType!==0||s.emboss!==false||
    s.engrave!==false||s.superscript!==false||s.subscript!==false||
-   s.emphasisDot!==0||s.shadeColor?.toLowerCase()!=='#ffffff'||
+   s.emphasisDot!==0||typeof s.shadeColor!=='string'||s.shadeColor.toLowerCase()!=='#ffffff'||
    (s.kerning!==undefined&&s.kerning!==false))fail('STYLE');
  if(!m||m.a!==1||m.b!==0||m.c!==0||m.d!==1||
    !finite(op.baseline)||!near(p.baselineY,0)||!near(m.e,op.bbox?.x)||
@@ -66,10 +66,18 @@ export function validateDirectFont(fontkit,face,family){
  if(!font||key(font.familyName)!==key(family)||font.postscriptName!==face.postscriptName||
    !['regular','normal','book'].includes(key(font.subfamilyName))||
    Object.keys(font.variationAxes??{}).length)fail('FONT_IDENTITY');
- const fsType=font['OS/2']?.fsType;
- // Unknown rights are not inferred from a filename. Caller approval is required;
- // reject explicitly restricted/bitmap-only fonts and use full embedding.
- if(typeof fsType==='number'&&(fsType&0x0202))fail('FONT_RESTRICTED');
+ // Read the static SFNT OS/2 embedding bits directly: fontkit may expose
+ // them as a decoded flag object instead of a numeric field.
+ const view=new DataView(face.bytes.buffer,face.bytes.byteOffset,face.bytes.byteLength);
+ const count=view.getUint16(4);let rights=null;
+ if(!count||count>256||12+16*count>view.byteLength)fail('FONT_TABLE');
+ for(let i=0;i<count;i++){
+   const p=12+16*i;if(view.getUint32(p)!==0x4f532f32)continue;
+   const offset=view.getUint32(p+8),length=view.getUint32(p+12);
+   if(rights!==null||length<10||offset>view.byteLength-length)fail('FONT_TABLE');
+   rights=view.getUint16(offset+8);
+ }
+ if(rights===null||(rights&0x0202))fail('FONT_RESTRICTED');
  return font;
 }
 // Legacy scalar replay is only valid where the font's actual whole-run
