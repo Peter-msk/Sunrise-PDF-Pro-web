@@ -108,8 +108,8 @@ export function prepareDirectFontBytes(bytes,postscriptName){
   if(![0x00010000,0x00020000].includes(version)||!count||count>MAX_FACES||
     !within(12,count*4+(version===0x00020000?12:0),bytes.length))fail('FONT_COLLECTION');
   const headerEnd=12+count*4+(version===0x00020000?12:0);
-  if(version===0x00020000&&v.getUint32(12+count*4+4)!==0)fail('FONT_SIGNED_COLLECTION');
-  const offsets=new Set(),matches=[];
+  if(version===0x00020000&&[0,4,8].some(i=>v.getUint32(12+count*4+i)!==0))fail('FONT_SIGNED_COLLECTION');
+  const offsets=new Set(),matches=[],directories=[],allMaps=[];
   for(let i=0;i<count;i++){
    const base=v.getUint32(12+i*4);
    if(base<headerEnd||base%4||offsets.has(base)||!within(base,12,bytes.length))fail('FONT_COLLECTION');
@@ -117,10 +117,15 @@ export function prepareDirectFontBytes(bytes,postscriptName){
    // Do not guess or extract a CFF collection member.
    if(v.getUint32(base)===OTTO)fail('FONT_CFF_UNSUPPORTED');
    const candidate=directory(v,base);
+   directories.push({start:base,end:base+12+16*candidate.size});allMaps.push(candidate);
    if([...candidate.values()].some(t=>t.length&&t.offset<headerEnd))fail('FONT_COLLECTION');
    const names=postscriptNames(v,candidate);
    if(names.has(postscriptName)){if(names.size!==1)fail('FONT_IDENTITY');matches.push(candidate);}
   }
+  directories.sort((a,b)=>a.start-b.start);
+  for(let i=1;i<directories.length;i++)if(directories[i].start<directories[i-1].end)fail('FONT_COLLECTION');
+  for(const candidate of allMaps)for(const t of candidate.values())
+   if(t.length&&directories.some(d=>t.offset<d.end&&t.offset+t.length>d.start))fail('FONT_COLLECTION');
   if(matches.length!==1)fail(matches.length?'FONT_AMBIGUOUS':'FONT_COLLECTION_FACE');
   map=matches[0];
  }else map=directory(v,0);
