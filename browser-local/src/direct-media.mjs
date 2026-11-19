@@ -96,12 +96,12 @@ export function inspectDirectJpeg(b){
  }
  fail('JPEG_SCAN');
 }
-export function planDirectImage(op,resources){
+export function planDirectImage(op,resources,{allowLayers=false}={}){
  const allowed=['type','bbox','imagePaintBBox','mime','base64','sourceImageKey','fillMode','originalSize','originalSizeHu','effect','brightness','contrast','opacity','wrap','transform'];
  if(!only(op,allowed)||!identity(op.transform)||!sameBox(op.bbox,op.imagePaintBBox)||op.bbox.width<=0||op.bbox.height<=0||
    op.effect!=='realPic'||op.brightness!==0||op.contrast!==0||
    ![undefined,'none','fitToSize'].includes(op.fillMode)||
-   ![undefined,'square','tight','through','topAndBottom'].includes(op.wrap)||
+   ![undefined,'square','tight','through','topAndBottom',...(allowLayers?['behindText','inFrontOfText']:[])].includes(op.wrap)||
    (op.opacity!==undefined&&(!finite(op.opacity)||op.opacity<=0||op.opacity>1)))fail('IMAGE_EFFECT_OR_GEOMETRY');
  if(!['image/png','image/jpeg'].includes(op.mime))fail('IMAGE_MIME');
  let encoded=op.base64;
