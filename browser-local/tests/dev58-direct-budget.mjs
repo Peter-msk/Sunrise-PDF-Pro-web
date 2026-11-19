@@ -43,3 +43,9 @@ test('DEV58 cumulative work limits prevent later-page allocation and publication
 test('DEV58 invalid yield hook rejected before PDF allocation',async()=>{
  const h=harness();await assert.rejects(buildDirectPdf(doc([leaf(1)]),{...h.options,yieldControl:null}),/YIELD_CONTROL/);assert.equal(h.stats().pages,0);
 });
+
+test('DEV58 special form polyline expansion obeys shared vector command budget',async()=>{
+ const h=harness(),form={type:'formObject',bbox:b,formType:'radioButton',caption:'',text:'',foreColor:'#000000',backColor:'#ffffff',value:1,enabled:true,drawing:{label:null,primitives:Array.from({length:100},()=>({kind:'polyline',points:Array.from({length:256},(_,i)=>[i,i]),width:1,color:'#000000',closed:false}))}};
+ await assert.rejects(buildDirectPdf(doc([{kind:'leaf',bounds,ops:[form]}]),{...h.options,allowSpecial:true}),/PATH_PAGE_BUDGET/);
+ assert.equal(h.stats().pages,0);assert.equal(h.stats().saves,0);
+});
