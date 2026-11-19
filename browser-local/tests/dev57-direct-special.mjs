@@ -22,7 +22,7 @@ test('DEV57 equations, absent objects, complex labels and unknown primitives blo
 test('DEV57 opt-in special planning and text permission are explicit',()=>{
  assert.deepEqual(inspectDirectPage(tree([form])).blockers,['operation']);
  const p=inspectDirectPage(tree([form]),{allowSpecial:true,allowLayers:true});assert.equal(p.specialCount,1);assert.equal(p.specialItems,3);assert.deepEqual(p.paint.map(r=>r.plane),[2,2,2]);
- assert.throws(()=>inspectDirectPage(tree([{...form,drawing:{...form.drawing,label}}]),{allowSpecial:true}),/SPECIAL_TEXT_DISABLED/);
+ assert.deepEqual(inspectDirectPage(tree([{...form,drawing:{...form.drawing,label}}]),{allowSpecial:true}).blockers,['DIRECT_PDF_SPECIAL_TEXT_DISABLED']);
 });
 test('DEV57 static form vector native draw order and no partial equation output',async()=>{
  const calls=[];let saves=0;const page={drawRectangle:()=>calls.push('rect'),drawEllipse:()=>calls.push('circle'),pushOperators:()=>calls.push('path')};
