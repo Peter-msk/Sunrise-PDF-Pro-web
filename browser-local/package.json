@@ -35,7 +35,8 @@
     "test:dev46:real-qa": "node --test tests/dev46-compare-real-qa.mjs",
     "test:dev52": "node --test tests/dev52-direct-pdf.mjs",
     "test:dev52:browser": "node tests/dev52-direct-rhwp-browser.mjs",
-    "test:dev53": "node --test tests/dev52-direct-pdf.mjs tests/dev53-direct-text.mjs"
+    "test:dev53": "node --test tests/dev52-direct-pdf.mjs tests/dev53-direct-text.mjs",
+    "test:dev54": "node --test tests/dev52-direct-pdf.mjs tests/dev53-direct-text.mjs tests/dev54-direct-font.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "1.1.1",
