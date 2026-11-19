@@ -5,7 +5,7 @@ import {localQaFilterReason} from './svg-filter-diagnostics.mjs';
  */
 // Explicit app marker: older v1 reports lack this field, even if saved later.
 import {getVerifiedRhwpVersion} from './rhwp-wasm-loader.mjs';
-export const QA_BUILD_REVISION='DEV49';
+export const QA_BUILD_REVISION='DEV50';
 export function qaDeploymentChannel(host=globalThis.location?.hostname){
  if(host==='sunrise-pdf-pro-web-dev41-qa.ko-pg.workers.dev')return 'qa';
  if(host==='sunrise-pdf-pro-web.ko-pg.workers.dev')return 'production';

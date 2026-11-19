@@ -1,5 +1,6 @@
 import {handleProAdmin} from './admin/handler.js';
 import {sitePage,siteCSS} from './site-home.js';
+import {updatesCSS,updatesScript} from './site-updates.js';
 import {traceDev4Route,TRACE_DEV4_RELEASE} from './trace-dev4-runtime.js';
 import {OPERATIONS_R56_JS,OPERATIONS_R56_CSS} from './pro-operations-r56.js';
 import {validSecrets,findSession,verifyCsrf,originMatches} from './admin/auth.js'; // TRACE_DEV4_SOURCE
@@ -164,6 +165,8 @@ export default {
     if(path==='/features')return Response.redirect(new URL('/features/',request.url),302);
     if(path==='/features/'||path==='/features/index.html')return safe(sitePage('features'),200,method,'text/html; charset=utf-8');
     if(path==='/site-home.css')return safe(siteCSS,200,method,'text/css; charset=utf-8');
+    if(path==='/site-updates.css')return safe(updatesCSS,200,method,'text/css; charset=utf-8');
+    if(path==='/site-updates.js')return safe(updatesScript,200,method,'application/javascript; charset=utf-8');
     if(path==='/site-nav.css')return safe('#pro-site-navigation{display:flex;align-items:center;gap:16px;margin-left:auto;margin-right:24px}#pro-site-navigation a{font-size:13px;color:#c7e5ff;text-decoration:none}@media(max-width:820px){#pro-site-navigation{flex-wrap:wrap;gap:12px;margin:0}}',200,method,'text/css; charset=utf-8');
     if(path==='/style.css')return safe(CSS,200,method,'text/css; charset=utf-8');
     if(path==='/app.js')return safe(APP,200,method,'application/javascript; charset=utf-8');

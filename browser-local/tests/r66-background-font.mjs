@@ -72,8 +72,9 @@ test('font access verification is retained for actual conversion, with honest ba
  const main=readFileSync(new URL('main.js',src),'utf8');
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const pdf=readFileSync(new URL('svg-professional.js',src),'utf8');
- assert.match(main,/verifiedPcFontData=result\.fonts/);
- assert.match(main,/verifiedPcFontData!==null\?Promise\.resolve\(verifiedPcFontData\):requestLocalFontAccess\(\)/);
+ assert.match(main,/verifiedPcFontData\.set\(result\.fonts\)/);
+ assert.match(main,/verifiedPcFontData\.take\(\)/);
+ assert.match(main,/verified!==null\?Promise\.resolve\(verified\):requestLocalFontAccess\(\)/);
  assert.match(main,/document\.addEventListener\('visibilitychange'/);
  assert.match(html,/id="background-policy"/);
  assert.match(pdf,/registerFont\(face\.name,face\.bytes,face\.collectionFontName\|\|undefined\)/);

@@ -3,7 +3,7 @@ import {cooperativeYield} from './cooperative-yield.mjs';
 import init, { HwpDocument } from '@rhwp/core';
 import {initializeRhwp} from './rhwp-wasm-loader.mjs';
 import { tryProfessionalDocument } from './svg-professional.js';
-import { loadPdfFonts, installMeasureFonts, familyKey } from './pdf-fonts.js';
+import { loadPdfFonts, installMeasureFonts, familyKey, keepLocalFontFaces } from './pdf-fonts.js';
 import { readDocumentBuffer } from './file-reader.js';
 import { svgPageSize } from './page-geometry.js';
 import {loadSvgRasterImage,encodeSvgRasterPng} from './raster-async-guard.mjs';
@@ -173,7 +173,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    }
    onProgress({stage:'fonts',page:1,total:1,detail:'bundled'});
    const bundled=await loadBundledFonts(fontkit,signal);
-   const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
+   const localOnly=keepLocalFontFaces(selected.faces,local.faces);
    // Do not register every alias of six bundled fonts as a separate CSS face.
    // Only load aliases actually named in the HWP SVG. PDF face aliases remain
    // intact for embedding, while measurement avoids dozens of redundant loads.
@@ -371,7 +371,7 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
    }
    onProgress({stage:'fonts',page:1,total:1,detail:'bundled'});
    const bundled=await loadBundledFonts(fontkit,signal);
-   const localOnly=local.faces.filter(face=>!selected.faces.some(chosen=>chosen.bold===face.bold&&chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))));
+   const localOnly=keepLocalFontFaces(selected.faces,local.faces);
    fontRegistry={faces:[...selected.faces,...localOnly,...bundled.faces]};
    release=await installMeasureFonts(fontRegistry,signal);
   }

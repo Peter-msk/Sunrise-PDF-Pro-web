@@ -109,15 +109,16 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   candidates.push({item,index,expanded,originalNames,score:frequency*10+(exact?5:0)});
  }
  candidates.sort((a,b)=>b.score-a.score||a.index-b.index);
- const faces=[],seen=new Set(),attempted=new Set(),loadedNames=new Set();
+ const faces=[],seen=new Set(),loadedSources=new Set(),loadedNames=new Set();
  const started=Date.now(),maxReadMs=22000;
  let unreadable=0,matched=0,timedOutFonts=0,skippedByBudget=0;
  for(const candidate of candidates){
   const {item,expanded,originalNames}=candidate;
   const sourceKey=familyKey(item.postscriptName||item.fullName||item.family)+'|'+
    familyKey(item.style||'');
-  if(attempted.has(sourceKey))continue;
-  attempted.add(sourceKey);matched++;
+  // Only successful reads suppress duplicates; a failed first candidate must not hide a valid face.
+  if(loadedSources.has(sourceKey))continue;
+  matched++;
   if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
   const remaining=maxReadMs-(Date.now()-started);
   const cached=cache?.get(item);
@@ -146,6 +147,7 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   const face=loaded?.faces?.[0];
   if(!face){unreadable++;continue;}
   const identity=familyKey(item.postscriptName||item.fullName||item.family)+'|'+face.bold+'|'+face.italic;
+  loadedSources.add(sourceKey);
   if(seen.has(identity))continue;
   seen.add(identity);
   face.name='LocalFont'+(faces.length+1);

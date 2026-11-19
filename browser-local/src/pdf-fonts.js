@@ -96,6 +96,16 @@ export function resolveFont(registry,family,weight='normal',style='normal',text=
     const match=faces.find(face=>!face.isFallback&&face.aliases.includes(key)&&exactStyle(face)&&covers(face));
     if(match)return match;
   }
+  // Preserve a covered requested PC/manual family before unrelated bundled faces.
+  // Exact style matches across all explicitly declared families still win.
+  if(registry?.allowCoverageFallback&&text){
+    for(const key of specified){
+      const same=faces.filter(face=>!face.standard&&!face.isFallback&&
+        face.aliases?.includes(key)&&covers(face));
+      if(same.length)return same.find(face=>face.bold===variant.bold)||
+        same.find(face=>face.italic===variant.italic)||same[0];
+    }
+  }
   for(const key of specified){
     const match=faces.find(face=>face.isFallback&&face.aliases.includes(key)&&exactStyle(face)&&covers(face));
     if(match)return match;
@@ -167,6 +177,13 @@ export function resolveFontRuns(registry,family,weight,style,text){
  return runs;
 }
 
+// Manual precedence may remove a PC face only if it covers all its glyphs.
+export function keepLocalFontFaces(manual,local){
+ return local.filter(face=>!manual.some(chosen=>chosen.bold===face.bold&&
+  chosen.italic===face.italic&&face.aliases.some(alias=>chosen.aliases.includes(alias))&&
+  face.characterSet instanceof Set&&chosen.characterSet instanceof Set&&
+  [...face.characterSet].every(point=>chosen.characterSet.has(point))));
+}
 export function missingCodepoint(face,text){
   if(!face)return null;
   // Helvetica's standard encoding does not promise Korean Unicode coverage.

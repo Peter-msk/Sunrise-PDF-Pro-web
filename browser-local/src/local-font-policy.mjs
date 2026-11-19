@@ -86,6 +86,15 @@ export async function settleInstalledFonts(request, {
       'PC 글꼴을 읽는 과정에서 오류가 발생했습니다. 내장 글꼴로 변환하며 정확한 서체가 필요하면 TTF/OTF를 직접 선택하세요.');
   }
 }
+// Recent explicit verification is reusable once; never keep old FontData indefinitely.
+export function createVerifiedFontSnapshot({maxAgeMs=60000,now=()=>Date.now()}={}){
+ let value=null,stamp=0;
+ return {
+  set(fonts){value=Array.isArray(fonts)&&fonts.length?fonts:null;stamp=now();},
+  take(){const age=now()-stamp;const result=value&&age>=0&&age<=maxAgeMs?value:null;value=null;return result;},
+  clear(){value=null;}
+ };
+}
 /** Check browser support without prompting for permission. */
 export function localFontCapability(host=globalThis){
   return {supported:typeof host?.queryLocalFonts==='function',

@@ -12,11 +12,17 @@ import {canRecoverFile,planConversion,planBulkRecovery,planSingleRetry,localFail
 import {createLocalFontCache,requestLocalFontAccess} from './local-fonts.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
 import {summarizeVectorPreservation,inspectPdfVectorQuality} from './pdf-vector-quality.mjs';
-import {settleInstalledFonts,localFontCapability} from './local-font-policy.mjs';
+import {settleInstalledFonts,localFontCapability,createVerifiedFontSnapshot} from './local-font-policy.mjs';
 const USE_PC_FONTS_BY_DEFAULT=true;
-// Permission-granted FontData stays in this tab's memory only. A 'font-check'
-// success must not be thrown away and queried again after the tab is hidden.
-let verifiedPcFontData=null;
+// Only an explicit recent check is reusable once; each later conversion queries current fonts.
+const verifiedPcFontData=createVerifiedFontSnapshot();let fontCheckPending=false;
+function beginPcFontRequest(){
+ const verified=verifiedPcFontData.take();
+ return verified!==null?Promise.resolve(verified):requestLocalFontAccess();
+}
+try{globalThis.navigator?.permissions?.query?.({name:'local-fonts'}).then(p=>{
+ p.addEventListener?.('change',()=>verifiedPcFontData.clear());
+}).catch(()=>{});}catch{/* optional permission API */}
 const $=id=>document.getElementById(id);
 // Mark the actually executing JS bundle, not the HTML shell or the saved report date.
 const buildLabel=QA_BUILD_REVISION+' ('+qaDeploymentChannel()+')';
@@ -73,20 +79,20 @@ window.addEventListener('pageshow',event=>{
  if(event.persisted){browserFrozen=false;refreshBrowserLifecycle(true);}
 });
 $('font-check')?.addEventListener('click',async()=>{
- if(busy)return;
- const button=$('font-check');button.disabled=true;
+ if(busy||fontCheckPending)return;
+ fontCheckPending=true;verifiedPcFontData.clear();sync();
  let request=null;
  try{
   request=requestLocalFontAccess();
   fontStatus('PC 글꼴 권한을 확인하는 중입니다. 브라우저 요청이 나타나면 허용 여부를 선택하세요.');
   const result=await settleInstalledFonts(request,{timeoutMs:30000});
-  if(result.status==='ready')verifiedPcFontData=result.fonts;
+  if(result.status==='ready')verifiedPcFontData.set(result.fonts);
   fontStatus(result.status==='ready'
    ?'PC 설치 글꼴 '+result.fonts.length+'개에 접근 가능합니다. 문서 지정 서체와 일치·글꼴 파일 읽기·PDF 실제 임베딩은 변환 결과에서 별도로 확인하세요.'
    :result.notice||'PC 글꼴에 접근할 수 없습니다. TTF/OTF를 직접 추가할 수 있습니다.');
  }catch(error){
   fontStatus('PC 글꼴 조회를 시작하지 못했습니다: '+String(error?.message||error));
- }finally{button.disabled=false;}
+ }finally{fontCheckPending=false;sync();}
 });
 function clearPrint(){
  if(printJob){printJob.dispose();printJob=null;}
@@ -117,18 +123,19 @@ function show(item){
  $('quality-detail').replaceChildren(title,detail);viewer.open(item.result.pdf);sync();
 }
 function sync(){
+ if($('font-check'))$('font-check').disabled=!deviceFontsAvailable||busy||fontCheckPending;
  $('qa-export').disabled=!items.length;
  const pending=items.some(i=>['ready','failed','cancelled'].includes(i.state));
- $('convert').disabled=!ready||busy||!pending;$('reset').disabled=busy||!items.length;$('cancel').disabled=!busy;
+ $('convert').disabled=!ready||busy||fontCheckPending||!pending;$('reset').disabled=busy||!items.length;$('cancel').disabled=!busy;
  const hybridPending=items.some(i=>isHwp(i.file)&&['ready','failed','cancelled'].includes(i.state));
  $('convert-hybrid').hidden=!hybridPending;
- $('convert-hybrid').disabled=!ready||busy||!hybridPending;
+ $('convert-hybrid').disabled=!ready||busy||fontCheckPending||!hybridPending;
  const bulk=$('recover-failed'),recoverable=items.filter(canRecoverFile).length;
- if(bulk){bulk.hidden=recoverable===0;bulk.disabled=!ready||busy||recoverable===0;
+ if(bulk){bulk.hidden=recoverable===0;bulk.disabled=!ready||busy||fontCheckPending||recoverable===0;
   bulk.textContent='실패 파일 '+recoverable+'개만 복구';
   bulk.title='사용자가 직접 누를 때만 실패 파일을 다시 변환합니다. 글꼴 누락·PDF 스트림 오류는 문서 전체가 이미지 PDF로 저장되어 글자 검색이 불가능합니다. SVG 필터 오류는 먼저 해당 쪽만 이미지로 복구합니다.';}
  for(const id of ['source','pdf-font','pdf-engine'])$(id).disabled=busy;
- $('print-prepare').disabled=!ready||busy||!active||!isHwp(active.file)||active.state==='invalid';$('print-save').disabled=busy||!printJob;
+ $('print-prepare').disabled=!ready||busy||fontCheckPending||!active||!isHwp(active.file)||active.state==='invalid';$('print-save').disabled=busy||!printJob;
  $('total-count').textContent=items.length;$('done-count').textContent=items.filter(i=>i.state==='done').length;
  $('failed-count').textContent=items.filter(i=>['failed','invalid'].includes(i.state)).length;
  $('queue-count').textContent=items.length+'개 파일';$('summary-state').textContent=busy?'처리 중':items.some(i=>i.state==='failed'||i.state==='invalid')?'확인 필요':items.some(i=>i.state==='done')?'결과 준비':'대기 중';
@@ -273,7 +280,7 @@ function draw(){
     :' 호환 이미지 PDF로 이 파일만 다시 변환 (글자 검색 불가)'));
    recover.disabled=busy;
    recover.addEventListener('click',()=>{
-    if(busy||!ready||!canRecoverFile(item))return;
+    if(busy||!ready||fontCheckPending||!canRecoverFile(item))return;
     requestedFileRetry=null;requestedFileRecovery=item;
     $('convert').click();
    });
@@ -289,7 +296,7 @@ function draw(){
     retry.setAttribute('aria-label',item.file.name+' 파일만 다시 변환');
     retry.disabled=busy||!ready;
     retry.addEventListener('click',()=>{
-     if(busy||!ready||!items.includes(item)||!['failed','cancelled'].includes(item.state)||!inputKind(item.file))return;
+     if(busy||!ready||fontCheckPending||!items.includes(item)||!['failed','cancelled'].includes(item.state)||!inputKind(item.file))return;
      requestedFileRecovery=null;requestedBulkRecovery=false;requestedFileRetry=item;
      $('convert').click();
     });
@@ -308,7 +315,7 @@ function draw(){
     native.title='Chrome/Edge 인쇄 방식으로 준비합니다. 글꼴 부족 시 다른 글꼴로 보일 수 있고 일부 SVG 효과는 이미지화될 수 있습니다. PDF 저장 후 모든 페이지의 글꼴·표·그림을 원본과 반드시 대조하세요.';
     native.disabled=busy||!ready;
     native.addEventListener('click',()=>{
-     if(busy||!ready||!items.includes(item)||item.state!=='failed'||!isHwp(item.file)||
+     if(busy||!ready||fontCheckPending||!items.includes(item)||item.state!=='failed'||!isHwp(item.file)||
       !(recoveryCode(item.error)==='SVG_FILTER_EFFECT_UNSUPPORTED'||
         /\bFONT_GLYPH_MISSING\b/.test(item.error||'')))return;
      show(item);
@@ -376,7 +383,7 @@ $('recover-failed').addEventListener('click',()=>{
  $('convert').click();
 });
 $('convert').addEventListener('click',async()=>{
- if(busy||!ready)return;
+ if(busy||!ready||fontCheckPending)return;
  const requested=requestedFileRecovery;requestedFileRecovery=null;
  const oneFileRetry=requestedFileRetry;requestedFileRetry=null;
  const bulkRequested=requestedBulkRecovery;requestedBulkRecovery=false;
@@ -403,14 +410,14 @@ $('convert').addEventListener('click',async()=>{
  try{
   if(USE_PC_FONTS_BY_DEFAULT&&needsFonts){
    if(deviceFontsAvailable)
-    fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();
+    fontsRequest=beginPcFontRequest();
    else fontAccessNotice='이 기기는 설치 글꼴 자동 조회를 지원하지 않습니다. 한컴오피스 설치 없이 웹 엔진과 내장 글꼴로 변환합니다. 원본 TTF/OTF가 있으면 직접 추가할 수 있습니다. 대체 서체로 줄바꿈이나 배치가 달라질 수 있습니다.';
   }
  }catch(error){fontAccessNotice='설치 글꼴 접근을 시작하지 못해 내장 글꼴로 계속합니다. 원본 TTF/OTF는 직접 추가할 수 있습니다.';}
  const localFontCache=createLocalFontCache();
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();refreshBrowserLifecycle();let completed=0;
  try{
-  let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');if(access.status==='ready')verifiedPcFontData=localFonts;
+  let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');
    fontStatus(access.status==='ready'?'PC 글꼴 '+localFonts.length+'개에 접근 확인 · 실제 PDF 사용 여부는 변환 결과를 확인하세요.':fontAccessNotice);}
   await runBatch(pending,async(file,item)=>{
    item._proDiagStage='load';
@@ -540,15 +547,15 @@ $('convert').addEventListener('click',async()=>{
  }
 });
 $('print-prepare').addEventListener('click',async()=>{
- if(!active||!isHwp(active.file)||!ready||busy)return;const file=active.file;
+ if(!active||!isHwp(active.file)||!ready||busy||fontCheckPending)return;const file=active.file;
  let fontsRequest=null,printFontNotice='';
  try{
   if(USE_PC_FONTS_BY_DEFAULT&&deviceFontsAvailable)
-   fontsRequest=verifiedPcFontData!==null?Promise.resolve(verifiedPcFontData):requestLocalFontAccess();
+   fontsRequest=beginPcFontRequest();
   else printFontNotice='설치 글꼴 자동 조회가 없어 내장 글꼴과 사용자가 선택한 글꼴로 인쇄합니다. 한컴오피스 설치는 필요하지 않습니다.';
  }catch(error){printFontNotice='설치 글꼴 접근 실패: 내장 글꼴로 인쇄합니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();refreshBrowserLifecycle();
- try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;if(access.status==='ready')verifiedPcFontData=localFonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('브라우저 인쇄 준비 완료. 해당 문서의 브라우저 PDF로 저장 버튼을 눌러 PDF 저장 대상을 직접 선택하세요. 필터·글꼴·배치를 원본과 대조해야 하며 앱의 실패 상태는 자동으로 성공 처리되지 않습니다.'+(printFontNotice?' · '+printFontNotice:''));}
+ try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('브라우저 인쇄 준비 완료. 해당 문서의 브라우저 PDF로 저장 버튼을 눌러 PDF 저장 대상을 직접 선택하세요. 필터·글꼴·배치를 원본과 대조해야 하며 앱의 실패 상태는 자동으로 성공 처리되지 않습니다.'+(printFontNotice?' · '+printFontNotice:''));}
  catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+String(error?.message||error));}
  finally{busy=false;controller=null;draw();}
 });
