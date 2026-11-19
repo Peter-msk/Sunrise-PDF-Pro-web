@@ -7,6 +7,7 @@ import {MAX_CONVERSION_PAGES} from './page-limit.mjs';
 import {planDirectText,prepareDirectText} from './direct-text.mjs';
 import {createDirectFontResolver} from './direct-font.mjs';
 import {planDirectImage,planDirectShape,verifyDirectPng} from './direct-media.mjs';
+import {directLayer,directPlane,directClip,directGroup,openDirectClip} from './direct-layer.mjs';
 const SCHEMA_MINOR=35,RESOURCE_MINOR=6,PT=.75;
 const MAX_JSON=32*1024*1024,MAX_NODES=60000,MAX_OPS=100000,MAX_DEPTH=128;
 const error=code=>{throw Error('DIRECT_PDF_'+code);};
@@ -35,29 +36,35 @@ export function readDirectPage(doc,index){
 // Streaming traversal: preserve upstream child/operation order. Collect
 // paint planes separately; no arbitrary z-order interpretation. Clip geometry
 // deliberately blocks the prototype until clipping replay is implemented.
-export function inspectDirectPage(tree,{allowText=false,allowMedia=false}={}){
+export function inspectDirectPage(tree,{allowText=false,allowMedia=false,allowLayers=false}={}){
  let nodes=0,operations=0,textRuns=0,clips=0,svgReferences=0;
  const types=new Map(), fonts=new Set(), blockers=new Set(),rectangles=[],paint=[];
+ let tableCount=0,cellCount=0,mergedCells=0,clipCost=0,clipReplayCost=0;
  let glyphCount=0,mediaCount=0,mediaBytes=0,mediaPixels=0,pathCommands=0;
- const stack=[{node:tree.root,depth:0,layer:null}];
+ const stack=[{node:tree.root,depth:0,layer:null,chain:[]}];
  while(stack.length){
-  const {node,depth,layer}=stack.pop();
+  const {node,depth,layer,chain}=stack.pop();
   if(++nodes>MAX_NODES||depth>MAX_DEPTH)error('NODE_BUDGET');
   if(!plain(node))error('NODE');bbox(node.bounds);
   const active=node.layer??layer;
-  if(active&&(!plain(active)||active.masterPage||active.textWrap==='behindText'||active.textWrap==='inFrontOfText'))blockers.add('paint-plane');
+  if(allowLayers)directLayer(active);
+  if(!allowLayers&&active&&(!plain(active)||active.masterPage||active.textWrap==='behindText'||active.textWrap==='inFrontOfText'))blockers.add('paint-plane');
   switch(node.kind){
    case 'group':
+    if(allowLayers){const g=directGroup(node);if(g==='table')tableCount++;if(g==='tableCell'){cellCount++;if(node.groupKind.rowSpan>1||node.groupKind.colSpan>1)mergedCells++;}}
     if(!Array.isArray(node.children)||node.children.length>MAX_NODES-nodes||stack.length+node.children.length>MAX_NODES)error('NODE_BUDGET');
-    for(let i=node.children.length-1;i>=0;i--)stack.push({node:node.children[i],depth:depth+1,layer:active});
+    for(let i=node.children.length-1;i>=0;i--)stack.push({node:node.children[i],depth:depth+1,layer:active,chain});
     break;
    case 'clipRect':case 'clipPath':
-    clips++;blockers.add('clip');stack.push({node:node.child,depth:depth+1,layer:active});break;
+    clips++;
+    if(allowLayers){const clip=directClip(node);clipCost+=clip.cost;if(clipCost>20000||chain.length>=16)error('CLIP_BUDGET');stack.push({node:node.child,depth:depth+1,layer:active,chain:[...chain,clip]});}
+    else{blockers.add('clip');stack.push({node:node.child,depth:depth+1,layer:active,chain});}break;
    case 'leaf':
     if(!Array.isArray(node.ops)||node.ops.length>MAX_OPS-operations)error('OP_BUDGET');
     for(const op of node.ops){
      if(!plain(op)||typeof op.type!=='string'||op.type.length>64)error('OP');
      operations++;bbox(op.bbox);
+     const add=item=>{if(allowLayers){item.plane=directPlane(op,active);item.clips=chain;clipReplayCost+=chain.reduce((n,c)=>n+c.cost,0);if(clipReplayCost>100000)error('CLIP_REPLAY_BUDGET');}paint.push(item);};
      types.set(op.type,(types.get(op.type)||0)+1);
      if(op.type==='rawSvg')svgReferences++;
      if(op.type==='textRun'){
@@ -66,35 +73,35 @@ export function inspectDirectPage(tree,{allowText=false,allowMedia=false}={}){
       if(typeof family==='string'&&family.length<=256&&fonts.size<1024)fonts.add(family);
       if(allowText){
        try{const plan=planDirectText(op);glyphCount+=plan.glyphs.length;
-        if(glyphCount>50000)error('TEXT_BUDGET');paint.push(plan);
+        if(glyphCount>50000)error('TEXT_BUDGET');add(plan);
        }catch(e){if(!String(e.message).startsWith('DIRECT_PDF_TEXT_'))throw e;blockers.add(e.message);}
        continue;
       }
      }
      if(allowMedia&&['image','line','ellipse','path'].includes(op.type)){
       try{
-       const item=op.type==='image'?planDirectImage(op,tree.resources):planDirectShape(op);
+       const item=op.type==='image'?planDirectImage(op,tree.resources,{allowLayers}):planDirectShape(op);
        if(++mediaCount>2048)error('MEDIA_COUNT');
        if(item.kind==='image'){
         mediaBytes+=item.bytes.length;mediaPixels+=item.info.width*item.info.height;
         if(mediaBytes>32*1024*1024||mediaPixels>48_000_000)error('MEDIA_PAGE_BUDGET');
        }
        if(item.kind==='path'&&(pathCommands+=item.commands.length)>20000)error('PATH_PAGE_BUDGET');
-       paint.push(item);
+       add(item);
       }catch(e){if(!String(e.message).startsWith('DIRECT_PDF_MEDIA_'))throw e;blockers.add(e.message);}
       continue;
      }
      if(op.type!=='rectangle'&&op.type!=='pageBackground'){blockers.add('operation');continue;}
      const rectangle=rectanglePlan(op);
      if(!rectangle){blockers.add('rectangle-style');continue;}
-     rectangles.push(rectangle);paint.push({...rectangle,kind:'rectangle'});
+     rectangles.push(rectangle);add({...rectangle,kind:'rectangle'});
     }
     break;
    default:error('NODE_KIND');
   }
  }
  return {width:tree.pageWidth,height:tree.pageHeight,nodes,operations,textRuns,clips,svgReferences,
-  operationCounts:Object.fromEntries(types),fontFamilies:[...fonts],blockers:[...blockers],rectangles,paint,glyphCount,mediaCount};
+  operationCounts:Object.fromEntries(types),fontFamilies:[...fonts],blockers:[...blockers],rectangles,paint,glyphCount,mediaCount,tableCount,cellCount,mergedCells,clipReplayCost};
 }
 const color=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
 function rectanglePlan(op){
@@ -116,10 +123,10 @@ function rectanglePlan(op){
 // DEV52: caller-owned RHWP document; do not free or mutate it. Reject ALL
 // unsupported pages before returning bytes. PDF-lib is already a dependency.
 export async function buildDirectGeometryPdf(doc,options={}){
- return buildDirectPdf(doc,{...options,resolveFont:undefined,approvedFaces:undefined,allowMedia:false});
+ return buildDirectPdf(doc,{...options,resolveFont:undefined,approvedFaces:undefined,allowMedia:false,allowLayers:false});
 }
 // DEV53 remains opt-in. The production converter is not connected.
-export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,approvedFaces,fontSelections,allowMedia=false,validateJpeg=verifyJpegDecode,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
+export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,approvedFaces,fontSelections,allowMedia=false,allowLayers=false,validateJpeg=verifyJpegDecode,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
  const count=pageCount(doc);cancel(signal);
  const lib=await loadPdf();
  const {PDFDocument,rgb}=lib;
@@ -134,14 +141,16 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
  const imageCache=new Map();
  for(let i=0;i<count;i++){
   cancel(signal);
-  const plan=inspectDirectPage(readDirectPage(doc,i),{allowText,allowMedia});
+  const plan=inspectDirectPage(readDirectPage(doc,i),{allowText,allowMedia,allowLayers});
   if((mediaTotal+=plan.mediaCount)>10000)error('MEDIA_DOCUMENT_BUDGET');
   if(glyphCount+plan.glyphCount>200000)error('DOCUMENT_TEXT_BUDGET');
   if(plan.blockers.length)error('UNSUPPORTED_PAGE_'+(i+1)+':'+plan.blockers.join(','));
   const page=pdf.addPage([plan.width*PT,plan.height*PT]);
   // Stable order inside each plane. Coordinate conversion once, at PDF boundary.
-  for(const plane of [0,1])for(const r of plan.paint){
+  for(const plane of (allowLayers?[0,1,2,3]:[0,1]))for(const r of plan.paint){
    if(r.plane!==plane)continue;
+   for(const clip of r.clips??[])openDirectClip(page,clip,plan.height,lib);
+   try{
    if(r.kind==='text'){
     cancel(signal);
     if(!fontkit){fontkit=await loadFontkit();pdf.registerFontkit(fontkit);}
@@ -170,6 +179,7 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
     borderWidth:r.stroke?r.strokeWidth*PT:0,color:r.fill?toColor(r.fill):undefined,
     ...(r.stroke?{borderColor:toColor(r.stroke)}:{})};
    page.drawRectangle(options);rendered++;
+   }finally{for(const clip of r.clips??[])page.pushOperators(lib.popGraphicsState());}
   }
   onProgress({page:i+1,total:count,operations:plan.operations});
  }
