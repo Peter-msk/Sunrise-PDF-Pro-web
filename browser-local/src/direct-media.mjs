@@ -87,7 +87,7 @@ export function inspectDirectJpeg(b){
    // Baseline single interleaved scan. Only byte stuffing/restart markers
    // are accepted in entropy data; no extra frames or hidden trailing bytes.
    for(let i=end;i<b.length-2;i++)if(b[i]===255){
-    const m=b[++i];if(m!==0&&(m<0xd0||m>0xd7))fail('JPEG_SCAN');
+    const m=b[++i];if(i>=b.length-2||(m!==0&&(m<0xd0||m>0xd7)))fail('JPEG_SCAN');
    }
    if(end>=b.length-2)fail('JPEG_SCAN');
    return frame;
@@ -122,7 +122,7 @@ export function planDirectImage(op,resources){
  if(typeof encoded!=='string')fail('IMAGE_BYTES_MISSING');
  const bytes=decodeImageBase64(encoded);
  const info=op.mime==='image/png'?inspectDirectPng(bytes):inspectDirectJpeg(bytes);
- return {plane:1,kind:'image',...op.bbox,mime:op.mime,encoded,bytes,info,opacity:op.opacity??1};
+ return {plane:1,kind:'image',x:op.bbox.x,y:op.bbox.y,width:op.bbox.width,height:op.bbox.height,mime:op.mime,encoded,bytes,info,opacity:op.opacity??1};
 }
 export function planDirectShape(op){
  if(!identity(op.transform)||op.gradient!=null||op.arrowHeads!=null||op.connectorEndpoints!=null||op.lineStyle!=null)fail('SHAPE_TRANSFORM');
@@ -138,7 +138,7 @@ export function planDirectShape(op){
   !only(s,['fillColor','strokeColor','strokeWidth','strokeDash','opacity'])||
   !(s.fillColor===null||color(s.fillColor))||!(s.strokeColor===null||color(s.strokeColor))||
   (!s.fillColor&&!s.strokeColor)||!finite(s.strokeWidth)||s.strokeWidth<0||(s.strokeColor&&s.strokeWidth===0)||s.strokeDash!=='solid'||s.opacity!==1)fail('SHAPE_STYLE');
- const plan={plane:1,kind:op.type,...b,fill:s.fillColor,stroke:s.strokeColor,strokeWidth:s.strokeWidth};
+ const plan={plane:1,kind:op.type,x:b.x,y:b.y,width:b.width,height:b.height,fill:s.fillColor,stroke:s.strokeColor,strokeWidth:s.strokeWidth};
  if(op.type==='ellipse'){if(b.width<=0||b.height<=0)fail('SHAPE_BOUNDS');return plan;}
  if(op.type!=='path'||!Array.isArray(op.commands)||op.commands.length<2||op.commands.length>4096)fail('PATH_COMMANDS');
  let open=false,segments=0;const commands=[];
