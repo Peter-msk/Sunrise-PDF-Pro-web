@@ -6,6 +6,7 @@
 import {MAX_CONVERSION_PAGES} from './page-limit.mjs';
 import {planDirectText,prepareDirectText} from './direct-text.mjs';
 import {createDirectFontResolver} from './direct-font.mjs';
+import {planDirectImage,planDirectShape,verifyDirectPng} from './direct-media.mjs';
 const SCHEMA_MINOR=35,RESOURCE_MINOR=6,PT=.75;
 const MAX_JSON=32*1024*1024,MAX_NODES=60000,MAX_OPS=100000,MAX_DEPTH=128;
 const error=code=>{throw Error('DIRECT_PDF_'+code);};
@@ -34,10 +35,10 @@ export function readDirectPage(doc,index){
 // Streaming traversal: preserve upstream child/operation order. Collect
 // paint planes separately; no arbitrary z-order interpretation. Clip geometry
 // deliberately blocks the prototype until clipping replay is implemented.
-export function inspectDirectPage(tree,{allowText=false}={}){
+export function inspectDirectPage(tree,{allowText=false,allowMedia=false}={}){
  let nodes=0,operations=0,textRuns=0,clips=0,svgReferences=0;
  const types=new Map(), fonts=new Set(), blockers=new Set(),rectangles=[],paint=[];
- let glyphCount=0;
+ let glyphCount=0,mediaCount=0,mediaBytes=0,mediaPixels=0,pathCommands=0;
  const stack=[{node:tree.root,depth:0,layer:null}];
  while(stack.length){
   const {node,depth,layer}=stack.pop();
@@ -70,6 +71,19 @@ export function inspectDirectPage(tree,{allowText=false}={}){
        continue;
       }
      }
+     if(allowMedia&&['image','line','ellipse','path'].includes(op.type)){
+      try{
+       const item=op.type==='image'?planDirectImage(op,tree.resources):planDirectShape(op);
+       if(++mediaCount>2048)error('MEDIA_COUNT');
+       if(item.kind==='image'){
+        mediaBytes+=item.bytes.length;mediaPixels+=item.info.width*item.info.height;
+        if(mediaBytes>32*1024*1024||mediaPixels>48_000_000)error('MEDIA_PAGE_BUDGET');
+       }
+       if(item.kind==='path'&&(pathCommands+=item.commands.length)>20000)error('PATH_PAGE_BUDGET');
+       paint.push(item);
+      }catch(e){if(!String(e.message).startsWith('DIRECT_PDF_MEDIA_'))throw e;blockers.add(e.message);}
+      continue;
+     }
      if(op.type!=='rectangle'&&op.type!=='pageBackground'){blockers.add('operation');continue;}
      const rectangle=rectanglePlan(op);
      if(!rectangle){blockers.add('rectangle-style');continue;}
@@ -80,7 +94,7 @@ export function inspectDirectPage(tree,{allowText=false}={}){
   }
  }
  return {width:tree.pageWidth,height:tree.pageHeight,nodes,operations,textRuns,clips,svgReferences,
-  operationCounts:Object.fromEntries(types),fontFamilies:[...fonts],blockers:[...blockers],rectangles,paint,glyphCount};
+  operationCounts:Object.fromEntries(types),fontFamilies:[...fonts],blockers:[...blockers],rectangles,paint,glyphCount,mediaCount};
 }
 const color=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
 function rectanglePlan(op){
@@ -102,12 +116,13 @@ function rectanglePlan(op){
 // DEV52: caller-owned RHWP document; do not free or mutate it. Reject ALL
 // unsupported pages before returning bytes. PDF-lib is already a dependency.
 export async function buildDirectGeometryPdf(doc,options={}){
- return buildDirectPdf(doc,{...options,resolveFont:undefined,approvedFaces:undefined});
+ return buildDirectPdf(doc,{...options,resolveFont:undefined,approvedFaces:undefined,allowMedia:false});
 }
 // DEV53 remains opt-in. The production converter is not connected.
-export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,approvedFaces,fontSelections,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
+export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,approvedFaces,fontSelections,allowMedia=false,validateJpeg=verifyJpegDecode,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
  const count=pageCount(doc);cancel(signal);
- const {PDFDocument,rgb}=await loadPdf();
+ const lib=await loadPdf();
+ const {PDFDocument,rgb}=lib;
  const pdf=await PDFDocument.create();
  const toColor=hex=>rgb(...[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255));
  if(approvedFaces!==undefined){
@@ -115,10 +130,12 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
   resolveFont=createDirectFontResolver(approvedFaces,{selections:fontSelections});
  }
  const allowText=typeof resolveFont==='function',cache=new Map();
- let fontkit,rendered=0,textRuns=0,glyphCount=0;
+ let fontkit,rendered=0,textRuns=0,glyphCount=0,images=0,shapes=0,embeddedBytes=0,embeddedPixels=0,mediaTotal=0;
+ const imageCache=new Map();
  for(let i=0;i<count;i++){
   cancel(signal);
-  const plan=inspectDirectPage(readDirectPage(doc,i),{allowText});
+  const plan=inspectDirectPage(readDirectPage(doc,i),{allowText,allowMedia});
+  if((mediaTotal+=plan.mediaCount)>10000)error('MEDIA_DOCUMENT_BUDGET');
   if(glyphCount+plan.glyphCount>200000)error('DOCUMENT_TEXT_BUDGET');
   if(plan.blockers.length)error('UNSUPPORTED_PAGE_'+(i+1)+':'+plan.blockers.join(','));
   const page=pdf.addPage([plan.width*PT,plan.height*PT]);
@@ -133,6 +150,21 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
     for(const g of r.glyphs)page.drawText(g.ch,{font,size:r.size*PT,x:g.x*PT,y:(plan.height-g.y)*PT,color:toColor(r.color)});
     textRuns++;glyphCount+=r.glyphs.length;continue;
    }
+   if(r.kind==='image'){
+    cancel(signal);const key=r.mime+'|'+r.encoded;let image=imageCache.get(key);
+    if(!image){
+     if(imageCache.size>=128||embeddedBytes+r.bytes.length>64*1024*1024||embeddedPixels+r.info.width*r.info.height>96_000_000)error('IMAGE_DOCUMENT_BUDGET');
+     if(r.mime==='image/png')await verifyDirectPng(r.info,signal);else await validateJpeg(r.bytes,r.info,signal);
+     cancel(signal);
+     image=await (r.mime==='image/png'?pdf.embedPng(r.bytes):pdf.embedJpg(r.bytes));
+     if(image.width!==r.info.width||image.height!==r.info.height)error('IMAGE_EMBED_DIMENSIONS');
+     imageCache.set(key,image);embeddedBytes+=r.bytes.length;embeddedPixels+=r.info.width*r.info.height;
+    }
+    cancel(signal);page.drawImage(image,{x:r.x*PT,y:(plan.height-r.y-r.height)*PT,width:r.width*PT,height:r.height*PT,opacity:r.opacity});images++;continue;
+   }
+   if(['line','ellipse','path'].includes(r.kind)){
+    drawDirectShape(page,r,plan.height,lib,toColor);shapes++;continue;
+   }
    if(!r.fill&&!r.stroke)continue;
    const options={x:r.x*PT,y:(plan.height-r.y-r.height)*PT,width:r.width*PT,height:r.height*PT,
     borderWidth:r.stroke?r.strokeWidth*PT:0,color:r.fill?toColor(r.fill):undefined,
@@ -144,5 +176,33 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
  cancel(signal);
  const bytes=await pdf.save();cancel(signal);
  if(!(bytes instanceof Uint8Array)||bytes.length===0||bytes.length>512*1024*1024)error('OUTPUT_BYTES');
- return {bytes,pages:count,rectangles:rendered,textRuns,glyphCount,experimental:true};
+ return {bytes,pages:count,rectangles:rendered,textRuns,glyphCount,images,shapes,uniqueImages:imageCache.size,experimental:true};
+}
+
+async function verifyJpegDecode(bytes,info,signal){
+ if(typeof createImageBitmap!=='function')error('MEDIA_JPEG_DECODER_UNAVAILABLE');
+ const bitmap=await createImageBitmap(new Blob([bytes],{type:'image/jpeg'}),{imageOrientation:'none',colorSpaceConversion:'none'});
+ try{cancel(signal);if(bitmap.width!==info.width||bitmap.height!==info.height)error('MEDIA_JPEG_DECODE_DIMENSIONS');}
+ finally{bitmap.close();}
+}
+function drawDirectShape(page,r,height,lib,toColor){
+ const x=v=>v*PT,y=v=>(height-v)*PT;
+ if(r.kind==='line'){
+  page.drawLine({start:{x:x(r.x1),y:y(r.y1)},end:{x:x(r.x2),y:y(r.y2)},thickness:r.strokeWidth*PT,color:toColor(r.stroke)});return;
+ }
+ const style={borderWidth:r.stroke?r.strokeWidth*PT:0,...(r.fill?{color:toColor(r.fill)}:{}),...(r.stroke?{borderColor:toColor(r.stroke)}:{})};
+ if(r.kind==='ellipse'){
+  page.drawEllipse({x:x(r.x+r.width/2),y:y(r.y+r.height/2),xScale:r.width*PT/2,yScale:r.height*PT/2,...style});return;
+ }
+ const ops=[lib.pushGraphicsState()];
+ if(r.fill)ops.push(lib.setFillingColor(toColor(r.fill)));
+ if(r.stroke)ops.push(lib.setStrokingColor(toColor(r.stroke)),lib.setLineWidth(r.strokeWidth*PT));
+ for(const c of r.commands){
+  if(c.type==='moveTo')ops.push(lib.moveTo(x(c.x),y(c.y)));
+  else if(c.type==='lineTo')ops.push(lib.lineTo(x(c.x),y(c.y)));
+  else if(c.type==='curveTo')ops.push(lib.appendBezierCurve(x(c.x1),y(c.y1),x(c.x2),y(c.y2),x(c.x3),y(c.y3)));
+  else ops.push(lib.closePath());
+ }
+ ops.push(r.fill&&r.stroke?lib.fillAndStroke():r.fill?lib.fill():lib.stroke(),lib.popGraphicsState());
+ page.pushOperators(...ops);
 }
