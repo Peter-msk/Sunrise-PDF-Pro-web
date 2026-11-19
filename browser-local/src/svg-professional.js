@@ -4,7 +4,7 @@ import {cooperativeYield} from './cooperative-yield.mjs';
  * SVG-to-PDFKit and PDFKit are MIT dependencies, loaded only when selected.
  * checkedSvg() must sanitize each page before invoking this module.
  */
-import {resolveFont,resolveFontRuns,missingCodepoint,splitFontFamilies,familyKey,requestedStyle,pendingPdfFaceIndex,fontFamilyForPdfFace} from './pdf-fonts.js';
+import {resolveFont,resolveFontRuns,missingCodepoint,splitFontFamilies,familyKey,requestedStyle,pendingPdfFaceIndex,fontFamilyForPdfFace,normalizeSvgFontStyle} from './pdf-fonts.js';
 import {validateTextGeometry} from './svg-text-geometry.js';
 import {flattenLocalSvgStyles} from './svg-style.js';
 import {loadBrowserPdfBackend} from './pdfkit-backend.js';
@@ -140,9 +140,9 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
     root.setAttribute('font-family',normal.family);
     changed=true;
   }
-  const stack=[{el:root,family:'',weight:'normal',style:'normal'}];
+  const stack=[{el:root,family:'',weight:'normal',style:'normal',computedWeight:400,computedStyle:'normal'}];
   while(stack.length){
-    const {el,family,weight,style}=stack.pop();
+    const {el,family,weight,style,computedWeight=400,computedStyle='normal'}=stack.pop();
     if(++nodes>60000)return {ok:false,reason:'SVG_COMPLEXITY'};
     const vectorIssue=vectorBudget.element(el);
     if(vectorIssue)return {ok:false,reason:vectorIssue};
@@ -184,12 +184,31 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
     let currentFamily=el.getAttribute('font-family')??family;
     let currentWeight=el.getAttribute('font-weight')??weight;
     let currentStyle=el.getAttribute('font-style')??style;
+    // Resolve CSS inheritance and relative/numeric weights before asking the
+    // static font resolver. The computed weight is independent of fallback.
+    const normalizedStyle=fontRegistry.allowCoverageFallback?
+      normalizeSvgFontStyle(el.getAttribute('font-weight'),el.getAttribute('font-style'),
+        computedWeight,computedStyle):null;
+    if(normalizedStyle&&!normalizedStyle.reason){
+      const rawWeight=el.getAttribute('font-weight'),rawStyle=el.getAttribute('font-style');
+      if((rawWeight!==null||weight!==normalizedStyle.weight)&&rawWeight!==normalizedStyle.weight){
+        el.setAttribute('font-weight',normalizedStyle.weight);changed=true;
+      }
+      if((rawStyle!==null||style!==normalizedStyle.style)&&rawStyle!==normalizedStyle.style){
+        el.setAttribute('font-style',normalizedStyle.style);changed=true;
+      }
+      currentWeight=normalizedStyle.weight;currentStyle=normalizedStyle.style;
+    }
     if(el.localName==='text'||el.localName==='tspan'||el.localName==='textPath'){
       const value=textDirectlyIn(el);
       const textIssue=vectorBudget.text(value);
       if(textIssue)return {ok:false,reason:textIssue};
       if(value.trim()){
         hasText=true;textPages++;
+        if(normalizedStyle?.reason)return {ok:false,reason:'FONT_FAMILY_OR_VARIANT_UNAVAILABLE',
+          fontReason:'unsupported-style',fontStyleReason:normalizedStyle.reason,
+          fontFamily:String(currentFamily||'기본 글꼴').slice(0,120),
+          fontWeight:String(currentWeight).slice(0,24),fontStyle:String(currentStyle).slice(0,24)};
         const face=resolveFont(fontRegistry,currentFamily,currentWeight,currentStyle,value);
         // Preserve the specified face (user/PC or bundled) for every glyph it
         // supports. A wide substitute must not replace an entire paragraph
@@ -239,7 +258,8 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
           }
           changed=true;
           for(const child of Array.from(el.children).reverse())
-            stack.push({el:child,family:currentFamily,weight:currentWeight,style:currentStyle});
+            stack.push({el:child,family:currentFamily,weight:currentWeight,style:currentStyle,
+              computedWeight:normalizedStyle?.numeric??null,computedStyle:normalizedStyle?.computedStyle??null});
           continue;
         }
         if(!face){
@@ -299,7 +319,9 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
       }
     }
     for(const child of el.children)stack.push({el:child,family:currentFamily,
-      weight:currentWeight,style:currentStyle});
+      weight:currentWeight,style:currentStyle,
+      computedWeight:normalizedStyle?normalizedStyle.numeric:computedWeight,
+      computedStyle:normalizedStyle?normalizedStyle.computedStyle:computedStyle});
   }
   const normalizedSvg=changed?new XMLSerializer().serializeToString(root):checked.svg;
   return {ok:true,reason:'OK',nodes,hasText,textRuns:textPages,positionedRuns,substituteFamilies:[...substituteFamilies],svg:normalizedSvg};
@@ -326,6 +348,19 @@ export async function localPngBytes(blob,signal){
  * in that case the entire candidate is discarded. The caller must not silently
  * retry as an image PDF. No partial vector pages are accepted.
  */
+// Fixed, local-only categorization. Never export raw library text or stack.
+export function classifySvgWriterReason(error){
+ const message=String(error?.message||error||'');
+ if(/\bFONT_FAMILY_OR_VARIANT_UNAVAILABLE\b/.test(message))return 'font-callback';
+ if(/\bSVG_EXTERNAL_RESOURCE\b/.test(message))return 'resource-callback';
+ if(/\bPROFESSIONAL_SVG_WARNING_/.test(message))return 'renderer-warning';
+ if(/\bPNG_[A-Z_]+\b|^Unknown image format\b|^Invalid JPEG\b/i.test(message))return 'image-decode';
+ if(/maximum call stack size exceeded/i.test(message))return 'recursion-limit';
+ if(/unsupported number|not a finite number/i.test(message))return 'numeric-geometry';
+ if(error?.name==='TypeError')return 'type-error';
+ if(error?.name==='ReferenceError')return 'reference-error';
+ return 'unclassified';
+}
 export async function tryProfessionalDocument(hwpDoc,count,{
   checkedSvg,rasterPage,signal,fontRegistry={faces:[]},
   onProgress=()=>{},loadLibraries,imageBytes=localPngBytes,allowRasterFallback=false,
@@ -409,7 +444,8 @@ export async function tryProfessionalDocument(hwpDoc,count,{
           const attrInfo=preflight.unsupportedAttribute?' · 미지원 SVG 속성: '+preflight.unsupportedAttribute:'';
           throw Error((i+1)+'쪽의 글자·도형 보존 변환을 완료할 수 없습니다 ('+preflight.reason+attrInfo+').'+fontInfo+
             ' 원본 글꼴과 문서 지원 범위를 확인하세요.'+
-            (preflight.fontReason?' [font_reason='+preflight.fontReason+']':''));
+            (preflight.fontReason?' [font_reason='+preflight.fontReason+']':'')+
+            (preflight.fontStyleReason?' [font_style_reason='+preflight.fontStyleReason+']':''));
         }
         // This page has not yet modified PDFKit; safe to rasterize just it.
         onProgress({stage:'professional-raster',page:i+1,total:count});
@@ -568,7 +604,8 @@ export async function tryProfessionalDocument(hwpDoc,count,{
       // The structured stream timeout is already diagnostic and its leading
       // token is consumed by existing recovery and integrity contracts.
       if(/^PDF_STREAM_TIMEOUT\b/.test(original))throw error;
-      throw Error('[writer_step='+writerStep+'] '+original,{cause:error});
+      const detail=writerStep==='svg-render'?' [writer_reason='+classifySvgWriterReason(error)+']':'';
+      throw Error('[writer_step='+writerStep+']'+detail+' '+original,{cause:error});
     }
     throw error;
   }finally{

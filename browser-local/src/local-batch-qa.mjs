@@ -5,7 +5,7 @@ import {localQaFilterReason} from './svg-filter-diagnostics.mjs';
  */
 // Explicit app marker: older v1 reports lack this field, even if saved later.
 import {getVerifiedRhwpVersion} from './rhwp-wasm-loader.mjs';
-export const QA_BUILD_REVISION='DEV48';
+export const QA_BUILD_REVISION='DEV49';
 export function qaDeploymentChannel(host=globalThis.location?.hostname){
  if(host==='sunrise-pdf-pro-web-dev41-qa.ko-pg.workers.dev')return 'qa';
  if(host==='sunrise-pdf-pro-web.ko-pg.workers.dev')return 'production';
@@ -44,6 +44,14 @@ const ERROR_CODES=[
  'PROFESSIONAL_PDF_INVALID_HEADER','PROFESSIONAL_DEPENDENCY_UNAVAILABLE'
 ];
 const FONT_REASONS=new Set(['unsupported-style','glyph-not-in-registry','unsafe-mixed-run','no-single-covered-face','ambiguous-nested-face']);
+const STYLE_REASONS=new Set(['weight-unsupported','style-unsupported']);
+const WRITER_REASONS=new Set(['font-callback','resource-callback','renderer-warning','image-decode','recursion-limit','numeric-geometry','type-error','reference-error','unclassified']);
+export function localQaFontStyleReason(error){
+ return safeReason(error,/\[font_style_reason=([a-z-]+)\]/,STYLE_REASONS);
+}
+export function localQaWriterReason(error){
+ return safeReason(error,/\[writer_reason=([a-z-]+)\]/,WRITER_REASONS);
+}
 const WRITER_STEPS=new Set(['font-register','page-add','image-embed','svg-render','pdf-end','pdf-collect']);
 function safeReason(error,pattern,allowed){
  const value=pattern.exec(String(error||''))?.[1];
@@ -136,7 +144,9 @@ export function buildLocalBatchQaReport(items,{generatedAt=new Date().toISOStrin
    duration_ms:safeDuration(item?._proDurationMs),phase,
    error_code:state==='failed'?localQaErrorCode(item?.error):null,
    font_reason:state==='failed'?localQaFontReason(item?.error):null,
+   font_style_reason:state==='failed'?localQaFontStyleReason(item?.error):null,
    writer_step:state==='failed'?localQaWriterStep(item?.error):null,
+   writer_reason:state==='failed'?localQaWriterReason(item?.error):null,
    stream_reason:state==='failed'?localQaStreamReason(item?.error):null,
    stream_integrity:state==='failed'?localQaStreamIntegrity(item?.error):null,
    stream_pending_refs:state==='failed'?localQaWriterPendingRefs(item?.error):null,

@@ -39,6 +39,33 @@ export function requestedStyle(weight='normal',style='normal'){
   return {bold:w==='bold'||(numeric!==null&&numeric>=600),italic:s!=='normal'};
 }
 
+// Compute inherited CSS font weight before choosing one of the available
+// static faces. Preserve the numeric weight for relative descendants.
+// Unknown CSS and unsupported oblique angles still fail closed.
+export function normalizeSvgFontStyle(weight,style,parentWeight=400,parentStyle='normal'){
+ const w=weight==null?'inherit':String(weight).trim().toLowerCase();
+ const s=style==null?'inherit':String(style).trim().toLowerCase();
+ let numeric=null,computedStyle=null;
+ if(w==='inherit'||w==='unset')numeric=parentWeight;
+ else if(w==='initial'||w==='normal')numeric=400;
+ else if(w==='bold')numeric=700;
+ else if(w==='bolder'||w==='lighter'){
+  if(Number.isFinite(parentWeight)){
+   const p=parentWeight;
+   numeric=w==='bolder'?(p<350?400:p<550?700:900):
+     (p<550?100:p<750?400:700);
+  }
+ }else if(/^(?:\d{1,4}(?:\.\d{1,6})?|\.\d{1,6})$/.test(w)){
+  const n=Number(w);if(n>=1&&n<=1000)numeric=n;
+ }
+ if(s==='inherit'||s==='unset')computedStyle=parentStyle;
+ else if(s==='initial'||s==='normal')computedStyle='normal';
+ else if(s==='italic'||s==='oblique')computedStyle='italic';
+ else if(/^oblique\s+0(?:\.0+)?deg$/.test(s))computedStyle='normal';
+ return {numeric,computedStyle,weight:numeric===null?null:numeric>=600?'bold':'normal',
+  style:computedStyle,reason:numeric===null?'weight-unsupported':computedStyle===null?'style-unsupported':null};
+}
+
 /**
  * Resolve an embedded font. Exact user-provided family+style wins; an OFL
  * bundled face is a clearly reported substitute when the document names a
