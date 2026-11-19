@@ -10,6 +10,7 @@ import {planDirectImage,planDirectShape,verifyDirectPng} from './direct-media.mj
 import {directLayer,directPlane,directClip,directGroup,openDirectClip} from './direct-layer.mjs';
 import {planDirectSpecial} from './direct-special.mjs';
 const SCHEMA_MINOR=35,RESOURCE_MINOR=6,PT=.75;
+const DOCUMENT_OP_LIMIT=200000,DOCUMENT_WORK_LIMIT=1000000,YIELD_UNITS=256;
 const MAX_JSON=32*1024*1024,MAX_NODES=60000,MAX_OPS=100000,MAX_DEPTH=128;
 const error=code=>{throw Error('DIRECT_PDF_'+code);};
 const plain=o=>o!==null&&typeof o==='object'&&!Array.isArray(o);
@@ -19,6 +20,7 @@ function bbox(b){
  return b;
 }
 function cancel(signal){if(signal?.aborted)throw new DOMException('취소됨','AbortError');}
+function yieldToHost(){return typeof setTimeout==='function'?new Promise(resolve=>setTimeout(resolve,0)):Promise.resolve();}
 function pageCount(doc){const n=doc.pageCount();if(!Number.isSafeInteger(n)||n<1||n>MAX_CONVERSION_PAGES)error('PAGE_COUNT');return n;}
 export function readDirectPage(doc,index){
  if(typeof doc?.getPageLayerTreeWithProfile!=='function')error('API_UNAVAILABLE');
@@ -36,7 +38,7 @@ export function readDirectPage(doc,index){
 }
 // Streaming traversal: preserve upstream child/operation order. Collect
 // paint planes separately; no arbitrary z-order interpretation. Clip geometry
-// deliberately blocks the prototype until clipping replay is implemented.
+// is opt-in, preserving the original geometry-only behavior.
 export function inspectDirectPage(tree,{allowText=false,allowMedia=false,allowLayers=false,allowSpecial=false}={}){
  let nodes=0,operations=0,textRuns=0,clips=0,svgReferences=0;
  const types=new Map(), fonts=new Set(), blockers=new Set(),rectangles=[],paint=[];
@@ -110,7 +112,7 @@ export function inspectDirectPage(tree,{allowText=false,allowMedia=false,allowLa
   }
  }
  return {width:tree.pageWidth,height:tree.pageHeight,nodes,operations,textRuns,clips,svgReferences,
-  operationCounts:Object.fromEntries(types),fontFamilies:[...fonts],blockers:[...blockers],rectangles,paint,glyphCount,mediaCount,tableCount,cellCount,mergedCells,clipReplayCost,specialCount,specialItems};
+  pathCommands,operationCounts:Object.fromEntries(types),fontFamilies:[...fonts],blockers:[...blockers],rectangles,paint,glyphCount,mediaCount,tableCount,cellCount,mergedCells,clipReplayCost,specialCount,specialItems};
 }
 const color=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
 function rectanglePlan(op){
@@ -135,8 +137,12 @@ export async function buildDirectGeometryPdf(doc,options={}){
  return buildDirectPdf(doc,{...options,resolveFont:undefined,approvedFaces:undefined,allowMedia:false,allowLayers:false,allowSpecial:false});
 }
 // DEV53 remains opt-in. The production converter is not connected.
-export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,approvedFaces,fontSelections,allowMedia=false,allowLayers=false,allowSpecial=false,validateJpeg=verifyJpegDecode,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
+export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,approvedFaces,fontSelections,allowMedia=false,allowLayers=false,allowSpecial=false,yieldControl=yieldToHost,validateJpeg=verifyJpegDecode,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
  const count=pageCount(doc);cancel(signal);
+ if(typeof yieldControl!=='function')error('YIELD_CONTROL');
+ let pendingUnits=0,cooperativeYields=0,totalOperations=0,totalWork=0,clipTransitions=0;
+ const due=units=>{pendingUnits+=units;if(pendingUnits<YIELD_UNITS)return false;pendingUnits=0;return true;};
+ const pause=async()=>{cancel(signal);await yieldControl();cancel(signal);cooperativeYields++;};
  const lib=await loadPdf();
  const {PDFDocument,rgb}=lib;
  const pdf=await PDFDocument.create();
@@ -151,22 +157,33 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
  for(let i=0;i<count;i++){
   cancel(signal);
   const plan=inspectDirectPage(readDirectPage(doc,i),{allowText,allowMedia,allowLayers,allowSpecial});
+  totalOperations+=plan.operations;
+  // Conservative preflight estimates; do not allocate PDF objects for a page
+  // that would exceed the cumulative document work budget.
+  totalWork+=plan.paint.length+plan.glyphCount*8+plan.pathCommands+plan.specialItems*4+plan.clipReplayCost*4;
+  if(totalOperations>DOCUMENT_OP_LIMIT||totalWork>DOCUMENT_WORK_LIMIT)error('DOCUMENT_WORK_BUDGET');
   if((specialTotal+=plan.specialItems)>30000)error('SPECIAL_DOCUMENT_BUDGET');
   if((mediaTotal+=plan.mediaCount)>10000)error('MEDIA_DOCUMENT_BUDGET');
   if(glyphCount+plan.glyphCount>200000)error('DOCUMENT_TEXT_BUDGET');
   if(plan.blockers.length)error('UNSUPPORTED_PAGE_'+(i+1)+':'+plan.blockers.join(','));
   const page=pdf.addPage([plan.width*PT,plan.height*PT]);
   // Stable order inside each plane. Coordinate conversion once, at PDF boundary.
-  for(const plane of (allowLayers?[0,1,2,3]:[0,1]))for(const r of plan.paint){
-   if(r.plane!==plane)continue;
-   for(const clip of r.clips??[])openDirectClip(page,clip,plan.height,lib);
-   try{
+  const planes=Array.from({length:allowLayers?4:2},()=>[]);
+  for(const r of plan.paint){if(!planes[r.plane])error('PAINT_PLANE');planes[r.plane].push(r);}
+  for(const items of planes){
+   const activeClips=[];
+   try{for(const r of items){
+    if(due(1))await pause();
+    const wanted=r.clips??[];let shared=0;
+    while(shared<activeClips.length&&shared<wanted.length&&activeClips[shared]===wanted[shared])shared++;
+    while(activeClips.length>shared){page.pushOperators(lib.popGraphicsState());activeClips.pop();clipTransitions++;}
+    for(let j=shared;j<wanted.length;j++){openDirectClip(page,wanted[j],plan.height,lib);activeClips.push(wanted[j]);clipTransitions++;}
    if(r.kind==='text'){
     cancel(signal);
     if(!fontkit){fontkit=await loadFontkit();pdf.registerFontkit(fontkit);}
     const font=await prepareDirectText(pdf,r,resolveFont,fontkit,cache);
     cancel(signal);
-    for(const g of r.glyphs)page.drawText(g.ch,{font,size:r.size*PT,x:g.x*PT,y:(plan.height-g.y)*PT,color:toColor(r.color)});
+    for(const g of r.glyphs){if(due(1))await pause();page.drawText(g.ch,{font,size:r.size*PT,x:g.x*PT,y:(plan.height-g.y)*PT,color:toColor(r.color)});}
     textRuns++;glyphCount+=r.glyphs.length;continue;
    }
    if(r.kind==='image'){
@@ -189,14 +206,15 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
     borderWidth:r.stroke?r.strokeWidth*PT:0,color:r.fill?toColor(r.fill):undefined,
     ...(r.stroke?{borderColor:toColor(r.stroke)}:{})};
    page.drawRectangle(options);rendered++;
-   }finally{for(const clip of r.clips??[])page.pushOperators(lib.popGraphicsState());}
+   }}finally{while(activeClips.length){page.pushOperators(lib.popGraphicsState());activeClips.pop();clipTransitions++;}}
   }
   onProgress({page:i+1,total:count,operations:plan.operations});
+  if(i+1<count)await pause();
  }
  cancel(signal);
  const bytes=await pdf.save();cancel(signal);
  if(!(bytes instanceof Uint8Array)||bytes.length===0||bytes.length>512*1024*1024)error('OUTPUT_BYTES');
- return {bytes,pages:count,rectangles:rendered,textRuns,glyphCount,images,shapes,uniqueImages:imageCache.size,specialItems:specialTotal,experimental:true};
+ return {bytes,pages:count,rectangles:rendered,textRuns,glyphCount,images,shapes,uniqueImages:imageCache.size,specialItems:specialTotal,metrics:{operations:totalOperations,estimatedWork:totalWork,cooperativeYields,clipTransitions},experimental:true};
 }
 
 async function verifyJpegDecode(bytes,info,signal){
