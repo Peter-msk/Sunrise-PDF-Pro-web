@@ -8,6 +8,7 @@ import {planDirectText,prepareDirectText} from './direct-text.mjs';
 import {createDirectFontResolver} from './direct-font.mjs';
 import {planDirectImage,planDirectShape,verifyDirectPng} from './direct-media.mjs';
 import {directLayer,directPlane,directClip,directGroup,openDirectClip} from './direct-layer.mjs';
+import {planDirectSpecial} from './direct-special.mjs';
 const SCHEMA_MINOR=35,RESOURCE_MINOR=6,PT=.75;
 const MAX_JSON=32*1024*1024,MAX_NODES=60000,MAX_OPS=100000,MAX_DEPTH=128;
 const error=code=>{throw Error('DIRECT_PDF_'+code);};
@@ -36,9 +37,10 @@ export function readDirectPage(doc,index){
 // Streaming traversal: preserve upstream child/operation order. Collect
 // paint planes separately; no arbitrary z-order interpretation. Clip geometry
 // deliberately blocks the prototype until clipping replay is implemented.
-export function inspectDirectPage(tree,{allowText=false,allowMedia=false,allowLayers=false}={}){
+export function inspectDirectPage(tree,{allowText=false,allowMedia=false,allowLayers=false,allowSpecial=false}={}){
  let nodes=0,operations=0,textRuns=0,clips=0,svgReferences=0;
  const types=new Map(), fonts=new Set(), blockers=new Set(),rectangles=[],paint=[];
+ let specialCount=0,specialItems=0;
  let tableCount=0,cellCount=0,mergedCells=0,clipCost=0,clipReplayCost=0;
  let glyphCount=0,mediaCount=0,mediaBytes=0,mediaPixels=0,pathCommands=0;
  const stack=[{node:tree.root,depth:0,layer:null,chain:[]}];
@@ -67,6 +69,13 @@ export function inspectDirectPage(tree,{allowText=false,allowMedia=false,allowLa
      const add=item=>{if(allowLayers){item.plane=directPlane(op,active);item.clips=chain;clipReplayCost+=chain.reduce((n,c)=>n+c.cost,0);if(clipReplayCost>100000)error('CLIP_REPLAY_BUDGET');}paint.push(item);};
      types.set(op.type,(types.get(op.type)||0)+1);
      if(op.type==='rawSvg')svgReferences++;
+     if(allowSpecial&&['equation','placeholder','footnoteMarker','textControlMark','controlLabel','textDecoration','tabLeader','charOverlap','formObject'].includes(op.type)){
+      try{const items=planDirectSpecial(op);
+       if((specialItems+=items.length)>10000)error('SPECIAL_BUDGET');
+       if(!allowText&&items.some(item=>item.kind==='text'))error('SPECIAL_TEXT_DISABLED');
+       for(const item of items){if(item.kind==='text'){if(++glyphCount>50000)error('TEXT_BUDGET');}item.plane=1;add(item);}specialCount++;
+      }catch(e){if(!String(e.message).startsWith('DIRECT_PDF_SPECIAL_'))throw e;blockers.add(e.message);}continue;
+     }
      if(op.type==='textRun'){
       textRuns++;
       const family=op.style?.fontFamily;
@@ -101,7 +110,7 @@ export function inspectDirectPage(tree,{allowText=false,allowMedia=false,allowLa
   }
  }
  return {width:tree.pageWidth,height:tree.pageHeight,nodes,operations,textRuns,clips,svgReferences,
-  operationCounts:Object.fromEntries(types),fontFamilies:[...fonts],blockers:[...blockers],rectangles,paint,glyphCount,mediaCount,tableCount,cellCount,mergedCells,clipReplayCost};
+  operationCounts:Object.fromEntries(types),fontFamilies:[...fonts],blockers:[...blockers],rectangles,paint,glyphCount,mediaCount,tableCount,cellCount,mergedCells,clipReplayCost,specialCount,specialItems};
 }
 const color=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
 function rectanglePlan(op){
@@ -123,10 +132,10 @@ function rectanglePlan(op){
 // DEV52: caller-owned RHWP document; do not free or mutate it. Reject ALL
 // unsupported pages before returning bytes. PDF-lib is already a dependency.
 export async function buildDirectGeometryPdf(doc,options={}){
- return buildDirectPdf(doc,{...options,resolveFont:undefined,approvedFaces:undefined,allowMedia:false,allowLayers:false});
+ return buildDirectPdf(doc,{...options,resolveFont:undefined,approvedFaces:undefined,allowMedia:false,allowLayers:false,allowSpecial:false});
 }
 // DEV53 remains opt-in. The production converter is not connected.
-export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,approvedFaces,fontSelections,allowMedia=false,allowLayers=false,validateJpeg=verifyJpegDecode,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
+export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,approvedFaces,fontSelections,allowMedia=false,allowLayers=false,allowSpecial=false,validateJpeg=verifyJpegDecode,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
  const count=pageCount(doc);cancel(signal);
  const lib=await loadPdf();
  const {PDFDocument,rgb}=lib;
@@ -137,11 +146,12 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
   resolveFont=createDirectFontResolver(approvedFaces,{selections:fontSelections});
  }
  const allowText=typeof resolveFont==='function',cache=new Map();
- let fontkit,rendered=0,textRuns=0,glyphCount=0,images=0,shapes=0,embeddedBytes=0,embeddedPixels=0,mediaTotal=0;
+ let fontkit,rendered=0,textRuns=0,glyphCount=0,images=0,shapes=0,embeddedBytes=0,embeddedPixels=0,mediaTotal=0,specialTotal=0;
  const imageCache=new Map();
  for(let i=0;i<count;i++){
   cancel(signal);
-  const plan=inspectDirectPage(readDirectPage(doc,i),{allowText,allowMedia,allowLayers});
+  const plan=inspectDirectPage(readDirectPage(doc,i),{allowText,allowMedia,allowLayers,allowSpecial});
+  if((specialTotal+=plan.specialItems)>30000)error('SPECIAL_DOCUMENT_BUDGET');
   if((mediaTotal+=plan.mediaCount)>10000)error('MEDIA_DOCUMENT_BUDGET');
   if(glyphCount+plan.glyphCount>200000)error('DOCUMENT_TEXT_BUDGET');
   if(plan.blockers.length)error('UNSUPPORTED_PAGE_'+(i+1)+':'+plan.blockers.join(','));
@@ -186,7 +196,7 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
  cancel(signal);
  const bytes=await pdf.save();cancel(signal);
  if(!(bytes instanceof Uint8Array)||bytes.length===0||bytes.length>512*1024*1024)error('OUTPUT_BYTES');
- return {bytes,pages:count,rectangles:rendered,textRuns,glyphCount,images,shapes,uniqueImages:imageCache.size,experimental:true};
+ return {bytes,pages:count,rectangles:rendered,textRuns,glyphCount,images,shapes,uniqueImages:imageCache.size,specialItems:specialTotal,experimental:true};
 }
 
 async function verifyJpegDecode(bytes,info,signal){
