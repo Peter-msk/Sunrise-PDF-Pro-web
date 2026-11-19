@@ -93,8 +93,45 @@ try{
  assert.ok(evidence[3].cropViewports>0,'RHWP did not actually emit an inner crop viewport');
  await page.locator('#source').setInputFiles(samples.map(({name,mimeType,buffer})=>({name,mimeType,buffer})));
  assert.equal(await page.locator('#pdf-engine').inputValue(),'professional');
+ // Public fixtures only: observe the actual UI without changing conversion behavior.
+ // Browser heartbeats preserve the last responsive stage even when a later
+ // synchronous operation blocks the page or the final QA download is unavailable.
+ page.on('console',message=>{
+  const value=message.text();
+  if(value.startsWith('DEV46_BATCH_HEARTBEAT '))console.log(value);
+ });
+ await page.evaluate(()=>{
+  const snapshot=()=>{
+   const text=id=>document.getElementById(id)?.textContent||'';
+   console.log('DEV46_BATCH_HEARTBEAT '+JSON.stringify({
+    total:text('total-count'),done:text('done-count'),failed:text('failed-count'),
+    summary:text('summary-state'),progress:document.querySelector('#progress')?.value??null,
+    status:text('status'),
+    states:Array.from(document.querySelectorAll('#file-list .file-row'),row=>row.dataset.state)
+   }));
+  };
+  snapshot();
+  setInterval(snapshot,5000);
+ });
  await page.locator('#convert').click();
- await page.waitForFunction(()=>Number(document.querySelector('#done-count')?.textContent||0)+Number(document.querySelector('#failed-count')?.textContent||0)===4,null,{timeout:180000});
+ try{
+  await page.waitForFunction(()=>Number(document.querySelector('#done-count')?.textContent||0)+Number(document.querySelector('#failed-count')?.textContent||0)===4,null,{timeout:180000});
+ }catch(error){
+  // Do not turn an incomplete batch into a passing test. The same local,
+  // privacy-filtered QA export is available during an in-progress conversion.
+  try{
+   const [partial]=await Promise.all([
+    page.waitForEvent('download',{timeout:5000}),
+    page.locator('#qa-export').click({timeout:5000})
+   ]);
+   const report=JSON.parse(readFileSync(await partial.path(),'utf8'));
+   console.log('DEV46_BATCH_TIMEOUT_QA '+JSON.stringify(report));
+  }catch(qaError){
+   console.error('DEV46_BATCH_TIMEOUT_QA_UNAVAILABLE '+(qaError?.name||'Error'));
+  }
+  console.error('DEV46_BATCH_PAGE_ERRORS '+JSON.stringify(errors));
+  throw error;
+ }
  const exported=page.waitForEvent('download');
  await page.locator('#qa-export').click();
  const qaDownload=await exported;
