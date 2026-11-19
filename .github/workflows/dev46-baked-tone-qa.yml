@@ -21,6 +21,8 @@ jobs:
           node-version: '24'
       - name: Install pinned dependencies
         run: npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund
+      - name: Workerless PNG decode regression
+        run: node --test browser-local/tests/dev47-png-workerless.mjs
       - name: Prepare verified engine parts and approved fonts
         working-directory: browser-local
         run: |

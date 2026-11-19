@@ -55,6 +55,8 @@ try{
  browser=await chromium.launch({headless:true});
  const page=await browser.newPage({acceptDownloads:true});
  const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+ const workerViolations=[];
+ await page.addInitScript(()=>{globalThis.__dev47WorkerViolations=[];document.addEventListener('securitypolicyviolation',e=>{if(e.effectiveDirective==='worker-src')globalThis.__dev47WorkerViolations.push(e.effectiveDirective);});});
  await page.goto('http://127.0.0.1:5180/',{waitUntil:'domcontentloaded'});
  await page.waitForFunction(()=>document.querySelector('#status')?.textContent.includes('변환 준비 완료'),null,{timeout:30000});
  const label=await page.locator('#build-revision').textContent();
@@ -154,6 +156,8 @@ try{
   assert.equal(qa.files[i].raster_pages,0);
   output.push({name:variants[i].name,pages:pdf.getPageCount(),bytes:bytes.length});
  }
+ workerViolations.push(...await page.evaluate(()=>globalThis.__dev47WorkerViolations));
+ assert.deepEqual(workerViolations,[],'worker CSP violations');
  assert.deepEqual(errors,[]);
  console.log('DEV46_FULL_BROWSER_PASS '+JSON.stringify(output));
 }finally{await browser?.close();await server.close();}
