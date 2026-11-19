@@ -1,0 +1,90 @@
+name: DEV47 authorized production release
+on:
+  push:
+    branches:
+      - release/dev47-prod-20261119
+    paths:
+      - .github/workflows/dev47-authorized-prod.yml
+permissions:
+  contents: read
+concurrency:
+  group: sunrise-pdf-pro-web-production-release
+  cancel-in-progress: false
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      CLOUDFLARE_ACCOUNT_ID: '569c0b66d1f480e577ca67cd68592203'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify authorized release source and isolated target
+        run: |
+          set -euo pipefail
+          test "$(git diff --name-only 611d02df796e3a843fde66b0e2ff1a04e41e7dc9 HEAD | sort)" = "$(printf '%s\n' .github/workflows/dev47-authorized-prod.yml browser-local/tests/dev47-release-smoke.mjs)"
+          node -e 'const c=JSON.parse(require("fs").readFileSync("wrangler.jsonc","utf8")); if(c.name!=="sunrise-pdf-pro-web"||c.main!=="src/worker.js"||c.assets.directory!=="./browser-local/dist"||c.d1_databases[0].database_id!=="d7fd7866-2ac2-485f-8d4b-4773b69d99e4") process.exit(1)'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: browser-local/package-lock.json
+      - name: Build production distribution and run release checks
+        run: npm run build
+      - name: Verify new PNG regression and pinned WASM split
+        run: node --test browser-local/tests/dev47-png-workerless.mjs browser-local/tests/dev46-rhwp-split.mjs
+      - name: Verify Worker bundle without deployment
+        run: npx --yes wrangler@4 deploy --dry-run --config wrangler.jsonc --outdir /tmp/dev47-worker-check
+      - name: Install Chromium
+        working-directory: browser-local
+        run: npx playwright install --with-deps chromium
+      - name: Start local Worker with production assets
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 dev --local --ip 127.0.0.1 --port 8787 --config wrangler.jsonc >/tmp/dev47-local-worker.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8787/local/health >/tmp/dev47-local-health.json; then
+              node -e 'const h=require("/tmp/dev47-local-health.json");if(h.rhwp_version!=="0.9.0"||h.document_upload!==false)process.exit(1)'
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/dev47-local-worker.log
+          exit 1
+      - name: Real four-document release gate against built Worker
+        env:
+          SUNRISE_RELEASE_TEST_URL: http://127.0.0.1:8787/local/
+        run: node browser-local/tests/dev47-release-smoke.mjs
+      - name: Deploy authorized production version and smoke test with rollback
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+          SUNRISE_RELEASE_TEST_URL: https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'BLOCKED: deploy secret not configured'; exit 3; }
+          endpoint="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/sunrise-pdf-pro-web/deployments"
+          active() {
+            curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$endpoint" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const j=JSON.parse(s);const d=j.result?.deployments?.[0];if(!j.success||d?.versions?.length!==1||d.versions[0].percentage!==100)process.exit(1);console.log(d.versions[0].version_id)})'
+          }
+          previous="$(active)"
+          test "$previous" = '5a8f74e4-319a-4e2e-8b15-a0841d802d57' || { echo 'BLOCKED: production changed since approval checkpoint'; exit 4; }
+          echo "PREVIOUS_VERSION=$previous"
+          npx --yes wrangler@4 deploy --config wrangler.jsonc --keep-vars --message 'DEV47 authorized production 611d02df'
+          deployed="$(active)"
+          test "$deployed" != "$previous"
+          echo "DEPLOYED_VERSION=$deployed"
+          if (
+            set -e
+            curl -fsS --retry 5 --retry-delay 3 https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/health >/tmp/dev47-live-health.json
+            node -e 'const h=require("/tmp/dev47-live-health.json");if(h.rhwp_version!=="0.9.0"||h.wasm_sha256!=="c3b0632b84881f81f2c80be7c2f9e44a4086cb01e05a6a9107a3b3c6350abc1d"||h.document_upload!==false)process.exit(1)'
+            node browser-local/tests/dev47-release-smoke.mjs
+          ); then echo 'DEV47_PRODUCTION_RELEASE_PASS'; else
+            if test "$(active)" = "$deployed"; then
+              npx --yes wrangler@4 rollback "$previous" --config wrangler.jsonc --message 'DEV47 live smoke failed; restore previous version'
+              echo 'DEV47_ROLLBACK_EXECUTED'
+            else echo 'BLOCKED: concurrent deployment, no automatic rollback'; fi
+            exit 1
+          fi
