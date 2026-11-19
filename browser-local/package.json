@@ -38,7 +38,8 @@
     "test:dev53": "node --test tests/dev52-direct-pdf.mjs tests/dev53-direct-text.mjs",
     "test:dev54": "node --test tests/dev52-direct-pdf.mjs tests/dev53-direct-text.mjs tests/dev54-direct-font.mjs",
     "test:dev55": "node --test tests/dev52-direct-pdf.mjs tests/dev53-direct-text.mjs tests/dev54-direct-font.mjs tests/dev55-direct-media.mjs",
-    "test:dev56": "node --test tests/dev56-direct-layer.mjs tests/dev55-direct-media.mjs tests/dev52-direct-pdf.mjs"
+    "test:dev56": "node --test tests/dev56-direct-layer.mjs tests/dev55-direct-media.mjs tests/dev52-direct-pdf.mjs",
+    "test:dev57": "node --test tests/dev57-direct-special.mjs tests/dev56-direct-layer.mjs tests/dev53-direct-text.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "1.1.1",
