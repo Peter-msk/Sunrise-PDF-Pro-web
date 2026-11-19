@@ -491,7 +491,7 @@ $('convert').addEventListener('click',async()=>{
       ?' · '+Math.min(100,Math.floor(info.loaded/info.total*100))+'% 읽음':'';
     status(file.name+' · '+message+byteStatus+elapsedStatus+pageStatus+loadStatus+
      ' · '+(completed+1)+'/'+pending.length+'개');
-   },signal,{fontFiles,engine:itemEngine,localFonts,localFontCache});
+   },signal,{fontFiles,engine:itemEngine,localFontCache,localFonts});
    if(fontAccessNotice&&isHwp(file))result.warnings=[...(result.warnings||[]),fontAccessNotice];
    if((plan.recovery&&item===requested)||spec){
     const cause=spec?.cause||plan.cause;

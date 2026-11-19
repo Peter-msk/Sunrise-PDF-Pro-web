@@ -564,7 +564,11 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     }catch{/* Keep the primary failure reason and fail closed. */}
     // Fixed stage marker only; raw message remains local and never in QA.
     if(writerStep&&error?.name!=='AbortError'&&!(error instanceof RangeError)){
-      throw Error('[writer_step='+writerStep+'] '+String(error?.message||error),{cause:error});
+      const original=String(error?.message||error);
+      // The structured stream timeout is already diagnostic and its leading
+      // token is consumed by existing recovery and integrity contracts.
+      if(/^PDF_STREAM_TIMEOUT\b/.test(original))throw error;
+      throw Error('[writer_step='+writerStep+'] '+original,{cause:error});
     }
     throw error;
   }finally{

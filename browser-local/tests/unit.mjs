@@ -96,7 +96,8 @@ test('R40 font substitution handles enterprise HWP family lists without adding f
   assert.equal(result.ok,true);
   assert.equal(text.getAttribute('font-family'),'Nanum Gothic');
   assert.equal(text.getAttribute('font-style'),'normal');
-  assert.deepEqual(result.substituteFamilies,["'굴림' → Nanum Gothic"]);
+  // DEV48 reports the actual italic-to-normal substitution explicitly.
+  assert.deepEqual(result.substituteFamilies,["'굴림' → Nanum Gothic (굵기·기울임 대체)"]);
   assert.equal(result.svg,'normalized-svg-placeholder');
  });
  assert.equal(resolveFont(registry,screenshot,'normal','normal','漢'),null);
