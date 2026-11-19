@@ -8,7 +8,8 @@ export async function probeDirectRhwp(input){
   for(let i=0;i<count;i++){
    const t=readDirectPage(doc,i),r=inspectDirectPage(t);
    const candidate=inspectDirectPage(t,{allowText:true});
-   output.push({dev53CandidateGlyphs:candidate.glyphCount,dev53Blockers:candidate.blockers,page:i+1,schema:t.schemaMinorVersion,width:r.width,height:r.height,operations:r.operations,operationCounts:r.operationCounts,blockers:r.blockers,clips:r.clips,svgReferences:r.svgReferences,textRuns:r.textRuns});
+   const mediaCandidate=inspectDirectPage(t,{allowText:true,allowMedia:true});
+   output.push({dev55CandidateMedia:mediaCandidate.mediaCount,dev55Blockers:mediaCandidate.blockers,dev53CandidateGlyphs:candidate.glyphCount,dev53Blockers:candidate.blockers,page:i+1,schema:t.schemaMinorVersion,width:r.width,height:r.height,operations:r.operations,operationCounts:r.operationCounts,blockers:r.blockers,clips:r.clips,svgReferences:r.svgReferences,textRuns:r.textRuns});
   }
   return output;
  }finally{doc.free();}
