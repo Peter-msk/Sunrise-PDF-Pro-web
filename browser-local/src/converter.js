@@ -169,7 +169,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
     onProgress({stage:'load',detail:'hwp_open',loaded:1,total:1});
     doc=openHwpDocument(buf);
     const pages=readConversionPageCount(doc,onProgress);
-    local=await loadDocumentLocalFonts(doc,pages,options.localFonts,fontkit,signal,onProgress);
+    local=await loadDocumentLocalFonts(doc,pages,options.localFonts,fontkit,signal,onProgress,options.localFontCache);
    }
    onProgress({stage:'fonts',page:1,total:1,detail:'bundled'});
    const bundled=await loadBundledFonts(fontkit,signal);
@@ -194,7 +194,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
      unmatchedNames:local.unmatchedNames||[],unreadable:local.unreadableFonts||0,
      timedOut:local.timedOutFonts||0,budgetSkipped:local.skippedByBudget||0
    }:null;
-   fontRegistry={faces:[...selected.faces,...localOnly,...tailoredBundled]};
+   fontRegistry={faces:[...selected.faces,...localOnly,...tailoredBundled],allowCoverageFallback:true};
    onProgress({stage:'fonts',page:1,total:1,detail:'measure'});
    releaseMeasureFonts=await installMeasureFonts(fontRegistry,signal,
     undefined,undefined,{skipUnavailable:true,maxTotalMs:18000,perFaceMs:3500});

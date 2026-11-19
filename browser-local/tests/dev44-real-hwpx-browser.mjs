@@ -60,7 +60,7 @@ try{
  await page.goto('http://127.0.0.1:5180/',{waitUntil:'domcontentloaded'});
  await page.waitForFunction(()=>document.querySelector('#status')?.textContent.includes('변환 준비 완료'),null,{timeout:30000});
  const label=await page.locator('#build-revision').textContent();
- assert.equal(label,'DEV46 (local)');
+ assert.equal(label,'DEV48 (local)');
  const evidence=[];
  for(let i=0;i<samples.length;i++){
   const probe=await page.evaluate(async ({data,mode})=>{
@@ -139,8 +139,8 @@ try{
  const qaDownload=await exported;
  const qa=JSON.parse(readFileSync(await qaDownload.path(),'utf8'));
  console.log('APP_QA '+JSON.stringify(qa));
- assert.match(qaDownload.suggestedFilename(),/DEV46_local_/);
- assert.equal(qa.build_revision,'DEV46');
+ assert.match(qaDownload.suggestedFilename(),/DEV48_local_/);
+ assert.equal(qa.build_revision,'DEV48');
  assert.equal(qa.rhwp_version,'0.9.0');
  assert.equal(qa.deployment_channel,'local');
  assert.equal(qa.totals.done,4,JSON.stringify(qa));

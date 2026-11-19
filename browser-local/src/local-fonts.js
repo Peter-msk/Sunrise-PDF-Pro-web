@@ -62,7 +62,20 @@ export function svgFontFamilies(svg,Parser=globalThis.DOMParser){
  return names;
 }
 
-export async function loadDocumentLocalFonts(doc,count,available,parser,signal,onProgress=()=>{}){
+// Bounded per-batch cache: exact FontData identity, never persist to disk.
+export function createLocalFontCache({maxBytes=48*1024*1024,maxFaces=32}={}){
+ const entries=new Map();let used=0;
+ return {
+  get(item){return entries.get(item)?.face;},
+  put(item,face){
+   const size=(face.bytes?.byteLength||0)+(face.characterSet?.size||0)*8;
+   if(entries.has(item)||!size||size>maxBytes-used||entries.size>=maxFaces)return;
+   entries.set(item,{face});used+=size;
+  },
+  clear(){entries.clear();used=0;}
+ };
+}
+export async function loadDocumentLocalFonts(doc,count,available,parser,signal,onProgress=()=>{},cache=null){
  const needed=new Map(),neededPages=new Map();
  // Report before the expensive synchronous WASM/SVG scan.
  if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
@@ -107,10 +120,13 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
   attempted.add(sourceKey);matched++;
   if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');
   const remaining=maxReadMs-(Date.now()-started);
-  if(remaining<=0){skippedByBudget++;continue;}
+  const cached=cache?.get(item);
+  if(!cached&&remaining<=0){skippedByBudget++;continue;}
   onProgress({stage:'fonts',page:count,total:count,detail:'read',processed:matched});
   let loaded;
   try{
+   if(cached)loaded={faces:[{...cached,aliases:[...cached.aliases]}]};
+   else{
    const blob=await boundedFontStep(()=>item.blob(),{signal,
     timeoutMs:Math.min(4000,remaining),code:'PC_FONT_BLOB_TIMEOUT'});
    // The blob is an SFNT container, not necessarily a .ttf outline. Fontkit
@@ -120,6 +136,8 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
     {postscriptName:item.postscriptName||null}),{signal,
     timeoutMs:Math.min(4000,Math.max(1,maxReadMs-(Date.now()-started))),
     code:'PC_FONT_PARSE_TIMEOUT'});
+   if(loaded?.faces?.[0])cache?.put(item,{...loaded.faces[0],aliases:[...loaded.faces[0].aliases]});
+   }
   }catch(error){
    if(error?.name==='AbortError'||signal?.aborted)throw error;
    if(error?.name==='TimeoutError')timedOutFonts++;

@@ -5,7 +5,7 @@ import {localQaFilterReason} from './svg-filter-diagnostics.mjs';
  */
 // Explicit app marker: older v1 reports lack this field, even if saved later.
 import {getVerifiedRhwpVersion} from './rhwp-wasm-loader.mjs';
-export const QA_BUILD_REVISION='DEV46';
+export const QA_BUILD_REVISION='DEV48';
 export function qaDeploymentChannel(host=globalThis.location?.hostname){
  if(host==='sunrise-pdf-pro-web-dev41-qa.ko-pg.workers.dev')return 'qa';
  if(host==='sunrise-pdf-pro-web.ko-pg.workers.dev')return 'production';
@@ -32,8 +32,29 @@ const ERROR_CODES=[
  'PDF_OUTPUT_BLOB_REQUIRED','PDF_OUTPUT_HEADER_INVALID',
  'PDF_OUTPUT_TRAILER_INCOMPLETE','PDF_OUTPUT_XREF_TARGET_INVALID',
  'PDF_OUTPUT_XREF_OFFSET_INVALID','PDF_OUTPUT_BYTES_LIMIT',
- 'PDF_RESULT_BYTES_MISMATCH'
+ 'PDF_RESULT_BYTES_MISMATCH','FONT_FACE_SELECTION_AMBIGUOUS',
+ 'PNG_PDF_DECODE_BUDGET','PNG_PDF_IDAT_INVALID','PNG_PDF_IDAT_LENGTH_MISMATCH',
+ 'PNG_PDF_IDAT_CHECKSUM','PNG_IMAGE_DIMENSIONS_INVALID','PNG_EMBEDDED_DATA_INVALID',
+ 'PNG_EMBEDDED_BYTES_LIMIT','PNG_EMBEDDED_PAGE_TIMEOUT',
+ 'PNG_EMBEDDED_PAGE_INPUT_BUDGET_EXCEEDED','PNG_EMBEDDED_PAGE_PIXEL_BUDGET_EXCEEDED',
+ 'PNG_EMBEDDED_PAGE_BYTES_BUDGET_EXCEEDED','PNG_EMBEDDED_IMAGE_COUNT_LIMIT',
+ 'PNG_RESIZE_DECODE_TIMEOUT','PNG_RESIZE_ENCODE_TIMEOUT','PNG_RESIZE_DATAURL_TIMEOUT',
+ 'PNG_RESIZE_DECODE_DIMENSIONS_MISMATCH','PNG_RESIZE_ENCODE_FAILED','PNG_RESIZE_CANVAS_UNAVAILABLE',
+ 'SVG_EXTERNAL_RESOURCE','SVG_COMPLEXITY','WASM_INIT_FAILED','PROFESSIONAL_PDF_EMPTY',
+ 'PROFESSIONAL_PDF_INVALID_HEADER','PROFESSIONAL_DEPENDENCY_UNAVAILABLE'
 ];
+const FONT_REASONS=new Set(['unsupported-style','glyph-not-in-registry','unsafe-mixed-run','no-single-covered-face','ambiguous-nested-face']);
+const WRITER_STEPS=new Set(['font-register','page-add','image-embed','svg-render','pdf-end','pdf-collect']);
+function safeReason(error,pattern,allowed){
+ const value=pattern.exec(String(error||''))?.[1];
+ return allowed.has(value)?value:null;
+}
+export function localQaFontReason(error){
+ return safeReason(error,/\[font_reason=([a-z-]+)\]/,FONT_REASONS);
+}
+export function localQaWriterStep(error){
+ return safeReason(error,/\[writer_step=([a-z-]+)\]/,WRITER_STEPS);
+}
 const STREAM_REASONS=new Set(['NO_BYTES','NO_FINAL_BYTES','FINAL_BYTES_NO_END','END_SEEN_NO_COMPLETION']);
 const PDF_INTEGRITY=new Set(['PDF_OUTPUT_HEADER_INVALID','PDF_OUTPUT_TRAILER_INCOMPLETE',
  'PDF_OUTPUT_XREF_TARGET_INVALID','PDF_OUTPUT_XREF_OFFSET_INVALID',
@@ -95,6 +116,9 @@ export function localQaErrorCode(error){
  if(/\bXLSX_ZIP_[A-Z0-9_]+\b/.test(value))return 'XLSX_ZIP_ERROR';
  if(/\bPDF_OUTPUT_[A-Z0-9_]+\b/.test(value))return 'PDF_OUTPUT_ERROR';
  if(/\bFILE_READ_[A-Z0-9_]+\b/.test(value))return 'FILE_READ_ERROR';
+ if(/\bPROFESSIONAL_SVG_WARNING_/.test(value))return 'PROFESSIONAL_SVG_WARNING';
+ const writerStep=localQaWriterStep(value);
+ if(writerStep)return 'PDF_WRITER_'+writerStep.replace(/-/g,'_').toUpperCase()+'_FAILED';
  return value?'OTHER_ERROR':null;
 }
 /** The caller downloads this in the same browser tab. No automatic upload. */
@@ -111,6 +135,8 @@ export function buildLocalBatchQaReport(items,{generatedAt=new Date().toISOStrin
    index:i+1,format:extension(item?.file),state,engine,
    duration_ms:safeDuration(item?._proDurationMs),phase,
    error_code:state==='failed'?localQaErrorCode(item?.error):null,
+   font_reason:state==='failed'?localQaFontReason(item?.error):null,
+   writer_step:state==='failed'?localQaWriterStep(item?.error):null,
    stream_reason:state==='failed'?localQaStreamReason(item?.error):null,
    stream_integrity:state==='failed'?localQaStreamIntegrity(item?.error):null,
    stream_pending_refs:state==='failed'?localQaWriterPendingRefs(item?.error):null,

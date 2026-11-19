@@ -4,7 +4,7 @@ import {cooperativeYield} from './cooperative-yield.mjs';
  * SVG-to-PDFKit and PDFKit are MIT dependencies, loaded only when selected.
  * checkedSvg() must sanitize each page before invoking this module.
  */
-import {resolveFont,resolveFontRuns,missingCodepoint,splitFontFamilies,familyKey} from './pdf-fonts.js';
+import {resolveFont,resolveFontRuns,missingCodepoint,splitFontFamilies,familyKey,requestedStyle,pendingPdfFaceIndex,fontFamilyForPdfFace} from './pdf-fonts.js';
 import {validateTextGeometry} from './svg-text-geometry.js';
 import {flattenLocalSvgStyles} from './svg-style.js';
 import {loadBrowserPdfBackend} from './pdfkit-backend.js';
@@ -197,7 +197,9 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
         // Only check mixed runs when another same-style named face actually
         // supports part of this text; ordinary complete runs stay untouched.
         const specifiedKeys=splitFontFamilies(currentFamily).map(familyKey);
-        const namedOriginal=face?.isFallback
+        const namedOriginal=(face?.isFallback||(fontRegistry.allowCoverageFallback&&face&&!face.standard&&
+          pendingPdfFaceIndex(currentFamily)===null&&
+          !specifiedKeys.some(key=>face.aliases?.includes(key))))
           ? fontRegistry.faces.find(candidate=>candidate.name!==face.name &&
               !candidate.standard && candidate.bold===face.bold &&
               candidate.italic===face.italic &&
@@ -226,7 +228,8 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
           for(const run of runs){
             const span=el.ownerDocument.createElementNS('http://www.w3.org/2000/svg','tspan');
             span.textContent=run.text;
-            span.setAttribute('font-family',run.face.family||run.face.name);
+            span.setAttribute('font-family',fontRegistry.allowCoverageFallback
+              ?fontFamilyForPdfFace(fontRegistry,run.face):run.face.family||run.face.name);
             span.setAttribute('font-weight',run.face.bold?'bold':'normal');
             span.setAttribute('font-style',run.face.italic?'italic':'normal');
             el.appendChild(span);
@@ -251,7 +254,9 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
           const reason=runs?.length>1?'FONT_RUN_SPLIT_UNSUPPORTED':
             missing&&(!specified.length||declaredFacePresent)?'FONT_GLYPH_MISSING':
             'FONT_FAMILY_OR_VARIANT_UNAVAILABLE'+glyph;
-          return {ok:false,reason,
+          const fontReason=fontRegistry.allowCoverageFallback&&!requestedStyle(currentWeight,currentStyle)?'unsupported-style':
+            missing?'glyph-not-in-registry':runs?.length>1?'unsafe-mixed-run':'no-single-covered-face';
+          return {ok:false,reason,fontReason,
             fontFamily:String(currentFamily||'기본 글꼴').slice(0,120),
             fontWeight:String(currentWeight||'normal').slice(0,24),
             fontStyle:String(currentStyle||'normal').slice(0,24)};
@@ -264,19 +269,28 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
         // selected from later CSS entries need alias normalization.
         const alternateFace=!face.standard&&Array.isArray(face.aliases)&&
           !face.aliases.includes(familyKey(primary));
-        if(face.isFallback||alternateFace){
+        const pinned=fontRegistry.allowCoverageFallback&&pendingPdfFaceIndex(currentFamily)!==null;
+        const requested=requestedStyle(currentWeight,currentStyle);
+        const variantChanged=!face.standard&&requested&&
+          (requested.bold!==face.bold||requested.italic!==face.italic);
+        const ambiguous=fontRegistry.allowCoverageFallback&&!face.standard&&!pinned&&
+          resolveFont(fontRegistry,currentFamily,currentWeight,currentStyle)?.name!==face.name;
+        if(!pinned&&(face.isFallback||alternateFace||variantChanged||ambiguous)){
           const original=primary;
-          if(familyKey(original)!==familyKey(face.family)||
-             (currentWeight==='bold')!==face.bold||
-             (currentStyle!=='normal')!==face.italic){
-            substituteFamilies.add(original.slice(0,48)+' → '+face.family);
+          if(familyKey(original)!==familyKey(face.family)||variantChanged){
+            substituteFamilies.add(original.slice(0,48)+' → '+face.family+
+              (variantChanged?' (굵기·기울임 대체)':''));
           }
-          // Preflight and PDFKit must use the very same embedded font face.
-          // Replace unavailable italics/weights deterministically and report.
-          el.setAttribute('font-family',face.family);
+          const family=fontRegistry.allowCoverageFallback
+            ?fontFamilyForPdfFace(fontRegistry,face):face.family;
+          // Never pass a synthetic face alias to unrelated nested text.
+          if(fontRegistry.allowCoverageFallback&&pendingPdfFaceIndex(family)!==null&&el.children?.length)
+            return {ok:false,reason:'FONT_FACE_SELECTION_AMBIGUOUS',fontReason:'ambiguous-nested-face',
+              fontFamily:String(currentFamily||'기본 글꼴').slice(0,120)};
+          el.setAttribute('font-family',family);
           el.setAttribute('font-weight',face.bold?'bold':'normal');
           el.setAttribute('font-style',face.italic?'italic':'normal');
-          currentFamily=face.family;currentWeight=face.bold?'bold':'normal';
+          currentFamily=family;currentWeight=face.bold?'bold':'normal';
           currentStyle=face.italic?'italic':'normal';changed=true;
         }
         if(missingCodepoint(face,value)!==null)
@@ -356,11 +370,14 @@ export async function tryProfessionalDocument(hwpDoc,count,{
   let ended=false;
   let previewBlob=null,textCandidatePages=0;
   let vectorPages=0,rasterPages=0;
+  let writerStep=null;
   const fallbackPages=[];
   const substituteFamilies=new Set();
   const usedLocal=new Set(),usedBundled=new Set(),usedManual=new Set();
   try{
+    writerStep='font-register';
     for(const face of fontRegistry.faces)pdf.registerFont(face.name,face.bytes,face.collectionFontName||undefined);
+    writerStep=null;
     for(let i=0;i<count;i++){
       currentPdfPage=i+1;
       cancel();
@@ -390,7 +407,9 @@ export async function tryProfessionalDocument(hwpDoc,count,{
           const fontInfo=preflight.fontFamily?' 필요한 글꼴: '+preflight.fontFamily+
             (preflight.fontWeight?' (굵기 '+preflight.fontWeight+', 스타일 '+preflight.fontStyle+')':'')+'.':'';
           const attrInfo=preflight.unsupportedAttribute?' · 미지원 SVG 속성: '+preflight.unsupportedAttribute:'';
-          throw Error((i+1)+'쪽의 글자·도형 보존 변환을 완료할 수 없습니다 ('+preflight.reason+attrInfo+').'+fontInfo+' 원본 글꼴과 문서 지원 범위를 확인하세요.');
+          throw Error((i+1)+'쪽의 글자·도형 보존 변환을 완료할 수 없습니다 ('+preflight.reason+attrInfo+').'+fontInfo+
+            ' 원본 글꼴과 문서 지원 범위를 확인하세요.'+
+            (preflight.fontReason?' [font_reason='+preflight.fontReason+']':''));
         }
         // This page has not yet modified PDFKit; safe to rasterize just it.
         onProgress({stage:'professional-raster',page:i+1,total:count});
@@ -398,18 +417,24 @@ export async function tryProfessionalDocument(hwpDoc,count,{
         cancel();
         const bytes=await imageBytes(raster.blob,signal);
         cancel();
+        writerStep='page-add';
         pdf.addPage({size:[width,height],margins:{top:0,bottom:0,left:0,right:0}});
+        writerStep='image-embed';
         pdf.image(bytes,0,0,{width,height});
+        writerStep=null;
         if(i===0)previewBlob=raster.blob;
         rasterPages++;
         fallbackPages.push({page:i+1,reason:preflight.reason});
       }else{
+        writerStep='page-add';
         pdf.addPage({size:[width,height],margins:{top:0,bottom:0,left:0,right:0}});
+        writerStep=null;
         const warnings=[];
         onProgress({stage:'professional',page:i+1,total:count,detail:'svg_vector'});
         await cooperativeYield({signal});cancel();
         assertSvgSourceWithinBudget(preflight.svg);
         const vectorStarted=Date.now();
+        writerStep='svg-render';
         SVGtoPDF(pdf,preflight.svg,0,0,{
           width,height,assumePt:false,
           fontCallback:(family,bold,italic)=>{
@@ -428,6 +453,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
           warningCallback:message=>warnings.push(String(message))
         });
         if(warnings.length)throw Error('PROFESSIONAL_SVG_WARNING_'+warnings[0].slice(0,200));
+        writerStep=null;
         onProgress({stage:'professional',page:i+1,total:count,detail:'svg_vector_done',
           elapsedMs:Date.now()-vectorStarted});
         if(preflight.hasText)textCandidatePages++;
@@ -443,7 +469,9 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     const pdfEndStarted=Date.now();
     const bytesBeforeEnd=streamProbe.bytes||0;
     const chunksBeforeEnd=streamProbe.chunks||0;
+    writerStep='pdf-end';
     pdf.end();
+    writerStep='pdf-collect';
     onProgress({stage:'professional',page:count,total:count,detail:'pdf_stream',
       elapsedMs:Date.now()-pdfEndStarted});
     // A timeout can mean no bytes, bytes before end but none afterwards,
@@ -497,6 +525,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     }finally{
       if(terminalCheckTimer!==null)clearInterval(terminalCheckTimer);
     }
+    writerStep=null;
     cancel();
     if(!(blob instanceof Blob)||blob.size<100)throw Error('PROFESSIONAL_PDF_EMPTY');
     const header=new Uint8Array(await blob.slice(0,5).arrayBuffer());
@@ -533,6 +562,10 @@ export async function tryProfessionalDocument(hwpDoc,count,{
       if(typeof pdf.destroy==='function')pdf.destroy();
       else if(!ended){ended=true;pdf.end();}
     }catch{/* Keep the primary failure reason and fail closed. */}
+    // Fixed stage marker only; raw message remains local and never in QA.
+    if(writerStep&&error?.name!=='AbortError'&&!(error instanceof RangeError)){
+      throw Error(String(error?.message||error)+' [writer_step='+writerStep+']',{cause:error});
+    }
     throw error;
   }finally{
     writerAbort.close();

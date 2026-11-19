@@ -9,7 +9,7 @@ import {prepareNativePrint} from './native-print.js';
 import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
 import {buildLocalBatchQaReport,QA_BUILD_REVISION,qaDeploymentChannel} from './local-batch-qa.mjs';
 import {canRecoverFile,planConversion,planBulkRecovery,planSingleRetry,localFailureAdvice,recoveryEngine,recoveryCode} from './conversion-recovery.mjs';
-import {requestLocalFontAccess} from './local-fonts.js';
+import {createLocalFontCache,requestLocalFontAccess} from './local-fonts.js';
 import {inspectPdfFontEmbedding,compareSelectedAndEmbedded} from './pdf-font-audit.mjs';
 import {summarizeVectorPreservation,inspectPdfVectorQuality} from './pdf-vector-quality.mjs';
 import {settleInstalledFonts,localFontCapability} from './local-font-policy.mjs';
@@ -407,6 +407,7 @@ $('convert').addEventListener('click',async()=>{
    else fontAccessNotice='이 기기는 설치 글꼴 자동 조회를 지원하지 않습니다. 한컴오피스 설치 없이 웹 엔진과 내장 글꼴로 변환합니다. 원본 TTF/OTF가 있으면 직접 추가할 수 있습니다. 대체 서체로 줄바꿈이나 배치가 달라질 수 있습니다.';
   }
  }catch(error){fontAccessNotice='설치 글꼴 접근을 시작하지 못해 내장 글꼴로 계속합니다. 원본 TTF/OTF는 직접 추가할 수 있습니다.';}
+ const localFontCache=createLocalFontCache();
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();clearArchive();draw();refreshBrowserLifecycle();let completed=0;
  try{
   let localFonts=null;if(fontsRequest){status('PC 글꼴 접근 권한 확인 중입니다. 브라우저의 글꼴 허용 요청을 확인하세요. 응답이 없으면 30초 후 내장 글꼴로 진행합니다.');const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;fontAccessNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 문서에 일치하는 서체를 우선 사용합니다.':'');if(access.status==='ready')verifiedPcFontData=localFonts;
@@ -490,7 +491,7 @@ $('convert').addEventListener('click',async()=>{
       ?' · '+Math.min(100,Math.floor(info.loaded/info.total*100))+'% 읽음':'';
     status(file.name+' · '+message+byteStatus+elapsedStatus+pageStatus+loadStatus+
      ' · '+(completed+1)+'/'+pending.length+'개');
-   },signal,{fontFiles,engine:itemEngine,localFonts});
+   },signal,{fontFiles,engine:itemEngine,localFonts,localFontCache});
    if(fontAccessNotice&&isHwp(file))result.warnings=[...(result.warnings||[]),fontAccessNotice];
    if((plan.recovery&&item===requested)||spec){
     const cause=spec?.cause||plan.cause;
@@ -529,6 +530,7 @@ $('convert').addEventListener('click',async()=>{
  }catch(error){const cancelled=signal.aborted||error?.name==='AbortError';status(cancelled?'작업이 취소되었습니다. 완료 PDF는 개별 다운로드 가능합니다.':'작업 실패: '+String(error?.message||error));conversionClock.finish(cancelled?'cancelled':'failed');}
  finally{
   if(conversionClock.active)conversionClock.finish(signal.aborted?'cancelled':pending.some(i=>i.state==='failed')?'partial':'done');
+  localFontCache.clear();
   busy=false;controller=null;
   try{
    draw();

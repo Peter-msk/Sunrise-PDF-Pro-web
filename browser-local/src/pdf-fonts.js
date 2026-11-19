@@ -53,6 +53,12 @@ export function resolveFont(registry,family,weight='normal',style='normal',text=
   const firstConcrete=declared.find(name=>!GENERIC_FAMILIES.has(familyKey(name)));
   const covers=face=>!text||missingCodepoint(face,text)===null;
   const exactStyle=face=>face.bold===variant.bold&&face.italic===variant.italic;
+  // A normalized SVG can pin the glyph-checked face by registry index.
+  const pin=registry?.allowCoverageFallback?pendingPdfFaceIndex(family):null;
+  if(pin!==null){
+    const chosen=faces[pin];
+    return chosen&&exactStyle(chosen)&&covers(chosen)?chosen:null;
+  }
   // Honor an explicitly supplied CSS family chain before choosing bundled substitutes.
   // Local PC/user fonts outrank bundled faces for every declared candidate.
   const specified=declared.map(familyKey).filter(key=>key&&!GENERIC_FAMILIES.has(key));
@@ -79,6 +85,17 @@ export function resolveFont(registry,family,weight='normal',style='normal',text=
     return ranked.find(exactStyle)||ranked.find(face=>face.bold===variant.bold&&!face.italic)
       ||ranked.find(face=>!face.bold&&!face.italic)||ranked[0];
   }
+  // Last resort: a PC/manual face already read into this document's registry
+  // may cover symbols absent from every approved OFL font. No new font reads.
+  if(registry?.allowCoverageFallback&&text){
+    const supported=faces.filter(face=>!face.standard&&!face.isFallback&&covers(face));
+    for(const key of specified){
+      const same=supported.filter(face=>face.aliases?.includes(key));
+      if(same.length)return same.find(exactStyle)||same.find(face=>face.bold===variant.bold)||same[0];
+    }
+    if(supported.length)return supported.find(exactStyle)||
+      supported.find(face=>face.bold===variant.bold)||supported[0];
+  }
   // Without explicit bundled substitutes, preserve strict family matching.
   if(!firstConcrete){
     const generic=declared.map(familyKey).find(n=>n==='serif'||n==='sans-serif');
@@ -88,6 +105,22 @@ export function resolveFont(registry,family,weight='normal',style='normal',text=
     if(!variant.bold&&!variant.italic)return {name:'Helvetica',characterSet:null,standard:true};
   }
   return null;
+}
+
+export function pendingPdfFaceIndex(family){
+ const match=/^__sunrise_pdf_face_(\d{1,5})__$/.exec(String(family||'').trim());
+ return match?Number(match[1]):null;
+}
+// SVG-to-PDFKit's callback has no text argument. Pin the selected face
+// when resolving a display family/style alone would select a different face.
+export function fontFamilyForPdfFace(registry,face){
+ if(!registry?.allowCoverageFallback||face.standard)return face.family||face.name;
+ const family=face.family||face.name;
+ const same=resolveFont(registry,family,face.bold?'bold':'normal',face.italic?'italic':'normal');
+ if(same?.name===face.name)return family;
+ const index=registry.faces.indexOf(face);
+ if(index<0||index>99999)throw Error('FONT_FACE_SELECTION_AMBIGUOUS');
+ return '__sunrise_pdf_face_'+index+'__';
 }
 
 /** Keep all original Unicode characters when one font cannot cover a full
