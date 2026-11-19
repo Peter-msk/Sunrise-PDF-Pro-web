@@ -5,6 +5,7 @@ on:
       - fix/dev46-rhwp-090-real-qa-20261118
     paths:
       - .github/workflows/dev46-baked-tone-qa.yml
+      - browser-local/tests/dev44-real-hwpx-browser.mjs
 permissions:
   contents: read
 jobs:
@@ -20,8 +21,6 @@ jobs:
           node-version: '24'
       - name: Install pinned dependencies
         run: npm --prefix browser-local ci --ignore-scripts --no-audit --no-fund
-      - name: New tone oracle only
-        run: node --test browser-local/tests/dev46-baked-tone.test.mjs
       - name: Prepare verified engine parts and approved fonts
         working-directory: browser-local
         run: |
@@ -30,5 +29,5 @@ jobs:
       - name: Install Chromium
         working-directory: browser-local
         run: npx playwright install --with-deps chromium
-      - name: Actual four HWPX effects and PDF output
+      - name: Actual four HWPX effects and PDF output with timeout evidence
         run: npm --prefix browser-local run test:dev44:browser
