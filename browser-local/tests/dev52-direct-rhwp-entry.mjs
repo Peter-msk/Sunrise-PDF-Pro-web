@@ -7,7 +7,8 @@ export async function probeDirectRhwp(input){
   const count=doc.pageCount(),output=[];
   for(let i=0;i<count;i++){
    const t=readDirectPage(doc,i),r=inspectDirectPage(t);
-   output.push({page:i+1,schema:t.schemaMinorVersion,width:r.width,height:r.height,operations:r.operations,operationCounts:r.operationCounts,blockers:r.blockers,clips:r.clips,svgReferences:r.svgReferences,textRuns:r.textRuns});
+   const candidate=inspectDirectPage(t,{allowText:true});
+   output.push({dev53CandidateGlyphs:candidate.glyphCount,dev53Blockers:candidate.blockers,page:i+1,schema:t.schemaMinorVersion,width:r.width,height:r.height,operations:r.operations,operationCounts:r.operationCounts,blockers:r.blockers,clips:r.clips,svgReferences:r.svgReferences,textRuns:r.textRuns});
   }
   return output;
  }finally{doc.free();}
