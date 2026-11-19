@@ -69,6 +69,20 @@ test('DEV53 preserves text/rectangle order and exact px-to-point baseline',async
  const abort=new AbortController();abort.abort();
  await assert.rejects(buildDirectPdf(doc([tree([op()])]),{...options,signal:abort.signal}),{name:'AbortError'});
 });
+test('DEV54 bold text flows through approved registry and geometry wrapper stays disabled',async()=>{
+ const regular={...face(),family:'Example',bold:false,italic:false};
+ const b={...regular,bold:true,postscriptName:'Example-Bold',bytes:mockFontBytes({name:'Example-Bold',bold:true})};
+ const t=op();t.style.bold=t.paintStyle.bold=true;
+ const normal=op(),seen=[];let embeds=0;
+ const pdf={registerFontkit:()=>{},embedFont:async()=>({id:++embeds}),addPage:()=>({drawText:(ch,o)=>seen.push([ch,o.font.id])}),save:async()=>new Uint8Array([1])};
+ let parses=0;const loadFontkit=async()=>({create:()=>++parses===1?fakeFont:{...fakeFont,postscriptName:'Example-Bold',subfamilyName:'Bold'}});
+ const options={approvedFaces:[regular,b],loadFontkit,loadPdf:async()=>({PDFDocument:{create:async()=>pdf},rgb:(...v)=>v})};
+ const r=await buildDirectPdf(doc([tree([normal,t,normal])]),options);
+ assert.equal(r.textRuns,3);assert.equal(embeds,2);
+ assert.deepEqual(seen,[['한',1],['글',1],['한',2],['글',2],['한',1],['글',1]]);
+ await assert.rejects(buildDirectGeometryPdf(doc([tree([t])]),options),/UNSUPPORTED_PAGE_1/);
+ await assert.rejects(buildDirectPdf(doc([tree([t])]),{...options,resolveFont:async()=>b}),/FONT_RESOLVER_CONFLICT/);
+});
 test('DEV53 real fontkit and pdf-lib PDF text extraction and embedded Korean face',{timeout:45000},async()=>{
  const {readFile}=await import('node:fs/promises');
  const fontkit=(await import('@pdf-lib/fontkit')).default;
