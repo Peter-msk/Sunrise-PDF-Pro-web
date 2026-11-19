@@ -81,3 +81,11 @@ Official release https://github.com/edwardkim/rhwp/releases/tag/v0.9.0 and https
 - Both runs use public/synthetic fixtures only and do not deploy. Actual 25 original documents and visual acceptance remain unverified, production HOLD.
 
 - DEV47 diagnostic run 44412312752 completed SUCCESS: 49/49 affected tests passed (6 new diagnostics + 43 existing related checks), no production deployment. The original eight documents remain unverified.
+
+
+## 2026-11-19 KST — DEV47 handoff continuation / batch timeout evidence
+- Retrieved run 44412056827 job 135182532200. All four engine probes: gray filter, blackwhite 214120 pixels / 0 mismatches / 0 alpha mismatches, RealPic +10/+20 214120 visible pixels / 3975 changed / 0 mismatches / 0 alpha mismatches, crop-gray 5 viewports. Browser app batch exceeded 180000 ms test deadline; no final QA export or PDF download evidence. Browser test timeout is not evidence of the product PDF_STREAM_TIMEOUT code or its root cause.
+- Run 44412312752 job 135183413738 independently confirmed successful targeted diagnostics.
+- Commit 0ff60806219ff69e33bf1e2e5f71748c7465f3f0 adds 5-second public-fixture-only browser UI heartbeat and bounded partial local QA export on timeout, with explicit unavailable evidence and page errors. Existing 180s fail gate, PDF checks, professional engine and 0-raster checks unchanged. No product runtime changes.
+- Commit 8e3ab7780585bcee8297b229f724429d72148bf7 adjusts the branch-only browser QA trigger and removes redundant standalone tone oracle rerun (already passed). No deployment step or user originals. New push CI result NOT VERIFIED; PR-only listing returned no runs and combined status was empty.
+- Next: inspect new browser heartbeat and partial QA, identify font access, WASM, SVG render, PDF writer or completion observer stall before any minimal runtime fix. Run affected regression and four-PDF gate. Originals #3,4,9–14 and #24,25 remain unrecovered/unverified. Production HOLD.
