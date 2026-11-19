@@ -5,7 +5,7 @@ import {localQaFilterReason} from './svg-filter-diagnostics.mjs';
  */
 // Explicit app marker: older v1 reports lack this field, even if saved later.
 import {getVerifiedRhwpVersion} from './rhwp-wasm-loader.mjs';
-export const QA_BUILD_REVISION='DEV50';
+export const QA_BUILD_REVISION='DEV51';
 export function qaDeploymentChannel(host=globalThis.location?.hostname){
  if(host==='sunrise-pdf-pro-web-dev41-qa.ko-pg.workers.dev')return 'qa';
  if(host==='sunrise-pdf-pro-web.ko-pg.workers.dev')return 'production';
@@ -145,6 +145,7 @@ export function buildLocalBatchQaReport(items,{generatedAt=new Date().toISOStrin
    error_code:state==='failed'?localQaErrorCode(item?.error):null,
    font_reason:state==='failed'?localQaFontReason(item?.error):null,
    font_style_reason:state==='failed'?localQaFontStyleReason(item?.error):null,
+   font_style_recoveries:safeCount(result?.fontStyleRecoveries),
    writer_step:state==='failed'?localQaWriterStep(item?.error):null,
    writer_reason:state==='failed'?localQaWriterReason(item?.error):null,
    stream_reason:state==='failed'?localQaStreamReason(item?.error):null,

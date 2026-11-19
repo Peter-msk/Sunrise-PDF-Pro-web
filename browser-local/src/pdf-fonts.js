@@ -67,6 +67,34 @@ export function normalizeSvgFontStyle(weight,style,parentWeight=400,parentStyle=
 }
 
 /**
+ * Rendering policy after security/geometry checks. An invalid declaration of
+ * the inherited CSS font-style property is ignored by SVG/CSS, not a null
+ * computed style. Keep the inherited value, and disclose every correction.
+ * The strict parser above remains available to classify invalid input.
+ * Weight errors continue to fail closed; do not invent a weight.
+ */
+export function resolveSvgFontStyleForRendering(weight,style,parentWeight=400,parentStyle='normal'){
+ const strict=normalizeSvgFontStyle(weight,style,parentWeight,parentStyle);
+ if(strict.reason!=='style-unsupported')return {...strict,styleRecovery:null};
+ if(!['normal','italic','oblique'].includes(parentStyle))
+  return {...strict,styleRecovery:null};
+ const raw=String(style??'').trim().toLowerCase();
+ // A CSS oblique angle is valid within +/-90 degrees. The static PDF faces
+ // cannot preserve an arbitrary angle; approximate by upright/italic and
+ // explicitly signal it. Invalid declarations instead inherit normally.
+ const angled=/^oblique\s+([+-]?(?:\d+(?:\.\d+)?|\.\d+))(deg|grad|rad|turn)$/.exec(raw);
+ let angle=null;
+ if(angled){
+  const scale={deg:1,grad:.9,rad:180/Math.PI,turn:360}[angled[2]];
+  const value=Number(angled[1])*scale;
+  if(Number.isFinite(value)&&Math.abs(value)<=90+1e-10)angle=value;
+ }
+ const corrected=angle===null?parentStyle:Math.abs(angle)<1e-10?'normal':'italic';
+ return {...strict,computedStyle:corrected,style:corrected,reason:null,
+  styleRecovery:angle===null?(raw?'invalid-style-inherited':'empty-style-inherited'):'oblique-angle-approximated'};
+}
+
+/**
  * Resolve an embedded font. Exact user-provided family+style wins; an OFL
  * bundled face is a clearly reported substitute when the document names a
  * font not available in the browser. Never reach out to the OS or a CDN.

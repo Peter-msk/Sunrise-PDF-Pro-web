@@ -4,7 +4,7 @@ import {cooperativeYield} from './cooperative-yield.mjs';
  * SVG-to-PDFKit and PDFKit are MIT dependencies, loaded only when selected.
  * checkedSvg() must sanitize each page before invoking this module.
  */
-import {resolveFont,resolveFontRuns,missingCodepoint,splitFontFamilies,familyKey,requestedStyle,pendingPdfFaceIndex,fontFamilyForPdfFace,normalizeSvgFontStyle} from './pdf-fonts.js';
+import {resolveFont,resolveFontRuns,missingCodepoint,splitFontFamilies,familyKey,requestedStyle,pendingPdfFaceIndex,fontFamilyForPdfFace,resolveSvgFontStyleForRendering} from './pdf-fonts.js';
 import {validateTextGeometry} from './svg-text-geometry.js';
 import {flattenLocalSvgStyles} from './svg-style.js';
 import {loadBrowserPdfBackend} from './pdfkit-backend.js';
@@ -130,7 +130,7 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
   const root=doc.documentElement;
   const styles=flattenLocalSvgStyles(root);
   if(!styles.ok)return {ok:false,reason:styles.reason};
-  let changed=styles.changed,nodes=0,hasText=false,textPages=0,positionedRuns=0,pathChars=0;
+  let changed=styles.changed,nodes=0,hasText=false,textPages=0,positionedRuns=0,pathChars=0,fontStyleRecoveries=0;
   const vectorBudget=createSvgVectorBudget();
   const substituteFamilies=new Set();
   // SVG text without a declared family must use the same selected font in
@@ -187,9 +187,10 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
     // Resolve CSS inheritance and relative/numeric weights before asking the
     // static font resolver. The computed weight is independent of fallback.
     const normalizedStyle=fontRegistry.allowCoverageFallback?
-      normalizeSvgFontStyle(el.getAttribute('font-weight'),el.getAttribute('font-style'),
+      resolveSvgFontStyleForRendering(el.getAttribute('font-weight'),el.getAttribute('font-style'),
         computedWeight,computedStyle):null;
     if(normalizedStyle&&!normalizedStyle.reason){
+      if(normalizedStyle.styleRecovery)fontStyleRecoveries++;
       const rawWeight=el.getAttribute('font-weight'),rawStyle=el.getAttribute('font-style');
       if((rawWeight!==null||weight!==normalizedStyle.weight)&&rawWeight!==normalizedStyle.weight){
         el.setAttribute('font-weight',normalizedStyle.weight);changed=true;
@@ -325,7 +326,7 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
       computedStyle:normalizedStyle?normalizedStyle.computedStyle:computedStyle});
   }
   const normalizedSvg=changed?new XMLSerializer().serializeToString(root):checked.svg;
-  return {ok:true,reason:'OK',nodes,hasText,textRuns:textPages,positionedRuns,substituteFamilies:[...substituteFamilies],svg:normalizedSvg};
+  return {ok:true,reason:'OK',nodes,hasText,textRuns:textPages,positionedRuns,fontStyleRecoveries,substituteFamilies:[...substituteFamilies],svg:normalizedSvg};
 }
 
 /**
@@ -405,7 +406,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
   pending.catch(()=>{});
   let ended=false;
   let previewBlob=null,textCandidatePages=0;
-  let vectorPages=0,rasterPages=0;
+  let vectorPages=0,rasterPages=0,fontStyleRecoveries=0;
   let writerStep=null;
   const fallbackPages=[];
   const substituteFamilies=new Set();
@@ -438,6 +439,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
         :preflightProfessionalSvg(checked,{fontRegistry});
       const width=checked.width*PX_TO_PT,height=checked.height*PX_TO_PT;
       for(const family of preflight.substituteFamilies||[])substituteFamilies.add(family);
+      if(preflight.ok)fontStyleRecoveries+=preflight.fontStyleRecoveries||0;
       if(!preflight.ok){
         if(!allowRasterFallback||(filterOnlyRasterFallback&&!forceFilterRaster)){
           const fontInfo=preflight.fontFamily?' 필요한 글꼴: '+preflight.fontFamily+
@@ -574,7 +576,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
     const preview=previewBlob||null;
     const renderMode=rasterPages===0?'professional':vectorPages===0?'raster':'mixed';
     return {pdf:blob,preview,pages:count,bytes:blob.size,renderMode,
-      vectorPages,rasterPages,fallbackPages,textCandidatePages,searchablePages:null,
+      vectorPages,rasterPages,fallbackPages,textCandidatePages,searchablePages:null,fontStyleRecoveries,
       fontUsage:{local:usedLocal.size,bundled:usedBundled.size,selected:usedManual.size},
       // SVG-to-PDFKit selected these faces. PDF resource/FontDescriptor
       // confirmation is an independent, opt-in post-generation audit.
@@ -585,9 +587,11 @@ export async function tryProfessionalDocument(hwpDoc,count,{
       }),manual:usedManual.size,bundled:usedBundled.size},
       substituteFamilies:[...substituteFamilies],
       // A structurally valid EOF is not proof of the original HWP layout.
-      warnings:streamProbe.validatedWithoutEnd
-        ?['PDF 종료 신호가 누락됐지만 PDF 구조 검증을 통과해 복구했습니다. 원본 페이지 수·내용·줄바꿈을 확인하세요.']
-        :[]};
+      warnings:[
+        ...(streamProbe.validatedWithoutEnd
+          ?['PDF 종료 신호가 누락됐지만 PDF 구조 검증을 통과해 복구했습니다. 원본 페이지 수·내용·줄바꿈을 확인하세요.']:[]),
+        ...(fontStyleRecoveries?['SVG 글꼴 스타일 '+fontStyleRecoveries+'건을 상속값 또는 정적 글꼴 스타일로 보정했습니다. 원본 기울임과 줄바꿈을 확인하세요.']:[])
+      ]};
   }catch(error){
     // Reject toBlob's pending collector and release all queued PDF chunks
     // before disposing the writer, even if this failure was not user-driven.

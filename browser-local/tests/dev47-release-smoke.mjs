@@ -67,7 +67,7 @@ try{
  });
  await page.goto(site,{waitUntil:'domcontentloaded',timeout:30000});
  await page.waitForFunction(()=>document.querySelector('#status')?.textContent.includes('변환 준비 완료'),null,{timeout:30000});
- assert.equal(await page.locator('#build-revision').textContent(),'DEV50 ('+channel+')');
+ assert.equal(await page.locator('#build-revision').textContent(),'DEV51 ('+channel+')');
  assert.equal(await page.locator('#pdf-engine').inputValue(),'professional');
  await page.locator('#source').setInputFiles(samples.map(({name,mimeType,buffer})=>({name,mimeType,buffer})));
  await page.locator('#convert').click();

@@ -70,7 +70,7 @@ test('unsupported regions, multiple drawables, wrong definitions and external so
 });
 test('QA build provenance and numeric PDFKit references never export private details',()=>{
  const r=buildLocalBatchQaReport([{file:{name:'private.hwp'},state:'failed',error:'PDF_STREAM_TIMEOUT (FINAL_BYTES_NO_END, emitted=1B) [integrity=PDF_OUTPUT_TRAILER_INCOMPLETE] [ref_waiting=3]'}]);
- assert.equal(r.build_revision,'DEV50');
+ assert.equal(r.build_revision,'DEV51');
  assert.equal(r.rhwp_version,null);
  assert.equal(r.files[0].stream_pending_refs,3);
  assert.equal(localQaWriterPendingRefs('PDF_STREAM_TIMEOUT (NO_BYTES) [ref_waiting=999999]'),null);
