@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {mockFontBytes} from './fixtures/dev54-font-fixture.mjs';
 import assert from 'node:assert/strict';
 import {planDirectText,validateDirectFont,validateIndependentGlyphs} from '../src/direct-text.mjs';
 import {buildDirectPdf,buildDirectGeometryPdf,inspectDirectPage} from '../src/direct-pdf.mjs';
@@ -26,9 +27,7 @@ const rect={type:'rectangle',bbox:{x:20,y:30,width:40,height:50},cornerRadius:0,
 const fakeFont={familyName:'Example',postscriptName:'Example-Regular',subfamilyName:'Regular',variationAxes:{},
  hasGlyphForCodePoint:()=>true,layout:t=>({glyphs:Array.from(t,c=>({id:c.codePointAt(0),codePoints:[c.codePointAt(0)]})),
  positions:Array.from(t,()=>({xAdvance:1000,yAdvance:0,xOffset:0,yOffset:0}))})};
-function face(rights=0){const bytes=new Uint8Array(40),v=new DataView(bytes.buffer);
- v.setUint32(0,0x00010000);v.setUint16(4,1);v.setUint32(12,0x4f532f32);v.setUint32(20,28);v.setUint32(24,12);v.setUint16(36,rights);
- return {bytes,embeddingAllowed:true,postscriptName:'Example-Regular'};}
+function face(rights=0){return {bytes:mockFontBytes({rights}),embeddingAllowed:true,postscriptName:'Example-Regular'};}
 const kit={create:()=>fakeFont};
 test('DEV53 Hangul positions and UTF8/UTF16 ranges are explicit',()=>{
  const p=planDirectText(op());assert.equal(p.text,'한글');assert.deepEqual(p.glyphs,[{ch:'한',x:10,y:36},{ch:'글',x:30,y:36}]);
