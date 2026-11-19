@@ -23,6 +23,7 @@ test('writer errors stay bounded and the QA report never exports raw messages',(
  assert.equal(classifySvgWriterReason(new Error('Unknown image format')),'image-decode');
  assert.equal(classifySvgWriterReason(new Error('unsupported number: abc')),'numeric-geometry');
  assert.equal(classifySvgWriterReason(new Error('private unknown')),'unclassified');
+ assert.equal(classifySvgWriterReason(new RangeError('Maximum call stack size exceeded')),'recursion-limit');
  const e='[writer_step=svg-render] [writer_reason=type-error] confidential.hwp';
  assert.equal(localQaWriterReason(e),'type-error');assert.equal(localQaWriterReason('[writer_reason=private-name]'),null);
  assert.equal(localQaFontStyleReason('[font_style_reason=weight-unsupported]'),'weight-unsupported');

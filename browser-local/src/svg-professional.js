@@ -259,7 +259,8 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
           changed=true;
           for(const child of Array.from(el.children).reverse())
             stack.push({el:child,family:currentFamily,weight:currentWeight,style:currentStyle,
-              computedWeight:normalizedStyle?.numeric??null,computedStyle:normalizedStyle?.computedStyle??null});
+              computedWeight:fontRegistry.allowCoverageFallback?normalizedStyle?.numeric??null:400,
+              computedStyle:fontRegistry.allowCoverageFallback?normalizedStyle?.computedStyle??null:'normal'});
           continue;
         }
         if(!face){
@@ -599,7 +600,8 @@ export async function tryProfessionalDocument(hwpDoc,count,{
       else if(!ended){ended=true;pdf.end();}
     }catch{/* Keep the primary failure reason and fail closed. */}
     // Fixed stage marker only; raw message remains local and never in QA.
-    if(writerStep&&error?.name!=='AbortError'&&!(error instanceof RangeError)){
+    const stackOverflow=error instanceof RangeError&&/maximum call stack size exceeded/i.test(String(error.message||''));
+    if(writerStep&&error?.name!=='AbortError'&&(!(error instanceof RangeError)||stackOverflow)){
       const original=String(error?.message||error);
       // The structured stream timeout is already diagnostic and its leading
       // token is consumed by existing recovery and integrity contracts.

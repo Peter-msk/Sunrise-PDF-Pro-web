@@ -601,3 +601,25 @@ test('symbol fallback preserves original text alongside a selected font',()=>{
  assert.deepEqual(runs.map(r=>r.text),['한','㎡','글']);
  assert.deepEqual(runs.map(r=>r.face.name),['FakeRegular','Symbols','FakeRegular']);
 });
+
+// DEV49: exercise the production preflight, not merely the style helper.
+test('DEV49 relative weight inherits computed CSS weight through groups',async()=>{
+ const child=el('text',{'font-weight':'bolder'},[],korean);
+ const group=el('g',{'font-weight':'100'},[child]);
+ const sibling=el('text',{'font-weight':'650','font-style':'inherit'},[],korean);
+ const root=el('svg',{'font-weight':'700'},[group,sibling]);
+ await withDOM(root,()=>{
+  const result=preflightProfessionalSvg(checked,{fontRegistry:{...f,allowCoverageFallback:true}});
+  assert.equal(result.ok,true);
+  assert.equal(child.getAttribute('font-weight'),'normal');
+  assert.equal(sibling.getAttribute('font-weight'),'bold');
+ });
+});
+test('DEV49 invalid inherited style is rejected with a fixed category',async()=>{
+ const child=el('text',{},[],korean),root=el('svg',{'font-weight':'unknown'},[child]);
+ await withDOM(root,()=>{
+  const result=preflightProfessionalSvg(checked,{fontRegistry:{...f,allowCoverageFallback:true}});
+  assert.equal(result.ok,false);assert.equal(result.fontReason,'unsupported-style');
+  assert.equal(result.fontStyleReason,'weight-unsupported');
+ });
+});
