@@ -75,7 +75,9 @@ export function inspectDirectPage(tree,{allowText=false,allowMedia=false,allowLa
       try{const items=planDirectSpecial(op);
        if((specialItems+=items.length)>10000)error('SPECIAL_BUDGET');
        if(!allowText&&items.some(item=>item.kind==='text'))error('SPECIAL_TEXT_DISABLED');
-       for(const item of items){if(item.kind==='text'){if(++glyphCount>50000)error('TEXT_BUDGET');}item.plane=1;add(item);}specialCount++;
+       for(const item of items){if(item.kind==='text'){if(++glyphCount>50000)error('TEXT_BUDGET');}
+        if(item.kind==='path'&&(pathCommands+=item.commands.length)>20000)error('PATH_PAGE_BUDGET');
+        item.plane=1;add(item);}specialCount++;
       }catch(e){if(!String(e.message).startsWith('DIRECT_PDF_SPECIAL_'))throw e;blockers.add(e.message);}continue;
      }
      if(op.type==='textRun'){
