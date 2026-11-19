@@ -5,6 +5,7 @@
  */
 import {MAX_CONVERSION_PAGES} from './page-limit.mjs';
 import {planDirectText,prepareDirectText} from './direct-text.mjs';
+import {createDirectFontResolver} from './direct-font.mjs';
 const SCHEMA_MINOR=35,RESOURCE_MINOR=6,PT=.75;
 const MAX_JSON=32*1024*1024,MAX_NODES=60000,MAX_OPS=100000,MAX_DEPTH=128;
 const error=code=>{throw Error('DIRECT_PDF_'+code);};
@@ -101,14 +102,18 @@ function rectanglePlan(op){
 // DEV52: caller-owned RHWP document; do not free or mutate it. Reject ALL
 // unsupported pages before returning bytes. PDF-lib is already a dependency.
 export async function buildDirectGeometryPdf(doc,options={}){
- return buildDirectPdf(doc,{...options,resolveFont:undefined});
+ return buildDirectPdf(doc,{...options,resolveFont:undefined,approvedFaces:undefined});
 }
 // DEV53 remains opt-in. The production converter is not connected.
-export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
+export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>import('pdf-lib'),resolveFont,approvedFaces,fontSelections,loadFontkit=async()=>(await import('@pdf-lib/fontkit')).default}={}){
  const count=pageCount(doc);cancel(signal);
  const {PDFDocument,rgb}=await loadPdf();
  const pdf=await PDFDocument.create();
  const toColor=hex=>rgb(...[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255));
+ if(approvedFaces!==undefined){
+  if(resolveFont!==undefined)error('FONT_RESOLVER_CONFLICT');
+  resolveFont=createDirectFontResolver(approvedFaces,{selections:fontSelections});
+ }
  const allowText=typeof resolveFont==='function',cache=new Map();
  let fontkit,rendered=0,textRuns=0,glyphCount=0;
  for(let i=0;i<count;i++){
