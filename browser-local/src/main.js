@@ -112,7 +112,7 @@ function show(item){
  const link=$('active-download');link.hidden=!item?.result;
  if(!item?.result){link.removeAttribute('href');$('pages').textContent='';$('quality-detail').replaceChildren();viewer.open(null);sync();return;}
  link.href=item.pdfUrl;link.download=uniquePdfNames(items.map(i=>i.file))[items.indexOf(item)];
- const r=item.result;const mode=r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='mixed'?'혼합 PDF · 일부 쪽 이미지, 해당 쪽 검색 불가':r.renderMode==='raster-compat'?'호환 이미지 PDF · 글자 검색 불가':r.renderMode==='raster'?'혼합 출력 결과 · 전체 쪽 이미지, 글자 검색 불가':r.renderMode==='spreadsheet-text'?'셀·글자 보존 · 원본 서식 제한':r.renderMode==='source-image'?'원본 이미지':'PDF';
+ const r=item.result;const mode=r.renderMode==='direct-trial'?'Direct PDF · 실기 검증':r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='mixed'?'혼합 PDF · 일부 쪽 이미지, 해당 쪽 검색 불가':r.renderMode==='raster-compat'?'호환 이미지 PDF · 글자 검색 불가':r.renderMode==='raster'?'혼합 출력 결과 · 전체 쪽 이미지, 글자 검색 불가':r.renderMode==='spreadsheet-text'?'셀·글자 보존 · 원본 서식 제한':r.renderMode==='source-image'?'원본 이미지':'PDF';
  $('pages').textContent=r.pages+'쪽 · '+mode;
  const title=document.createElement('strong');title.textContent='출력 확인 · '+mode;
  const detail=document.createElement('div');
@@ -214,7 +214,7 @@ function draw(){
     });
     actions.append(quality);
    }
-   if(isHwp(item.file)&&['professional','mixed'].includes(item.result?.renderMode)){
+   if(isHwp(item.file)&&['professional','mixed','direct-trial'].includes(item.result?.renderMode)){
     const fontAudit=document.createElement('button');
     fontAudit.type='button';fontAudit.className='secondary font-audit';
     fontAudit.textContent=item._fontAuditBusy?'글꼴 검사 중':'PDF 글꼴 확인';
@@ -345,7 +345,7 @@ for(const event of ['dragenter','dragover'])$('drop').addEventListener(event,e=>
 for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{e.preventDefault();$('drop').classList.remove('drag');});
 $('drop').addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer?.files||[])));
 $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.';draw();});
-$('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');draw();});
+$('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='direct-trial'?'DEV61 Direct PDF 실기 검증 방식입니다. 원본 글꼴이 정확히 일치해야 하며 미지원 객체가 있으면 오류가 표시됩니다.':$('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');draw();});
 // Export is an explicit, local user action. It works during a long-running
 // batch so the last recorded stage is not lost; it never sends source data.
 $('qa-export').addEventListener('click',()=>{
@@ -474,7 +474,7 @@ $('convert').addEventListener('click',async()=>{
      image_gif:'GIF 그림 확인',image_png:'PNG 그림 확인·조정',
      image_filter:'그림 효과 검사',svg_sanitize:'SVG 안전 검사',
      svg_preflight:'글꼴·벡터 사전 검사',svg_vector:'SVG 벡터 PDF 출력',
-     svg_vector_done:'페이지 PDF 출력 완료',
+     svg_vector_done:'페이지 PDF 출력 완료',direct_page_done:'Direct PDF 페이지 출력 완료',
      pdf_finalize:'PDF 최종 저장 준비',pdf_write:'페이지 PDF 작성 중',pdf_stream:'PDF 바이트 생성 중',
      pdf_done:'PDF 바이트 생성 완료',compat_raster:'호환 이미지 페이지 생성',compat_page_done:'호환 이미지 페이지 완료',compat_save:'호환 PDF 저장 중'
     };
@@ -499,7 +499,7 @@ $('convert').addEventListener('click',async()=>{
     status(file.name+' · '+message+byteStatus+elapsedStatus+pageStatus+loadStatus+
      ' · '+(completed+1)+'/'+pending.length+'개');
    },signal,{fontFiles,engine:itemEngine,localFontCache,localFonts});
-   if(fontAccessNotice&&isHwp(file))result.warnings=[...(result.warnings||[]),fontAccessNotice];
+   if(fontAccessNotice&&isHwp(file)&&itemEngine!=='direct-trial')result.warnings=[...(result.warnings||[]),fontAccessNotice];
    if((plan.recovery&&item===requested)||spec){
     const cause=spec?.cause||plan.cause;
     result.warnings=[...(result.warnings||[]),(spec?itemEngine==='hybrid-filter':plan.engine==='hybrid-filter')
