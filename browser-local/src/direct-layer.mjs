@@ -3,7 +3,7 @@
  * Preserve source tree order within planes, never sort by raw zOrder.
  */
 const fail=c=>{throw Error('DIRECT_PDF_LAYER_'+c);};
-const finite=n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=1e7;
+import {isCoordinate as finite,PX_TO_PT} from './direct-contract.mjs';
 const wraps=[null,'square','tight','through','topAndBottom','behindText','inFrontOfText'];
 export function directLayer(layer){
  if(layer==null)return null;
@@ -46,7 +46,7 @@ export function directClip(node){
  if(open)fail('CLIP_SEQUENCE');
  return {kind:'path',commands,evenOdd:p.even_odd,cost:commands.length};
 }
-export function openDirectClip(page,c,height,lib,pt=.75){
+export function openDirectClip(page,c,height,lib,pt=PX_TO_PT){
  const x=n=>n*pt,y=n=>(height-n)*pt,ops=[lib.pushGraphicsState()];
  if(c.kind==='rect')ops.push(lib.rectangle(x(c.x),y(c.y+c.height),x(c.width),x(c.height)));
  else for(const [k,...v] of c.commands){
