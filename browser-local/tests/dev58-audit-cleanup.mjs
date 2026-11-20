@@ -38,3 +38,10 @@ test('audit: yield hook receives cancellation signal instead of a separate timer
  const r=await buildDirectPdf(doc(leaf(Array.from({length:256},()=>rect))),{signal,loadPdf:async()=>({PDFDocument:{create:async()=>pdf},rgb:()=>({})}),yieldControl:async arg=>{assert.equal(arg.signal,signal);yields++;}});
  assert.equal(yields,1);assert.equal(r.metrics.cooperativeYields,1);
 });
+
+test('audit: malformed PDF cannot be returned as successful conversion',async()=>{
+ for(const bytes of [new Uint8Array([1]),mockPdfBytes().subarray(0,-10)]){
+  const pdf={addPage:()=>({drawRectangle(){}}),save:async()=>bytes};
+  await assert.rejects(buildDirectPdf(doc(leaf([rect])),{loadPdf:async()=>({PDFDocument:{create:async()=>pdf},rgb:()=>({})})}),/PDF_OUTPUT_(HEADER_INVALID|TRAILER_INCOMPLETE)/);
+ }
+});
