@@ -130,6 +130,6 @@ test('DEV41 terminal-polling only starts after pdf.end and requires 2.5s idle',(
  assert.match(s,/idle>=2500/);
  assert.match(s,/terminalProbe\.tryFinish\(\)/);
  assert.match(s,/clearInterval\(terminalCheckTimer\)/);
- assert.match(s,/warnings:streamProbe\.validatedWithoutEnd/);
+ assert.match(s,/warnings:\s*\[\s*\.\.\.\(streamProbe\.validatedWithoutEnd/);
  assert.match(s,/원본 페이지 수·내용·줄바꿈을 확인하세요/);
 });
