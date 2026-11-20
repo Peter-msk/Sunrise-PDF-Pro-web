@@ -4,10 +4,9 @@
  */
 import {directFamilyKey as key,validateDirectFace} from './direct-font.mjs';
 const fail=code=>{throw Error('DIRECT_PDF_TEXT_'+code);};
-const finite=n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=1e7;
+import {isCoordinate as finite,isRecord as plain,isRgbHex} from './direct-contract.mjs';
 const near=(a,b)=>finite(a)&&finite(b)&&Math.abs(a-b)<=.002;
 const range=(r,start,end)=>r?.start===start&&r?.end===end;
-const plain=o=>o!==null&&typeof o==='object'&&!Array.isArray(o);
 const unsafe=/[^\uAC00-\uD7A3A-Za-z0-9 .,!?():;+\-\/]/u;
 const MAX_RUN=4096;
 export function planDirectText(op){
@@ -26,7 +25,7 @@ export function planDirectText(op){
    'emboss','engrave','superscript','subscript','underlineColor','strikeColor','shadeColor','emphasisDot','kerning']);
  if(Object.keys(s).some(k=>!styleKeys.has(k)))fail('STYLE_EXTENSION');
  if(typeof s.fontFamily!=='string'||!key(s.fontFamily)||s.fontFamily.length>256||
-   !finite(s.fontSize)||s.fontSize<=0||s.fontSize>1024||!/^#[0-9a-f]{6}$/i.test(s.color)||
+   !finite(s.fontSize)||s.fontSize<=0||s.fontSize>1024||!isRgbHex(s.color)||
    typeof s.bold!=='boolean'||s.italic!==false||s.ratio!==1||s.underline!=='none'||
    s.strikethrough!==false||s.outlineType!==0||s.shadowType!==0||s.emboss!==false||
    s.engrave!==false||s.superscript!==false||s.subscript!==false||
@@ -56,10 +55,6 @@ export function planDirectText(op){
  if(op.positions.length>t.length&&op.positions[t.length]<=op.positions[t.length-1])fail('ADVANCE');
  return {plane:1,kind:'text',text:t,family:s.fontFamily,size:s.fontSize,color:s.color,bold:s.bold,glyphs};
 }
-// Preserve DEV53 validation API; DEV54 checks actual SFNT style and rights.
-export function validateDirectFont(fontkit,face,family,bold=false){
- return validateDirectFace(fontkit,face,family,bold).font;
-}
 // Legacy scalar replay is only valid where the font's actual whole-run
 // layout equals isolated glyph layout, including positioning.
 export function validateIndependentGlyphs(font,plan){
@@ -87,7 +82,6 @@ export async function prepareDirectText(pdf,plan,resolveFont,fontkit,cache){
    validateIndependentGlyphs(font,plan);
    const embedded=await pdf.embedFont(bytes,{subset:false});
    entry={font,embedded,bytes:bytes.length};cache.set(name,entry);
- }
- validateIndependentGlyphs(entry.font,plan);
+ }else validateIndependentGlyphs(entry.font,plan);
  return entry.embedded;
 }
