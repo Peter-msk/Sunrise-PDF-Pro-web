@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {mockPdfBytes} from './fixtures/direct-mock-pdf.mjs';
 import assert from 'node:assert/strict';
 import {directLayer,directPlane,directClip} from '../src/direct-layer.mjs';
 import {inspectDirectPage,buildDirectPdf} from '../src/direct-pdf.mjs';
@@ -29,7 +30,7 @@ test('DEV56 clip path, malformed and unsupported clips fail closed',()=>{
 });
 test('DEV56 four planes and nested clip scope replay exact operator coordinates',async()=>{
  const calls=[];const page={drawRectangle:o=>calls.push(['draw',o.x]),pushOperators:(...v)=>calls.push(...v)};
- const lib={PDFDocument:{create:async()=>({addPage:()=>page,save:async()=>new Uint8Array([1])})},rgb:(...v)=>v};
+ const lib={PDFDocument:{create:async()=>({addPage:()=>page,save:async()=>mockPdfBytes()})},rgb:(...v)=>v};
  for(const n of ['pushGraphicsState','popGraphicsState','rectangle','clip','clipEvenOdd','endPath','moveTo','lineTo','appendBezierCurve','closePath'])lib[n]=(...v)=>[n,...v];
  const root=group([leaf([rect(70)],layer('inFrontOfText')),clip(pathClip(leaf([rect(30)]))),leaf([rect(20)],layer('behindText')),leaf([rect(40)])]);
  const result=await buildDirectPdf(doc(root),{allowLayers:true,loadPdf:async()=>lib});
