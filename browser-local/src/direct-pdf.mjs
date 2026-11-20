@@ -11,6 +11,7 @@ import {directLayer,directPlane,directClip,directGroup,openDirectClip} from './d
 import {planDirectSpecial} from './direct-special.mjs';
 import {PX_TO_PT as PT,isRecord as plain,isCoordinate as finite,isRgbHex as color,hasOnlyKeys as only,isIdentityShapeTransform as identity} from './direct-contract.mjs';
 import {cooperativeYield} from './cooperative-yield.mjs';
+import {assertCompletePdfBytes} from './pdf-output-integrity.mjs';
 const SCHEMA_MINOR=35,RESOURCE_MINOR=6;
 const DOCUMENT_OP_LIMIT=200000,DOCUMENT_WORK_LIMIT=1000000,YIELD_UNITS=256;
 const MAX_JSON=32*1024*1024,MAX_NODES=60000,MAX_OPS=100000,MAX_DEPTH=128;
@@ -213,7 +214,7 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
  }
  cancel(signal);
  const bytes=await pdf.save();cancel(signal);
- if(!(bytes instanceof Uint8Array)||bytes.length===0||bytes.length>512*1024*1024)error('OUTPUT_BYTES');
+ assertCompletePdfBytes(bytes);cancel(signal);
  return {bytes,pages:count,rectangles:rendered,textRuns,glyphCount,images,shapes,uniqueImages:imageCache.size,specialItems:specialTotal,metrics:{operations:totalOperations,estimatedWork:totalWork,cooperativeYields,clipTransitions},experimental:true};
 }
 
