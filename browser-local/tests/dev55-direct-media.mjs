@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {mockPdfBytes} from './fixtures/direct-mock-pdf.mjs';
 import assert from 'node:assert/strict';
 import {decodeImageBase64,inspectDirectPng,inspectDirectJpeg,planDirectImage,planDirectShape,verifyDirectPng} from '../src/direct-media.mjs';
 import {buildDirectPdf,buildDirectGeometryPdf,inspectDirectPage} from '../src/direct-pdf.mjs';
@@ -45,7 +46,7 @@ test('DEV55 media remains opt-in and geometry API does not permit it',async()=>{
 test('DEV55 image dedup, native draw order and geometry conversion without SVG',async()=>{
  const calls=[];let saves=0,embeds=0,decodes=0;
  const page={drawImage:(im,o)=>calls.push(['image',o]),drawLine:o=>calls.push(['line',o]),drawEllipse:o=>calls.push(['ellipse',o]),pushOperators:(...o)=>calls.push(['path',o])};
- const pdf={addPage:()=>page,embedJpg:async()=>{embeds++;return {width:2,height:2};},save:async()=>{saves++;return new Uint8Array([1]);}};
+ const pdf={addPage:()=>page,embedJpg:async()=>{embeds++;return {width:2,height:2};},save:async()=>{saves++;return mockPdfBytes();}};
  const lib={PDFDocument:{create:async()=>pdf},rgb:(...v)=>v};
  for(const n of ['pushGraphicsState','popGraphicsState','setFillingColor','setStrokingColor','setLineWidth','moveTo','lineTo','appendBezierCurve','closePath','fillAndStroke','fill','stroke'])lib[n]=(...v)=>[n,...v];
  const options={allowMedia:true,loadPdf:async()=>lib,validateJpeg:async()=>{decodes++;}};
