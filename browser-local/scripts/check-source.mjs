@@ -3,7 +3,7 @@ import { resolve,dirname,join } from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const files=[];
 function walk(dir){for(const item of readdirSync(dir,{withFileTypes:true})){
- const path=join(dir,item.name);if(item.isDirectory())walk(path);else if(item.name.endsWith('.js'))files.push(path);
+ const path=join(dir,item.name);if(item.isDirectory())walk(path);else if(/\.(?:js|mjs|cjs)$/.test(item.name))files.push(path);
 }}
 walk(join(root,'src'));
 const imports=/\b(?:import|export)\s*(?:[^'"()]*?\s+from\s*)?['"](\.\.?\/[^'"]+)['"]/g;
@@ -12,7 +12,7 @@ for(const file of files){
  const code=readFileSync(file,'utf8');
  for(const m of code.matchAll(imports)){
   const target=resolve(dirname(file),m[1]);
-  if(!existsSync(target)&&!existsSync(target+'.js'))failures.push(`${file}: missing ${m[1]}`);
+  if(!existsSync(target)&&!existsSync(target+'.js')&&!existsSync(target+'.mjs')&&!existsSync(target+'.cjs'))failures.push(`${file}: missing ${m[1]}`);
  }
 }
 const pkg=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
