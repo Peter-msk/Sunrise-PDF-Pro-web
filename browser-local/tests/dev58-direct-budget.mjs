@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {mockPdfBytes} from './fixtures/direct-mock-pdf.mjs';
 import assert from 'node:assert/strict';
 import {buildDirectPdf} from '../src/direct-pdf.mjs';
 const bounds={x:0,y:0,width:800,height:1000},b={x:10,y:20,width:40,height:60};
@@ -11,7 +12,7 @@ const doc=roots=>({pageCount:()=>roots.length,getPageLayerTreeWithProfile:i=>JSO
 function harness(){
  let draws=0,saves=0,pages=0,opens=0,closes=0,depth=0;
  const page={drawRectangle:()=>{draws++;},pushOperators:(...ops)=>{for(const o of ops){if(o==='pushGraphicsState'){opens++;depth++;}if(o==='popGraphicsState'){closes++;depth--;if(depth<0)throw Error('STACK');}}}};
- const pdf={addPage:()=>{pages++;return page;},save:async()=>{saves++;return new Uint8Array([1]);}};
+ const pdf={addPage:()=>{pages++;return page;},save:async()=>{saves++;return mockPdfBytes();}};
  const lib={PDFDocument:{create:async()=>pdf},rgb:(...v)=>v};
  for(const n of ['pushGraphicsState','popGraphicsState','rectangle','clip','endPath'])lib[n]=()=>n;
  return {options:{loadPdf:async()=>lib,yieldControl:async()=>{},allowLayers:true},stats:()=>({draws,saves,pages,opens,closes,depth})};
