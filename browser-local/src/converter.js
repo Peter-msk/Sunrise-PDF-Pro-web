@@ -124,7 +124,7 @@ export async function rasterPage(svg,signal){
  */
 export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
  options={engine:'professional',...options};
- if(!['professional','compat-raster','hybrid-filter'].includes(options.engine))throw Error('HWP/HWPX 출력 방식을 확인하세요.');
+ if(!['professional','compat-raster','hybrid-filter','direct-trial'].includes(options.engine))throw Error('HWP/HWPX 출력 방식을 확인하세요.');
  throwIfCancelled(signal);
  // Check the first bytes before allocating a whole large file in browser RAM.
  // This removes the former 20MiB rejection without eliminating magic checks.
@@ -151,6 +151,10 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
   throw new Error('FILE_READ_FAILED: 파일 읽기 실패. 브라우저 가용 메모리 또는 파일 접근 상태를 확인하세요.',{cause:e});
  }
  throwIfCancelled(signal);
+ if(options.engine==='direct-trial'){
+  const {convertDirectTrial}=await import('./direct-browser-trial.mjs');
+  return await convertDirectTrial({buffer:buf,openDocument:openHwpDocument,readPageCount:readConversionPageCount,fontFiles:options.fontFiles??(options.fontFile?[options.fontFile]:[]),localFonts:options.localFonts,signal,onProgress});
+ }
  let doc=null,releaseMeasureFonts=()=>{},pcFontStats=null;
  try{
   // A professional PDF must use the same faces during rhwp line measurement
