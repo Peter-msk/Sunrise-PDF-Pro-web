@@ -2,12 +2,9 @@
  * No external image reads, SVG execution, rasterized pages or silent effects.
  */
 const fail=tag=>{throw Error('DIRECT_PDF_MEDIA_'+tag);};
-const finite=n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=1e7;
-const color=s=>typeof s==='string'&&/^#[0-9a-f]{6}$/i.test(s);
-const identity=t=>t?.rotation===0&&t.horzFlip===false&&t.vertFlip===false;
+import {isCoordinate as finite,isRgbHex as color,isIdentityShapeTransform as identity,hasOnlyKeys as only} from './direct-contract.mjs';
 const sameBox=(a,b)=>['x','y','width','height'].every(k=>finite(a?.[k])&&finite(b?.[k])&&Math.abs(a[k]-b[k])<=.002);
 const MAX_BYTES=8*1024*1024,MAX_PIXELS=12_000_000,MAX_DIMENSION=8192;
-function only(o,keys){return o&&Object.keys(o).every(k=>keys.includes(k));}
 function size(w,h){if(!Number.isSafeInteger(w)||!Number.isSafeInteger(h)||w<1||h<1||w>MAX_DIMENSION||h>MAX_DIMENSION||w*h>MAX_PIXELS)fail('IMAGE_DIMENSIONS');}
 const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 export function decodeImageBase64(s){
