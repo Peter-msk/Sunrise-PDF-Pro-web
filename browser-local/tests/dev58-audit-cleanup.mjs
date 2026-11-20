@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {mockPdfBytes} from './fixtures/direct-mock-pdf.mjs';
 import assert from 'node:assert/strict';
 import {inspectDirectPage,buildDirectPdf,buildDirectGeometryPdf} from '../src/direct-pdf.mjs';
 import {prepareDirectText} from '../src/direct-text.mjs';
@@ -33,7 +34,7 @@ test('audit: first font run validated once and cached runs validated independent
 });
 test('audit: yield hook receives cancellation signal instead of a separate timer',async()=>{
  const signal=new AbortController().signal;let yields=0;
- const pdf={addPage:()=>({drawRectangle(){}}),save:async()=>new Uint8Array([1])};
+ const pdf={addPage:()=>({drawRectangle(){}}),save:async()=>mockPdfBytes()};
  const r=await buildDirectPdf(doc(leaf(Array.from({length:256},()=>rect))),{signal,loadPdf:async()=>({PDFDocument:{create:async()=>pdf},rgb:()=>({})}),yieldControl:async arg=>{assert.equal(arg.signal,signal);yields++;}});
  assert.equal(yields,1);assert.equal(r.metrics.cooperativeYields,1);
 });
