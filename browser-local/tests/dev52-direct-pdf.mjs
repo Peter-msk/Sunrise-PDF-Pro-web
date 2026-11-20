@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {mockPdfBytes} from './fixtures/direct-mock-pdf.mjs';
 import assert from 'node:assert/strict';
 import {PDFDocument} from 'pdf-lib';
 import {readDirectPage,inspectDirectPage,buildDirectGeometryPdf} from '../src/direct-pdf.mjs';
@@ -28,7 +29,7 @@ test('nested clipping and non-flow plane are never silently omitted',()=>{
  assert.deepEqual(r.blockers,['paint-plane','clip']);assert.equal(r.operations,1);
 });
 test('direct painter coordinates and cancellation; no partial publication',async()=>{
- const call=[];const fake={addPage:size=>{call.push(size);return {drawRectangle:r=>call.push(r)};},save:async()=>new Uint8Array([1])};
+ const call=[];const fake={addPage:size=>{call.push(size);return {drawRectangle:r=>call.push(r)};},save:async()=>mockPdfBytes()};
  const loadPdf=async()=>({PDFDocument:{create:async()=>fake},rgb:(...v)=>v});
  const result=await buildDirectGeometryPdf(doc([tree([rectangle])]),{loadPdf});
  assert.equal(result.pages,1);assert.deepEqual(call[0],[600,750]);
