@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {mockPdfBytes} from './fixtures/direct-mock-pdf.mjs';
 import {mockFontBytes} from './fixtures/dev54-font-fixture.mjs';
 import assert from 'node:assert/strict';
 import {planDirectText,validateIndependentGlyphs} from '../src/direct-text.mjs';
@@ -59,7 +60,7 @@ test('DEV53 rejects missing glyph and contextual shaping',()=>{
 });
 test('DEV53 preserves text/rectangle order and exact px-to-point baseline',async()=>{
  const calls=[];let saved=0;
- const pdf={registerFontkit:()=>{},embedFont:async()=>({}),addPage:size=>{calls.push(size);return {drawRectangle:r=>calls.push(['rect',r.x]),drawText:(t,o)=>calls.push([t,o.x,o.y,o.size])};},save:async()=>{saved++;return new Uint8Array([1]);}};
+ const pdf={registerFontkit:()=>{},embedFont:async()=>({}),addPage:size=>{calls.push(size);return {drawRectangle:r=>calls.push(['rect',r.x]),drawText:(t,o)=>calls.push([t,o.x,o.y,o.size])};},save:async()=>{saved++;return mockPdfBytes();}};
  const options={resolveFont:async()=>face(),loadFontkit:async()=>kit,loadPdf:async()=>({PDFDocument:{create:async()=>pdf},rgb:(...v)=>v})};
  const r=await buildDirectPdf(doc([tree([op(),rect])]),options);
  assert.deepEqual(calls,[[600,750],['한',7.5,723,15],['글',22.5,723,15],['rect',15]]);
@@ -75,7 +76,7 @@ test('DEV54 bold text flows through approved registry and geometry wrapper stays
  const b={...regular,bold:true,postscriptName:'Example-Bold',bytes:mockFontBytes({name:'Example-Bold',bold:true})};
  const t=op();t.style.bold=t.paintStyle.bold=true;
  const normal=op(),seen=[];let embeds=0;
- const pdf={registerFontkit:()=>{},embedFont:async()=>({id:++embeds}),addPage:()=>({drawText:(ch,o)=>seen.push([ch,o.font.id])}),save:async()=>new Uint8Array([1])};
+ const pdf={registerFontkit:()=>{},embedFont:async()=>({id:++embeds}),addPage:()=>({drawText:(ch,o)=>seen.push([ch,o.font.id])}),save:async()=>mockPdfBytes()};
  let parses=0;const loadFontkit=async()=>({create:()=>++parses===1?fakeFont:{...fakeFont,postscriptName:'Example-Bold',subfamilyName:'Bold'}});
  const options={approvedFaces:[regular,b],loadFontkit,loadPdf:async()=>({PDFDocument:{create:async()=>pdf},rgb:(...v)=>v})};
  const r=await buildDirectPdf(doc([tree([normal,t,normal])]),options);
