@@ -2,9 +2,7 @@
  * Never synthesize equation glyphs or silently discard labels.
  */
 const fail=c=>{throw Error('DIRECT_PDF_SPECIAL_'+c);};
-const finite=n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=1e7;
-const color=s=>typeof s==='string'&&/^#[0-9a-f]{6}$/i.test(s);
-const only=(o,k)=>o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).every(x=>k.includes(x));
+import {isCoordinate as finite,isRgbHex as color,hasOnlyKeys as only} from './direct-contract.mjs';
 const box=b=>['x','y','width','height'].every(k=>finite(b?.[k]))&&b.width>0&&b.height>0;
 export function planDirectSpecial(op){
  if(op.type==='equation')fail('EQUATION_LAYOUT_UNSUPPORTED');
