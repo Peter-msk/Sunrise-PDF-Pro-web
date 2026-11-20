@@ -1,7 +1,8 @@
 import test from 'node:test';
 import {mockFontBytes} from './fixtures/dev54-font-fixture.mjs';
 import assert from 'node:assert/strict';
-import {planDirectText,validateDirectFont,validateIndependentGlyphs} from '../src/direct-text.mjs';
+import {planDirectText,validateIndependentGlyphs} from '../src/direct-text.mjs';
+import {validateDirectFace} from '../src/direct-font.mjs';
 import {buildDirectPdf,buildDirectGeometryPdf,inspectDirectPage} from '../src/direct-pdf.mjs';
 const bounds={x:0,y:0,width:800,height:1000};
 function op(text='한글',family='Example'){
@@ -45,11 +46,11 @@ test('DEV53 rejects missing/decreasing positions and invalid baseline',()=>{
  const v=op();v.source.utf8Range.end=1;assert.throws(()=>planDirectText(v),/SOURCE/);
 });
 test('DEV53 exact static family and embedding permission are mandatory',()=>{
- assert.equal(validateDirectFont(kit,face(),'Example'),fakeFont);
- assert.throws(()=>validateDirectFont(kit,face(),'Another'),/FONT_IDENTITY/);
- assert.throws(()=>validateDirectFont(kit,face(2),'Example'),/FONT_RESTRICTED/);
- assert.throws(()=>validateDirectFont(kit,face(512),'Example'),/FONT_RESTRICTED/);
- assert.throws(()=>validateDirectFont(kit,{...face(),embeddingAllowed:false},'Example'),/FONT_INPUT/);
+ assert.equal(validateDirectFace(kit,face(),'Example').font,fakeFont);
+ assert.throws(()=>validateDirectFace(kit,face(),'Another'),/FONT_IDENTITY/);
+ assert.throws(()=>validateDirectFace(kit,face(2),'Example'),/FONT_RESTRICTED/);
+ assert.throws(()=>validateDirectFace(kit,face(512),'Example'),/FONT_RESTRICTED/);
+ assert.throws(()=>validateDirectFace(kit,{...face(),embeddingAllowed:false},'Example'),/FONT_INPUT/);
 });
 test('DEV53 rejects missing glyph and contextual shaping',()=>{
  const p=planDirectText(op());validateIndependentGlyphs(fakeFont,p);
