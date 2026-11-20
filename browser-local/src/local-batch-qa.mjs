@@ -5,7 +5,7 @@ import {localQaFilterReason} from './svg-filter-diagnostics.mjs';
  */
 // Explicit app marker: older v1 reports lack this field, even if saved later.
 import {getVerifiedRhwpVersion} from './rhwp-wasm-loader.mjs';
-export const QA_BUILD_REVISION='DEV51';
+export const QA_BUILD_REVISION='DEV61';
 export function qaDeploymentChannel(host=globalThis.location?.hostname){
  if(host==='sunrise-pdf-pro-web-dev41-qa.ko-pg.workers.dev')return 'qa';
  if(host==='sunrise-pdf-pro-web.ko-pg.workers.dev')return 'production';
@@ -14,7 +14,7 @@ export function qaDeploymentChannel(host=globalThis.location?.hostname){
 }
 const EXTENSIONS=new Set(['hwp','hwpx','xls','xlsx','jpg','jpeg','png']);
 const STATES=new Set(['ready','working','done','failed','cancelled','invalid']);
-const ENGINES=new Set(['professional','hybrid-filter','compat-raster']);
+const ENGINES=new Set(['professional','hybrid-filter','compat-raster','direct-trial']);
 const PHASES=new Set(['load','xlsx_package','xlsx_parse','xlsx_layout','font_read',
  'font_bundle','font_measure','font_scan','fonts','file_read','hwp_open','hwp_page_count','svg_build','svg_normalize',
  'image_gif','image_png','image_filter','svg_sanitize','svg_preflight',
@@ -121,6 +121,10 @@ export function localQaErrorCode(error){
   // Never export arbitrary error messages, source names, paths, or original text.
   if(new RegExp('\\b'+code+'\\b').test(value))return code;
  }
+ const direct=/\bDIRECT_PDF_(?:TEXT|MEDIA|LAYER|SPECIAL)_[A-Z0-9_]{1,64}\b/.exec(value);
+ if(direct)return direct[0];
+ if(/\bDIRECT_PDF_UNSUPPORTED_PAGE_\d+\b/.test(value))return 'DIRECT_PDF_UNSUPPORTED_PAGE';
+ if(/\bDIRECT_PDF_[A-Z0-9_]{1,64}\b/.test(value))return 'DIRECT_PDF_ERROR';
  if(/\bXLSX_ZIP_[A-Z0-9_]+\b/.test(value))return 'XLSX_ZIP_ERROR';
  if(/\bPDF_OUTPUT_[A-Z0-9_]+\b/.test(value))return 'PDF_OUTPUT_ERROR';
  if(/\bFILE_READ_[A-Z0-9_]+\b/.test(value))return 'FILE_READ_ERROR';
