@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {mockPdfBytes} from './fixtures/direct-mock-pdf.mjs';
 import assert from 'node:assert/strict';
 import {planDirectSpecial} from '../src/direct-special.mjs';
 import {inspectDirectPage,buildDirectPdf} from '../src/direct-pdf.mjs';
@@ -26,7 +27,7 @@ test('DEV57 opt-in special planning and text permission are explicit',()=>{
 });
 test('DEV57 static form vector native draw order and no partial equation output',async()=>{
  const calls=[];let saves=0;const page={drawRectangle:()=>calls.push('rect'),drawEllipse:()=>calls.push('circle'),pushOperators:()=>calls.push('path')};
- const lib={PDFDocument:{create:async()=>({addPage:()=>page,save:async()=>{saves++;return new Uint8Array([1]);}})},rgb:(...v)=>v};
+ const lib={PDFDocument:{create:async()=>({addPage:()=>page,save:async()=>{saves++;return mockPdfBytes();}})},rgb:(...v)=>v};
  for(const n of ['pushGraphicsState','popGraphicsState','setStrokingColor','setLineWidth','moveTo','lineTo','stroke'])lib[n]=(...v)=>[n,...v];
  const options={allowSpecial:true,loadPdf:async()=>lib};
  const result=await buildDirectPdf(doc([form]),options);assert.deepEqual(calls,['rect','circle','path']);assert.equal(result.specialItems,3);assert.equal(saves,1);
