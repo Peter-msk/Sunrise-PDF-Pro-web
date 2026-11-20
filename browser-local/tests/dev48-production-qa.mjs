@@ -50,7 +50,7 @@ test('writer and font reason classification, fixed taxonomy and privacy',()=>{
  assert.equal(localQaWriterStep('[writer_step=private-name]'),null);
  assert.equal(localQaErrorCode('private text'),'OTHER_ERROR');
  const report=buildLocalBatchQaReport([{file:{name:'private.hwp'},state:'failed',error:raw},{file:{name:'private2.hwp'},state:'failed',error:font}]);
- assert.equal(report.build_revision,'DEV51');assert.equal(QA_BUILD_REVISION,'DEV51');
+ assert.equal(report.build_revision,'DEV61');assert.equal(QA_BUILD_REVISION,'DEV61');
  assert.equal(report.files[0].writer_step,'svg-render');assert.equal(report.files[1].font_reason,'glyph-not-in-registry');
  assert.ok(!JSON.stringify(report).includes('private'));
 });
