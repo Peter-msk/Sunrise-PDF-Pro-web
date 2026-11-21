@@ -36,10 +36,11 @@ test('DEV58 cooperative cancellation restores open clip and never saves partial 
  await assert.rejects(buildDirectPdf(doc([clip(leaf(1000))]),{...h.options,signal:controller.signal,yieldControl:async()=>{controller.abort();}}),{name:'AbortError'});
  assert.equal(h.stats().draws,255);assert.equal(h.stats().saves,0);assert.equal(h.stats().depth,0);assert.equal(h.stats().opens,h.stats().closes);
 });
-test('DEV58 cumulative work limits prevent later-page allocation and publication',async()=>{
+test('DEV62 Direct PDF processes document operations beyond former 200k aggregate cap',async()=>{
  const h=harness(),root=leaf(10000);
- await assert.rejects(buildDirectPdf(doc(Array.from({length:21},()=>root)),h.options),/DOCUMENT_WORK_BUDGET/);
- assert.equal(h.stats().pages,20);assert.equal(h.stats().saves,0);
+ const r=await buildDirectPdf(doc(Array.from({length:21},()=>root)),h.options);
+ assert.equal(h.stats().pages,21);assert.equal(h.stats().saves,1);
+ assert.equal(r.metrics.operations,210000);
 });
 test('DEV58 invalid yield hook rejected before PDF allocation',async()=>{
  const h=harness();await assert.rejects(buildDirectPdf(doc([leaf(1)]),{...h.options,yieldControl:null}),/YIELD_CONTROL/);assert.equal(h.stats().pages,0);
