@@ -99,7 +99,7 @@ function clearPrint(){
  for(const button of $('file-list').querySelectorAll('.native-print-save'))button.remove();
 }
 function clearArchive(){if(archiveUrl)URL.revokeObjectURL(archiveUrl);archiveUrl=null;$('download-all').hidden=true;$('download-all').removeAttribute('href');}
-function release(item){item._fontAuditController?.abort();item._qualityAuditController?.abort();if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
+function release(item){if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
 function show(item){
  // A reselect of the same document must not discard its already prepared
  // browser-print frame; switching documents must always dispose that frame.
@@ -235,7 +235,7 @@ function draw(changed=null){
  if(changed){
   const index=items.indexOf(changed);
   if(index>=0&&list.children.length===items.length){
-   const old=Array.from(list.children).find(row=>row.dataset.id===String(changed.id));
+   const old=list.querySelector('.file-row[data-id="'+changed.id+'"]');
    if(old){old.replaceWith(createFileRow(changed,index,names));sync();return;}
   }
  }
@@ -255,7 +255,7 @@ for(const event of ['dragenter','dragover'])$('drop').addEventListener(event,e=>
 for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{e.preventDefault();$('drop').classList.remove('drag');});
 $('drop').addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer?.files||[])));
 $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.';draw();});
-$('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='direct-trial'?'DEV61 Direct PDF 실기 검증 방식입니다. 원본 글꼴이 정확히 일치해야 하며 미지원 객체가 있으면 오류가 표시됩니다.':$('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');draw();});
+$('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='direct-trial'?'Direct PDF 실기 검증 방식입니다. 원본 글꼴이 정확히 일치해야 하며 미지원 객체가 있으면 오류가 표시됩니다.':$('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');draw();});
 // Export is an explicit, local user action. It works during a long-running
 // batch so the last recorded stage is not lost; it never sends source data.
 $('qa-export').addEventListener('click',()=>{
