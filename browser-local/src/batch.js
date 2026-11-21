@@ -52,14 +52,23 @@ export async function runBatch(items,convert,signal,onChange=()=>{}){
 
 // ZIP is generated only for complete PDFs. Store rather than recompress already
 // compressed PDF data. Callers retain individual results if archive creation fails.
+// Stream each finished PDF into the store-only ZIP writer. Avoid duplicating
+// every whole PDF as an ArrayBuffer before handing it to the archive.
 export async function makePdfArchive(items,signal,onProgress=()=>{}){
  const ready=items.filter(item=>item.state==='done'&&item.result?.pdf instanceof Blob);
  if(!ready.length)throw Error('다운로드할 변환 결과가 없습니다.');
- const bytes=ready.reduce((sum,item)=>sum+item.result.pdf.size,0);
- if(bytes>256*1024*1024)throw Error('전체 ZIP이 너무 큽니다. 개별 PDF를 다운로드하세요.');
+ // ZIP32's actual format representation range, not a product file-count limit.
+ const ZIP32_MAX=0xffffffff;
  const names=uniquePdfNames(ready.map(item=>item.file));
- const chunks=[];
- let zipError=null;
+ let expectedBytes=22;
+ for(let i=0;i<ready.length;i++){
+  const nameBytes=new TextEncoder().encode(names[i]).byteLength;
+  // The central directory and local entry each contain their own header/name.
+  expectedBytes+=ready[i].result.pdf.size+76+nameBytes*2;
+  if(ready[i].result.pdf.size>ZIP32_MAX||expectedBytes>ZIP32_MAX)
+   throw Error('ZIP_FORMAT_LIMIT: 전체 ZIP이 표준 ZIP 형식의 크기 범위를 초과합니다. PDF를 개별 다운로드하세요.');
+ }
+ const chunks=[];let zipError=null;
  const zip=new Zip((error,data)=>{
   if(error)zipError=error;
   else if(data?.length)chunks.push(data);
@@ -67,9 +76,24 @@ export async function makePdfArchive(items,signal,onProgress=()=>{}){
  try{
   for(let index=0;index<ready.length;index++){
    if(signal?.aborted)throw new DOMException('ZIP 생성이 취소되었습니다.','AbortError');
-   const file=new ZipPassThrough(names[index]);zip.add(file);
-   file.push(new Uint8Array(await ready[index].result.pdf.arrayBuffer()),true);
-   if(zipError)throw zipError;
+   const entry=new ZipPassThrough(names[index]);zip.add(entry);
+   const reader=ready[index].result.pdf.stream().getReader();
+   let partCount=0;
+   try{
+    while(true){
+     if(signal?.aborted)throw new DOMException('ZIP 생성이 취소되었습니다.','AbortError');
+     const {done,value}=await reader.read();
+     if(done)break;
+     if(!(value instanceof Uint8Array))throw Error('ZIP_SOURCE_CHUNK_INVALID');
+     entry.push(value,false);
+     if(zipError)throw zipError;
+     // Keep the browser responsive for long local archives without a timer
+     // per chunk; backpressure is naturally enforced by awaiting the read.
+     if(++partCount%16===0)await cooperativeYield({signal});
+    }
+    entry.push(new Uint8Array(0),true);
+    if(zipError)throw zipError;
+   }finally{try{await reader.cancel();}catch{}reader.releaseLock();}
    onProgress(index+1,ready.length);
    await cooperativeYield({signal});
   }
