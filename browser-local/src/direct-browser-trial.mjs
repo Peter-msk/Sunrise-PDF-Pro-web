@@ -64,7 +64,7 @@ export async function convertDirectTrial({buffer,openDocument,readPageCount,font
   abort(signal);
   return {pdf:new Blob([r.bytes],{type:'application/pdf'}),pages:count,bytes:r.bytes.length,
    renderMode:'direct-trial',vectorPages:count,rasterPages:0,fontUsage:usage,
-   warnings:['DEV61 실기 검증용 Direct PDF입니다. 원본과 글자·줄바꿈·표·그림의 위치 및 색상을 비교하세요. 서체 대체와 전체 페이지 이미지화는 하지 않습니다.'],
+   warnings:['실기 검증용 Direct PDF입니다. 원본과 글자·줄바꿈·표·그림의 위치 및 색상을 비교하세요. 서체 대체와 전체 페이지 이미지화는 하지 않습니다.'],
    directMetrics:r.metrics};
  }finally{try{doc?.free();}finally{release();}}
 }
