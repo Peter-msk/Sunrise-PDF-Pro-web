@@ -6,7 +6,7 @@ import {MAX_CONVERSION_PAGES} from './page-limit.mjs';
  */
 const TAIL_BYTES=4096;
 const XREF_LOOKAHEAD=4096;
-const MAX_BYTES=512*1024*1024;
+const MAX_BYTES=Number.MAX_SAFE_INTEGER;
 const DECODER=new TextDecoder('latin1');
 
 function xrefWindow(source,offset,total){
