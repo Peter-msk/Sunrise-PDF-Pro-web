@@ -49,27 +49,14 @@ try{
   const bytes=await readFile(await download.path());
   const pdf=await PDFDocument.load(bytes);
   assert.ok(pdf.getPageCount()>0);
-  assert.ok(await page.locator('.vector-quality-audit').count()>0);
-  await page.locator('.vector-quality-audit').click();
-  await page.waitForFunction(()=>{
-   const t=document.querySelector('#file-list')?.textContent||'';
-   return /PDF 구조 검증|PDF 벡터 품질 검사를 완료하지 못했습니다/.test(t);
-  },null,{timeout:90000});
-  let report=await page.locator('#file-list').innerText();
-  assert.match(report,/PDF 구조 검증 통과/,report.slice(0,4000));
-  assert.match(report,/추출 글자/);
-  assert.ok(await page.locator('.font-audit').count()>0);
-  await page.locator('.font-audit').click();
-  await page.waitForFunction(()=>{
-   const t=document.querySelector('#file-list')?.textContent||'';
-   return /PDF 글꼴 리소스|PDF 글꼴 확인을 완료하지 못했습니다/.test(t);
-  },null,{timeout:90000});
-  report=await page.locator('#file-list').innerText();
-  assert.match(report,/PDF 글꼴 리소스/);
+  assert.equal(await page.locator('.vector-quality-audit').count(),0);
+  assert.equal(await page.locator('.font-audit').count(),0);
+  assert.equal(await page.locator('#quality-detail').count(),0);
+  assert.ok(await page.locator('#preview canvas').count()>0);
   assert.deepEqual(fatalAssets,[],'No critical asset HTTP errors');
   assert.deepEqual(exceptions,[],'No uncaught page exceptions');
   results.push({ext,pages:pdf.getPageCount(),pdfBytes:bytes.length,
-   professionalDefault:true,vectorQualityPass:true,fontAuditPass:true});
+   professionalDefault:true,cleanPreview:true});
   await page.close();
  }
  await ctx.close();
