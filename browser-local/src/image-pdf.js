@@ -8,7 +8,7 @@ import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 const MAX_DECODE_PIXELS=16_000_000,MAX_CANVAS_SIDE=16_384;
 const IMAGE_DECODE_TIMEOUT_MS=35_000,IMAGE_ENCODE_TIMEOUT_MS=35_000;
 const IMAGE_PDF_SAVE_TIMEOUT_MS=120_000;
-const MAX_IMAGE_INPUT_BYTES=128*1024*1024;
+
 /** Read PNG IHDR without decoding a potentially hundred-megapixel bitmap. */
 export function pngDimensions(data){
  const b=data instanceof Uint8Array?data:new Uint8Array(data);
@@ -47,8 +47,6 @@ export async function convertImage(file,onProgress,signal,kind,{
  if(![decodeTimeoutMs,encodeTimeoutMs,saveTimeoutMs].every(ms=>
    Number.isFinite(ms)&&ms>0))throw Error('IMAGE_TIMEOUT_CONFIG_INVALID');
  cancelled(signal);
- if(typeof file?.size==='number'&&file.size>MAX_IMAGE_INPUT_BYTES)
-  throw Error('IMAGE_INPUT_BYTES_LIMIT');
  verifyOtherHeader(kind,await file.slice(0,8).arrayBuffer());cancelled(signal);
  // Parse only a small image header *before* allocating a full file ArrayBuffer.
  const jpegHeader=kind==='png'?null:await file.slice(0,MAX_JPEG_HEADER_BYTES).arrayBuffer();
