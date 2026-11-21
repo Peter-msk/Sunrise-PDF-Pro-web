@@ -26,20 +26,13 @@ try{
   document.querySelector('#failed-count')?.textContent==='1',null,{timeout:240_000});
  assert.equal(await page.locator('#done-count').innerText(),'1',
   await page.locator('#file-list').innerText());
- const button=page.locator('.font-audit');
- assert.equal(await button.count(),1,'HWP vector PDF should expose font resource inspector');
- await button.click();
- await page.waitForFunction(()=>{
-  const txt=document.querySelector('#file-list')?.textContent||'';
-  return txt.includes('PDF 글꼴 리소스')||
-   txt.includes('PDF 글꼴 확인을 완료하지 못했습니다');
- },null,{timeout:60_000});
- const result=await page.locator('#file-list').innerText();
- assert.match(result,/PDF 글꼴 리소스/);
- assert.match(result,/글꼴 프로그램 내장/);
- assert.doesNotMatch(result,/완료하지 못했습니다|Font.*Error/);
+ // DEV62: only PDF preview and download remain visible to users. Font
+ // resource inspection stays in its separate testable source module.
+ assert.equal(await page.locator('.font-audit').count(),0);
+ assert.equal(await page.locator('.vector-quality-audit').count(),0);
+ assert.equal(await page.locator('#quality-detail').count(),0);
  assert.deepEqual(errors,[],'PDF font audit must not crash page');
  assert.deepEqual(external,[],'no external network access');
- console.log('DEV26_LOCAL_FONT_PROGRAM_BROWSER_AUDIT_PASS');
+ console.log('DEV62_BROWSER_USER_OUTPUT_CLEAN_PASS');
  await page.close();
 }finally{await browser.close();}
