@@ -57,8 +57,9 @@ export async function convertImage(file,onProgress,signal,kind,{
     {width:jpegInfo.displayWidth,height:jpegInfo.displayHeight};
  if(!rawSize)throw Error('PNG_HEADER_DIMENSIONS_INVALID');
  const decode=imageDecodeTarget(rawSize.width,rawSize.height);
- const data=await readDocumentBuffer(file,signal,p=>onProgress({stage:'load',...p}));cancelled(signal);
- const source=new Blob([data],{type:kind==='png'?'image/png':'image/jpeg'});
+ // Decode the original Blob directly: do not first duplicate a large JPEG
+ // as an ArrayBuffer and then wrap that buffer in a second Blob.
+ const source=file;cancelled(signal);
  let bitmap;
  try{
   const operation=decode?.resized
@@ -87,7 +88,7 @@ export async function convertImage(file,onProgress,signal,kind,{
   }
   const target=imageDecodeTarget(bitmap.width,bitmap.height);
   const resized=Boolean(decode?.resized||target.resized);
-  let normalized=data,width=bitmap.width,height=bitmap.height;
+  let normalized=null,width=bitmap.width,height=bitmap.height;
   if(kind!=='png'||target.resized||resized){
    width=target.width;height=target.height;
    onProgress({stage:'render',page:1,total:1});
@@ -102,6 +103,10 @@ export async function convertImage(file,onProgress,signal,kind,{
     normalized=await waitForImageOperation(blob.arrayBuffer(),signal,
       encodeTimeoutMs,'IMAGE_ENCODE_READ_TIMEOUT');
    }finally{canvas.width=canvas.height=0;}
+  }else{
+   // An unchanged PNG still needs its original compressed bytes for pdf-lib.
+   // Read only here, after native header/decode checks have succeeded.
+   normalized=await readDocumentBuffer(file,signal,p=>onProgress({stage:'load',...p}));
   }
   cancelled(signal);
   const bytes=await imagePdfBytes(normalized,width,height,signal,saveTimeoutMs);
