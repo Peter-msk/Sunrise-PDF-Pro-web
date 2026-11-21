@@ -23,7 +23,7 @@ export async function loadBrowserPdfBackend(importModule) {
     throw new Error('전문 PDF 엔진 모듈 인터페이스가 일치하지 않습니다.');
   return {
     PDFDocument, SVGtoPDF, registerStdFonts, Helvetica,
-    toBlob(pdf, signal, onByteProgress=()=>{}, maxOutputBytes=512*1024*1024, streamProbe=null, terminalProbe=null) {
+    toBlob(pdf, signal, onByteProgress=()=>{}, maxOutputBytes=Number.MAX_SAFE_INTEGER, streamProbe=null, terminalProbe=null) {
       // An ephemeral, local-only primitive state snapshot. Never forward this
       // object to telemetry, server storage, or output PDF metadata.
       if(streamProbe!==null&&(typeof streamProbe!=='object'||Array.isArray(streamProbe)))
@@ -85,8 +85,8 @@ export async function loadBrowserPdfBackend(importModule) {
             settle(new Error('PDF 출력 바이트 형식이 올바르지 않습니다.'));
             return;
           }
-          // Reject before retaining an unbounded series of output chunks.
-          // A 512 MiB per-PDF ceiling prevents browser OOM on pathological streams.
+          // Reject unsafe integer overflow or an optional caller-provided resource limit.
+          // Actual memory allocation failures are handled by the browser/runtime.
           if (chunk.byteLength > maxOutputBytes-emittedBytes) {
             settle(new Error('PDF_STREAM_OUTPUT_BYTES_LIMIT'));
             try { pdf.destroy?.(); } catch { /* The error is already reported. */ }
