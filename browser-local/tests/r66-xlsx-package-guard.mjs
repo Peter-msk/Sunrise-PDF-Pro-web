@@ -30,8 +30,8 @@ test('central total expanded-byte budget blocks forged oversized uncompressed si
 });
 test('central entry expanded cap catches large declared entry',()=>{
  const b=clone(fixture('small-deflated.xlsx')),p=firstCentral(b);
- view(b).setUint32(p+24,XLSX_LIMITS.entryBytes+1,true);
- err(b,/XLSX_ZIP_ENTRY_BYTES_LIMIT/);
+ view(b).setUint32(p+24,4096,true);
+ assert.throws(()=>inspectXlsxPackage(b,{...XLSX_LIMITS,entryBytes:1024}),/XLSX_ZIP_ENTRY_BYTES_LIMIT/);
 });
 test('entry count cap prevents excessive ZIP traversal',()=>{
  const b=fixture('small-deflated.xlsx');
