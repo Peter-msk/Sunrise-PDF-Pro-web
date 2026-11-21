@@ -9,7 +9,7 @@
  * a second security guard prevents executable/external content at this boundary.
  */
 const PX_TO_PT=72/96;
-const MAX_PRINT_PAGES=120;
+const MAX_PRINT_PAGES=Number.MAX_SAFE_INTEGER;
 import {parseSafeSvg} from './svg-security.js';
 function requireSafeSvg(svg,doc){
   return parseSafeSvg(svg,new doc.defaultView.DOMParser());
@@ -89,7 +89,7 @@ export async function prepareNativePrint(pages,ownerDocument=document,fontRegist
   const checkCancel=()=>{if(signal?.aborted)throw new DOMException('인쇄 준비가 취소되었습니다.','AbortError');};
   checkCancel();
   if(!Array.isArray(pages)||pages.length===0||pages.length>MAX_PRINT_PAGES)
-    throw Error('인쇄 페이지 수는 1~120쪽이어야 합니다.');
+    throw Error('인쇄할 페이지가 없거나 페이지 수가 올바르지 않습니다.');
   const paper=[];
   const pagePaper=[];
   for(const page of pages){
