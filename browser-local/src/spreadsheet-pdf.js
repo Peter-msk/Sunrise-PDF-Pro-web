@@ -2,13 +2,13 @@ import {cooperativeYield} from './cooperative-yield.mjs';
 import {PDFDocument,rgb} from 'pdf-lib';
 import {verifyOtherHeader,cancelled} from './input-types.js';
 import {readDocumentBuffer} from './file-reader.js';
-import {inspectXlsxPackage,XLSX_LIMITS} from './xlsx-package-guard.mjs';
+import {inspectXlsxPackage} from './xlsx-package-guard.mjs';
 import {loadBundledFonts} from './bundled-fonts.js';
 import {installMeasureFonts} from './pdf-fonts.js';
 import {rasterPage} from './converter.js';
 import {assertCompletePdfBytes} from './pdf-output-integrity.mjs';
 import {wrapSpreadsheetCell} from './spreadsheet-wrap.mjs';
-const FONT=9,LINE=12,PAD=4,MARGIN=32,MAX_CELLS=200000,MAX_PAGES=120;
+const FONT=9,LINE=12,PAD=4,MARGIN=32;
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 export function wrapCell(text,width,font,size=FONT){
  return wrapSpreadsheetCell(text,width,font,size);
@@ -24,7 +24,7 @@ export function planSheet(sheet,name,XLSX,font){
     range.e.r>1048575||range.e.c>16383)
   throw Error(name+': 시트 셀 범위가 유효하지 않습니다.');
  const allMerges=sheet['!merges']||[];
- if(!Array.isArray(allMerges)||allMerges.length>MAX_CELLS)
+ if(!Array.isArray(allMerges))
   throw Error(name+': 병합 셀 범위가 유효하지 않습니다.');
  for(const merge of allMerges){
   const pos=[merge?.s?.r,merge?.s?.c,merge?.e?.r,merge?.e?.c];
@@ -36,7 +36,7 @@ export function planSheet(sheet,name,XLSX,font){
   range.e.r=Math.max(range.e.r,merge.e.r);range.e.c=Math.max(range.e.c,merge.e.c);
  }
  const rowsN=range.e.r-range.s.r+1,colsN=range.e.c-range.s.c+1;
- if(rowsN<1||colsN<1||rowsN*colsN>MAX_CELLS)throw Error(name+': 사용 범위가 20만 셀을 초과합니다. 불필요한 빈 범위를 정리해 주세요.');
+ if(rowsN<1||colsN<1)throw Error(name+': 사용 범위가 20만 셀을 초과합니다. 불필요한 빈 범위를 정리해 주세요.');
  const rows=[],cols=[];
  for(let r=range.s.r;r<=range.e.r;r++)if(!sheet['!rows']?.[r]?.hidden)rows.push(r);
  for(let c=range.s.c;c<=range.e.c;c++)if(!sheet['!cols']?.[c]?.hidden)cols.push(c);
@@ -74,7 +74,7 @@ export function planSheet(sheet,name,XLSX,font){
   if(cell?.f&&(cell.v===undefined||cell.v===null))throw Error(name+': 저장된 계산값이 없는 수식이 있습니다. Excel에서 계산 후 저장해 주세요.');
   const text=(cell?XLSX.utils.format_cell(cell):'').replace(/\t/g,'    ');
   if(allowed&&Array.from(text).some(c=>!/[\r\n]/.test(c)&&!allowed.has(c.codePointAt(0))))throw Error(name+': 기본 글꼴로 표시할 수 없는 문자가 있습니다.');
-  if(text.length>20000)throw Error(name+': 한 셀의 내용이 너무 깁니다.');any ||= Boolean(text);
+  any ||= Boolean(text);
   const merge=merges.get(r+':'+c)||{r,c,endR:r,endC:c};
   const width=widths.slice(c,merge.endC+1).reduce((a,b)=>a+b,0);
   const lines=wrapCell(text,width-PAD*2*scale,font,size);
@@ -90,7 +90,7 @@ export function planSheet(sheet,name,XLSX,font){
   const groupHeight=heights.slice(cursor,end+1).reduce((a,b)=>a+b,0);
   if(groupHeight>body)throw Error(name+': 한 행 또는 병합 영역이 한 쪽보다 큽니다. 행 내용을 나누어 주세요.');
   const used=heights.slice(start,cursor).reduce((a,b)=>a+b,0);
-  if(used+groupHeight>body){pages.push({start,end:cursor-1});if(pages.length>=MAX_PAGES)throw Error(name+': 출력이 120쪽을 초과합니다.');start=cursor;}
+  if(used+groupHeight>body){pages.push({start,end:cursor-1});start=cursor;}
   cursor=end+1;
  }
  pages.push({start,end:rows.length-1});
@@ -118,12 +118,9 @@ export async function drawSheetPages(pdf,plan,font,signal,onProgress=()=>{},fami
 }
 export async function convertSpreadsheet(file,onProgress,signal,kind){
  cancelled(signal);verifyOtherHeader(kind,await file.slice(0,8).arrayBuffer());
- if(kind==='xlsx'&&typeof file?.size==='number'&&file.size>XLSX_LIMITS.inputBytes)
-  throw Error('XLSX_INPUT_BYTES_LIMIT');
- if(kind==='xls'&&typeof file?.size==='number'&&file.size>48*1024*1024)
-  throw Error('XLS_INPUT_BYTES_LIMIT');
+
  const data=await readDocumentBuffer(file,signal,p=>onProgress({stage:'load',...p}));cancelled(signal);
- if(kind==='xls'&&data.byteLength>48*1024*1024)throw Error('XLS_INPUT_BYTES_LIMIT');
+
  if(kind==='xlsx'){
   onProgress({stage:'load',detail:'xlsx_package',loaded:data.byteLength,total:data.byteLength});
   inspectXlsxPackage(data);
@@ -158,7 +155,7 @@ export async function convertSpreadsheet(file,onProgress,signal,kind){
   for(let index=0;index<book.SheetNames.length;index++){
    cancelled(signal);if(book.Workbook?.Sheets?.[index]?.Hidden){hidden++;continue;}
    const name=book.SheetNames[index];plan.push(...planSheet(book.Sheets[name],name,XLSX,font));
-   if(plan.length>MAX_PAGES)throw Error('엑셀 출력이 120쪽을 초과합니다. 시트를 나누어 변환해 주세요.');
+   
    await cooperativeYield({signal});
   }
   if(!plan.length)throw Error('출력할 셀 내용이 없습니다. 숨김 시트와 빈 시트는 제외합니다.');
