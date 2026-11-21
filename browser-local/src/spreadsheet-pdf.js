@@ -37,10 +37,10 @@ export function planSheet(sheet,name,XLSX,font){
  }
  const rowsN=range.e.r-range.s.r+1,colsN=range.e.c-range.s.c+1;
  if(rowsN<1||colsN<1)throw Error(name+': 사용 범위가 20만 셀을 초과합니다. 불필요한 빈 범위를 정리해 주세요.');
- const rows=[],cols=[];
- for(let r=range.s.r;r<=range.e.r;r++)if(!sheet['!rows']?.[r]?.hidden)rows.push(r);
+ const cols=[];
  for(let c=range.s.c;c<=range.e.c;c++)if(!sheet['!cols']?.[c]?.hidden)cols.push(c);
- if(!rows.length||!cols.length)return [];
+ if(!cols.length)return [];
+ // Reject unprintable overly-wide sheets before enumerating millions of rows.
  const widths=cols.map(c=>{
   const value=sheet['!cols']?.[c]?.wch??10;
   if(typeof value!=='number'||!Number.isFinite(value)||value<0)
@@ -51,6 +51,9 @@ export function planSheet(sheet,name,XLSX,font){
  const scale=Math.min(1,(paper[0]-MARGIN*2)/total);
  if(scale<.65)throw Error(name+': 열이 너무 많아 글자를 읽기 어렵습니다. 필요한 열을 별도 시트로 나누어 주세요.');
  for(let c=0;c<widths.length;c++)widths[c]*=scale;
+ const widthPrefix=[0];for(const w of widths)widthPrefix.push(widthPrefix.at(-1)+w);
+ const rows=[];for(let r=range.s.r;r<=range.e.r;r++)if(!sheet['!rows']?.[r]?.hidden)rows.push(r);
+ if(!rows.length)return [];
  const size=FONT*scale,lineHeight=LINE*scale;
  const heights=rows.map(r=>{
   const value=sheet['!rows']?.[r]?.hpt??20;
@@ -58,13 +61,22 @@ export function planSheet(sheet,name,XLSX,font){
    throw Error(name+': 행 높이가 유효하지 않습니다.');
   return Math.max(20*scale,value*scale);
  });
+ // A merge lookup must not scan every row and column for each merged cell.
+ const lowerBound=(array,value)=>{let lo=0,hi=array.length;while(lo<hi){const mid=(lo+hi)>>>1;if(array[mid]<value)lo=mid+1;else hi=mid;}return lo;};
+ const upperBound=(array,value)=>{let lo=0,hi=array.length;while(lo<hi){const mid=(lo+hi)>>>1;if(array[mid]<=value)lo=mid+1;else hi=mid;}return lo;};
  const covered=new Set(),merges=new Map(),mergeEnds=new Map();
+ const printableBody=paper[1]-MARGIN*2-28;
  for(const merge of allMerges){
-  const rr=rows.map((r,i)=>r>=merge.s.r&&r<=merge.e.r?i:-1).filter(i=>i>=0),cc=cols.map((c,i)=>c>=merge.s.c&&c<=merge.e.c?i:-1).filter(i=>i>=0);
-  if(!rr.length||!cc.length)continue;
-  if(rr[0]!==rows.indexOf(merge.s.r)||cc[0]!==cols.indexOf(merge.s.c))throw Error(name+': 병합 셀의 시작 위치가 숨겨져 있습니다. 숨김을 해제해 주세요.');
-  const m={r:rr[0],c:cc[0],endR:rr.at(-1),endC:cc.at(-1)};mergeEnds.set(m.r,Math.max(mergeEnds.get(m.r)??m.r,m.endR));
-  for(const r of rr)for(const c of cc){const key=r+':'+c;if(covered.has(key)||merges.has(key))throw Error(name+': 병합 셀이 겹칩니다.');if(r===m.r&&c===m.c)merges.set(key,m);else covered.add(key);}
+  const r0=lowerBound(rows,merge.s.r),r1=upperBound(rows,merge.e.r)-1;
+  const c0=lowerBound(cols,merge.s.c),c1=upperBound(cols,merge.e.c)-1;
+  if(r0>r1||c0>c1)continue;
+  if(rows[r0]!==merge.s.r||cols[c0]!==merge.s.c)
+   throw Error(name+': 병합 셀의 시작 위치가 숨겨져 있습니다. 숨김을 해제해 주세요.');
+  // An indivisible merged region taller than one paper cannot be output.
+  // Reject before allocating every covered-cell key for a pathological merge.
+  let mergeHeight=0;for(let i=r0;i<=r1;i++){mergeHeight+=heights[i];if(mergeHeight>printableBody)throw Error(name+': 한 행 또는 병합 영역이 한 쪽보다 큽니다.');}
+  const m={r:r0,c:c0,endR:r1,endC:c1};mergeEnds.set(m.r,Math.max(mergeEnds.get(m.r)??m.r,m.endR));
+  for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){const key=r+':'+c;if(covered.has(key)||merges.has(key))throw Error(name+': 병합 셀이 겹칩니다.');if(r===m.r&&c===m.c)merges.set(key,m);else covered.add(key);}
  }
  const allowed=font.getCharacterSet?new Set(font.getCharacterSet()):null;
  const cells=[];let any=false;
@@ -76,7 +88,7 @@ export function planSheet(sheet,name,XLSX,font){
   if(allowed&&Array.from(text).some(c=>!/[\r\n]/.test(c)&&!allowed.has(c.codePointAt(0))))throw Error(name+': 기본 글꼴로 표시할 수 없는 문자가 있습니다.');
   any ||= Boolean(text);
   const merge=merges.get(r+':'+c)||{r,c,endR:r,endC:c};
-  const width=widths.slice(c,merge.endC+1).reduce((a,b)=>a+b,0);
+  const width=widthPrefix[merge.endC+1]-widthPrefix[c];
   const lines=wrapCell(text,width-PAD*2*scale,font,size);
   const required=lines.length*lineHeight+PAD*2*scale;
   const current=heights.slice(r,merge.endR+1).reduce((a,b)=>a+b,0);
@@ -84,26 +96,40 @@ export function planSheet(sheet,name,XLSX,font){
   cells.push({...merge,lines,width});
  }
  if(!any)return [];
- const pages=[];const body=paper[1]-MARGIN*2-28;let start=0,cursor=0;
+ const pages=[];const body=printableBody;let start=0,cursor=0,used=0;
  while(cursor<rows.length){
   let end=cursor;for(let i=cursor;i<=end;i++)end=Math.max(end,mergeEnds.get(i)??i);
-  const groupHeight=heights.slice(cursor,end+1).reduce((a,b)=>a+b,0);
+  let groupHeight=0;for(let i=cursor;i<=end;i++)groupHeight+=heights[i];
   if(groupHeight>body)throw Error(name+': 한 행 또는 병합 영역이 한 쪽보다 큽니다. 행 내용을 나누어 주세요.');
-  const used=heights.slice(start,cursor).reduce((a,b)=>a+b,0);
-  if(used+groupHeight>body){pages.push({start,end:cursor-1});start=cursor;}
-  cursor=end+1;
+  if(used+groupHeight>body){pages.push({start,end:cursor-1});start=cursor;used=0;}
+  used+=groupHeight;cursor=end+1;
  }
  pages.push({start,end:rows.length-1});
- return pages.map((p,index)=>({name,paper,size,lineHeight,index:index+1,cols:widths,rows:heights.slice(p.start,p.end+1),cells:cells.filter(c=>c.r>=p.start&&c.r<=p.end).map(c=>({...c,r:c.r-p.start,endR:c.endR-p.start}))}));
+ const assigned=pages.map(()=>[]);
+ // A cell belongs to exactly one page: distribute once instead of filtering
+ // every cell for every page (quadratic for long worksheets).
+ let pageIndex=0;
+ for(const cell of cells){
+  while(pageIndex<pages.length-1&&cell.r>pages[pageIndex].end)pageIndex++;
+  const start=pages[pageIndex].start;
+  if(cell.r<start||cell.endR>pages[pageIndex].end)throw Error(name+': 병합 셀이 페이지 경계를 넘었습니다.');
+  assigned[pageIndex].push({...cell,r:cell.r-start,endR:cell.endR-start});
+ }
+ return pages.map((p,index)=>({name,paper,size,lineHeight,index:index+1,cols:widths,rows:heights.slice(p.start,p.end+1),cells:assigned[index]}));
 }
-function geometry(page,cell){const x=MARGIN+page.cols.slice(0,cell.c).reduce((a,b)=>a+b,0),top=MARGIN+28+page.rows.slice(0,cell.r).reduce((a,b)=>a+b,0),height=page.rows.slice(cell.r,cell.endR+1).reduce((a,b)=>a+b,0);return {x,top,height};}
+function geometry(cell,columnPrefix,rowPrefix){
+ const x=MARGIN+columnPrefix[cell.c],top=MARGIN+28+rowPrefix[cell.r];
+ return {x,top,height:rowPrefix[cell.endR+1]-rowPrefix[cell.r]};
+}
 export async function drawSheetPages(pdf,plan,font,signal,onProgress=()=>{},family="NanumGothic",{makePreviewSvg=true}={}){
- let firstSvg;
+ let firstSvg,previousCols=null,columnPrefix=null;
   for(let i=0;i<plan.length;i++){
    cancelled(signal);const p=plan[i],page=pdf.addPage(p.paper),title=p.name+' · '+p.index;
    page.drawText(title,{x:MARGIN,y:p.paper[1]-MARGIN-12,size:11,font,color:rgb(.08,.2,.33)});
    const shapes=[];
-   for(const cell of p.cells){const g=geometry(p,cell);page.drawRectangle({x:g.x,y:p.paper[1]-g.top-g.height,width:cell.width,height:g.height,borderColor:rgb(.72,.76,.8),borderWidth:.4});
+   if(p.cols!==previousCols){columnPrefix=[0];for(const width of p.cols)columnPrefix.push(columnPrefix.at(-1)+width);previousCols=p.cols;}
+   const rowPrefix=[0];for(const height of p.rows)rowPrefix.push(rowPrefix.at(-1)+height);
+   for(const cell of p.cells){const g=geometry(cell,columnPrefix,rowPrefix);page.drawRectangle({x:g.x,y:p.paper[1]-g.top-g.height,width:cell.width,height:g.height,borderColor:rgb(.72,.76,.8),borderWidth:.4});
     if(makePreviewSvg)shapes.push(`<rect x="${g.x}" y="${g.top}" width="${cell.width}" height="${g.height}" fill="white" stroke="#b8c2cc" stroke-width=".4"/>`);
     for(let n=0;n<cell.lines.length;n++){
      const text=cell.lines[n],baseline=g.top+PAD*p.size/FONT+p.size+n*p.lineHeight;
