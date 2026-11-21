@@ -143,8 +143,6 @@ test('source HWP names remain client-local comparison metadata, never telemetry'
 test('font inspection is local-only, never a network or telemetry operation',()=>{
  const src=readFileSync(new URL('../src/pdf-font-audit.mjs',import.meta.url),'utf8');
  const ui=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
- assert.match(ui,/PDF 글꼴 확인/);
- assert.match(ui,/compareSelectedAndEmbedded/);
+ assert.doesNotMatch(ui,/PDF 글꼴 확인|compareSelectedAndEmbedded|font-audit/);
  assert.doesNotMatch(src,/\bfetch\s*\(|sendBeacon|XMLHttpRequest|emitProEvent/);
- assert.match(ui,/PDF 글꼴 리소스/);
 });
