@@ -136,7 +136,7 @@ test('source HWP names remain client-local comparison metadata, never telemetry'
  const ui=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const telemetry=readFileSync(new URL('../src/pro-telemetry.js',import.meta.url),'utf8');
  assert.match(converter,/result\.sourceFontInventory=/);
- assert.match(ui,/sourceFontInventory\?\.requested/);
+ assert.doesNotMatch(ui,/sourceFontInventory\?\.requested/);
  assert.doesNotMatch(telemetry,/sourceFontInventory|requestedNames|matchedFaces/);
 });
 
