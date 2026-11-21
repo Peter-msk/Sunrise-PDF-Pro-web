@@ -5,10 +5,10 @@
  * worker isolation of synchronous parsers.
  */
 export const XLSX_LIMITS=Object.freeze({
-  inputBytes:96*1024*1024,
-  entries:10_000,
-  entryBytes:64*1024*1024,
-  totalExpandedBytes:256*1024*1024,
+  inputBytes:Number.MAX_SAFE_INTEGER,
+  entries:65535, // ZIP32 directory's native entry-count capacity
+  entryBytes:Number.MAX_SAFE_INTEGER,
+  totalExpandedBytes:Number.MAX_SAFE_INTEGER,
   compressionRatio:300,
 });
 const CEN=0x02014b50, LOCAL=0x04034b50, EOCD=0x06054b50;
