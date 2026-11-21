@@ -132,9 +132,11 @@ test('malformed PNG dimension header is rejected before any decoder allocation',
  assert.equal(x.canvases,0);
 });
 
-test('oversized image file is rejected before whole-file FileReader allocation',async()=>{
+test('large image metadata no longer hits a fixed 128MiB input ceiling',async()=>{
  const x=shim();x.input.size=129*1024*1024;
- await assert.rejects(x.api.convertImage(x.input,()=>{},undefined,'jpg'),/IMAGE_INPUT_BYTES_LIMIT/);
+ const result=await x.api.convertImage(x.input,()=>{},undefined,'jpg');
+ assert.equal(result.pages,1);
+ // JPEG goes straight from the original File/Blob to native image decoding.
  assert.equal(x.fullReads,0);
 });
 test('malformed PNG preflight fails without reading full source image bytes',async()=>{
@@ -142,8 +144,9 @@ test('malformed PNG preflight fails without reading full source image bytes',asy
  await assert.rejects(x.api.convertImage(x.input,()=>{},undefined,'png'),/PNG_HEADER_DIMENSIONS_INVALID/);
  assert.equal(x.fullReads,0);
 });
-test('JPEG/PNG size preflight precedes full FileReader allocation in source',()=>{
- assert.ok(src.indexOf('const jpegHeader=')<src.indexOf('await readDocumentBuffer('));
- assert.ok(src.indexOf('const pngHeader=')<src.indexOf('await readDocumentBuffer('));
- assert.ok(src.indexOf('IMAGE_INPUT_BYTES_LIMIT')<src.indexOf('await readDocumentBuffer('));
+test('JPEG/PNG header validation precedes native image decoding and full PNG read',()=>{
+ assert.ok(src.indexOf('const jpegHeader=')<src.indexOf('const source=file;'));
+ assert.ok(src.indexOf('const pngHeader=')<src.indexOf('const source=file;'));
+ assert.ok(src.indexOf('const source=file;')<src.indexOf('await readDocumentBuffer('));
+ assert.doesNotMatch(src,/IMAGE_INPUT_BYTES_LIMIT/);
 });
