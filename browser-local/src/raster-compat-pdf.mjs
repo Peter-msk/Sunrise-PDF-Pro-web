@@ -13,7 +13,7 @@ import {assertCompletePdfBytes} from './pdf-output-integrity.mjs';
 import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 
 const MAX_PAGES=MAX_CONVERSION_PAGES;
-const MAX_OUTPUT_BYTES=512*1024*1024;
+const MAX_OUTPUT_BYTES=Number.MAX_SAFE_INTEGER;
 const PDF_SAVE_TIMEOUT_MS=120_000;
 const cancelled=signal=>{
  if(signal?.aborted)throw new DOMException('호환 PDF 변환이 취소되었습니다.','AbortError');
