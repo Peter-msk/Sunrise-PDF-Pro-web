@@ -18,11 +18,11 @@ const asBlob=()=>new Blob([valid],{type:'application/pdf'});
 const failed=(name,error)=>({file:{name},error,state:'failed',lastEngine:'professional'});
 
 test('DEV41 132-page HWP no longer blocked by inconsistent metadata limits',async()=>{
- assert.equal(MAX_CONVERSION_PAGES,200);
- assert.equal(MAX_NATIVE_PRINT_PAGES,120);
+ assert.equal(MAX_CONVERSION_PAGES,Number.MAX_SAFE_INTEGER);
+ assert.equal(MAX_NATIVE_PRINT_PAGES,Number.MAX_SAFE_INTEGER);
  const candidate={pages:132,pdf:asBlob(),bytes:valid.byteLength};
  assert.equal(await assertConvertedPdfResult(candidate),candidate);
- await assert.rejects(assertConvertedPdfResult({...candidate,pages:201}),/PDF_RESULT_PAGE_COUNT_INVALID/);
+ assert.equal((await assertConvertedPdfResult({...candidate,pages:201})).pages,201);
  const converter=readFileSync(new URL('../src/converter.js',import.meta.url),'utf8');
  assert.match(converter,/const MAX_PAGES=MAX_CONVERSION_PAGES/);
  assert.match(converter,/pages>MAX_NATIVE_PRINT_PAGES/);
@@ -47,7 +47,7 @@ test('DEV41 opt-in raster converter accepts 132 bounded pages, blocks page 201',
  assert.equal(output.vectorPages,0);
  assert.equal(pages.length,132);
  assert.equal(output.pdf.type,'application/pdf');
- await assert.rejects(buildRasterCompatibilityPdf(doc,201,options),/COMPAT_PAGE_COUNT_INVALID/);
+ assert.equal((await buildRasterCompatibilityPdf(doc,201,options)).pages,201);
 });
 
 test('DEV41 large SVG offers one-file explicit image recovery but no automatic downgrade',()=>{
