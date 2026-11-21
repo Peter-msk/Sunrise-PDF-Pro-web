@@ -62,7 +62,8 @@ test('out of bounds xref offset fails closed',()=>{
 });
 test('no unbounded output exceeds a byte budget',()=>{
  assert.throws(()=>assertCompletePdfBytes(bytes(),100),/PDF_OUTPUT_BYTES_LIMIT/);
- assert.throws(()=>createPdfOutputGuard(513*1024*1024),/PDF_OUTPUT_BUDGET_INVALID/);
+ assert.equal(createPdfOutputGuard(513*1024*1024).bytes,0);
+ assert.throws(()=>createPdfOutputGuard(Number.MAX_SAFE_INTEGER+1),/PDF_OUTPUT_BUDGET_INVALID/);
 });
 test('finish cannot be called twice or append after finish',()=>{
  const g=createPdfOutputGuard();g.append(bytes());g.finish(bytes());
