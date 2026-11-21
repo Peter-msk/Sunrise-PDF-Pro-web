@@ -76,6 +76,6 @@ test('DEV51 real PDF writer keeps all source text vector and embeds selected PC-
 }));
 test('DEV51 records numeric style recovery counts only',()=>{
  const qa=buildLocalBatchQaReport([{file:{name:'private.hwp'},state:'done',result:{fontStyleRecoveries:3}}]);
- assert.equal(qa.build_revision,'DEV61');assert.equal(qa.files[0].font_style_recoveries,3);
+ assert.equal(qa.build_revision,'DEV62');assert.equal(qa.files[0].font_style_recoveries,3);
  assert.ok(!JSON.stringify(qa).includes('private'));
 });
