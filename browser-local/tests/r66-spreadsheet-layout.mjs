@@ -95,9 +95,9 @@ test('invalid reversed or fractional merge bounds rejected',()=>{
     assert.throws(()=>planSheet(s,'병합',xlsx,font),/병합 셀 범위가 유효하지/);
   }
 });
-test('merge expanding to huge rectangle fails by existing cell budget',()=>{
+test('impossible full-sheet merge fails before dense row allocation',()=>{
   const s=sheet();s['!merges']=[range('A1','XFD1048576')];
-  assert.throws(()=>planSheet(s,'거대병합',xlsx,font),/20만 셀/);
+  assert.throws(()=>planSheet(s,'거대병합',xlsx,font),/열이 너무 많아|병합 영역/);
 });
 test('invalid SheetJS !ref indices fail without entering row loops',()=>{
   for(const bad of ['C3:A1','A1:A1048577','A1:XFE1']){
