@@ -37,7 +37,7 @@ function verifyConversionPages(pages,onProgress){
   throw Error('HWP_PAGE_COUNT_INVALID: 페이지 수를 읽을 수 없습니다.');
  onProgress({stage:'document',detail:'hwp_page_count',pages,page:0,total:pages});
  if(pages>MAX_CONVERSION_PAGES)
-  throw Error('HWP_PAGE_COUNT_LIMIT: 페이지 수 제한: 1~'+MAX_CONVERSION_PAGES+'쪽 (실제 '+pages+'쪽)');
+  throw Error('HWP_PAGE_COUNT_UNREPRESENTABLE');
  return pages;
 }
 function throwIfCancelled(signal){
@@ -369,7 +369,7 @@ export async function renderNativePrintPages(file,onProgress=()=>{},signal,fontF
    let local={faces:[]};
    if(localFonts){
     const probe=new HwpDocument(new Uint8Array(buffer));
-    try{const pages=probe.pageCount();if(!Number.isInteger(pages)||pages<1||pages>MAX_NATIVE_PRINT_PAGES)throw Error('인쇄 준비 페이지 수 제한: 1~'+MAX_NATIVE_PRINT_PAGES+'쪽');
+    try{const pages=probe.pageCount();if(!Number.isInteger(pages)||pages<1||pages>MAX_NATIVE_PRINT_PAGES)throw Error('PRINT_PAGE_COUNT_UNREPRESENTABLE');
      local=await loadDocumentLocalFonts(probe,pages,localFonts,fontkit,signal,onProgress);
     }finally{probe.free();}
    }
