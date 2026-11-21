@@ -13,7 +13,7 @@ import {PX_TO_PT as PT,isRecord as plain,isCoordinate as finite,isRgbHex as colo
 import {cooperativeYield} from './cooperative-yield.mjs';
 import {assertCompletePdfBytes} from './pdf-output-integrity.mjs';
 const SCHEMA_MINOR=35,RESOURCE_MINOR=6;
-const DOCUMENT_OP_LIMIT=200000,DOCUMENT_WORK_LIMIT=1000000,YIELD_UNITS=256;
+const YIELD_UNITS=256,IMAGE_CACHE_ENTRIES=128;
 const MAX_JSON=32*1024*1024,MAX_NODES=60000,MAX_OPS=100000,MAX_DEPTH=128;
 const error=code=>{throw Error('DIRECT_PDF_'+code);};
 function bbox(b){
@@ -152,7 +152,7 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
   resolveFont=createDirectFontResolver(approvedFaces,{selections:fontSelections});
  }
  const allowText=typeof resolveFont==='function',cache=new Map();
- let fontkit,rendered=0,textRuns=0,glyphCount=0,images=0,shapes=0,embeddedBytes=0,embeddedPixels=0,mediaTotal=0,specialTotal=0;
+ let fontkit,rendered=0,textRuns=0,glyphCount=0,images=0,shapes=0,uniqueImages=0,embeddedBytes=0,embeddedPixels=0,mediaTotal=0,specialTotal=0;
  const imageCache=new Map();
  for(let i=0;i<count;i++){
   cancel(signal);
@@ -161,10 +161,13 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
   // Conservative preflight estimates; do not allocate PDF objects for a page
   // that would exceed the cumulative document work budget.
   totalWork+=plan.paint.length+plan.glyphCount*8+plan.pathCommands+plan.specialItems*4+plan.clipReplayCost*4;
-  if(totalOperations>DOCUMENT_OP_LIMIT||totalWork>DOCUMENT_WORK_LIMIT)error('DOCUMENT_WORK_BUDGET');
-  if((specialTotal+=plan.specialItems)>30000)error('SPECIAL_DOCUMENT_BUDGET');
-  if((mediaTotal+=plan.mediaCount)>10000)error('MEDIA_DOCUMENT_BUDGET');
-  if(glyphCount+plan.glyphCount>200000)error('DOCUMENT_TEXT_BUDGET');
+  // Per-page complexity guards stay active; a growing document does not
+  // acquire an arbitrary aggregate page/operation limit. Check integer safety.
+  if(!Number.isSafeInteger(totalOperations)||!Number.isSafeInteger(totalWork))
+   error('DOCUMENT_WORK_UNREPRESENTABLE');
+  specialTotal+=plan.specialItems;mediaTotal+=plan.mediaCount;
+  if(!Number.isSafeInteger(specialTotal)||!Number.isSafeInteger(mediaTotal)||
+     !Number.isSafeInteger(glyphCount+plan.glyphCount))error('DOCUMENT_WORK_UNREPRESENTABLE');
   if(plan.blockers.length)error('UNSUPPORTED_PAGE_'+(i+1)+':'+plan.blockers.join(','));
   const page=pdf.addPage([plan.width*PT,plan.height*PT]);
   // Stable order inside each plane. Coordinate conversion once, at PDF boundary.
@@ -190,12 +193,15 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
    if(r.kind==='image'){
     cancel(signal);const key=r.mime+'|'+r.encoded;let image=imageCache.get(key);
     if(!image){
-     if(imageCache.size>=128||embeddedBytes+r.bytes.length>64*1024*1024||embeddedPixels+r.info.width*r.info.height>96_000_000)error('IMAGE_DOCUMENT_BUDGET');
+     if(!Number.isSafeInteger(embeddedBytes+r.bytes.length)||
+        !Number.isSafeInteger(embeddedPixels+r.info.width*r.info.height))error('IMAGE_DOCUMENT_BUDGET');
      if(r.mime==='image/png')await verifyDirectPng(r.info,signal);else await validateJpeg(r.bytes,r.info,signal);
      cancel(signal);
      image=await (r.mime==='image/png'?pdf.embedPng(r.bytes):pdf.embedJpg(r.bytes));
      if(image.width!==r.info.width||image.height!==r.info.height)error('IMAGE_EMBED_DIMENSIONS');
-     imageCache.set(key,image);embeddedBytes+=r.bytes.length;embeddedPixels+=r.info.width*r.info.height;
+     imageCache.set(key,image);uniqueImages++;
+     if(imageCache.size>IMAGE_CACHE_ENTRIES)imageCache.delete(imageCache.keys().next().value);
+     embeddedBytes+=r.bytes.length;embeddedPixels+=r.info.width*r.info.height;
     }
     cancel(signal);page.drawImage(image,{x:r.x*PT,y:(plan.height-r.y-r.height)*PT,width:r.width*PT,height:r.height*PT,opacity:r.opacity});images++;continue;
    }
@@ -215,7 +221,7 @@ export async function buildDirectPdf(doc,{signal,onProgress=()=>{},loadPdf=()=>i
  cancel(signal);
  const bytes=await pdf.save();cancel(signal);
  assertCompletePdfBytes(bytes);cancel(signal);
- return {bytes,pages:count,rectangles:rendered,textRuns,glyphCount,images,shapes,uniqueImages:imageCache.size,specialItems:specialTotal,metrics:{operations:totalOperations,estimatedWork:totalWork,cooperativeYields,clipTransitions},experimental:true};
+ return {bytes,pages:count,rectangles:rendered,textRuns,glyphCount,images,shapes,uniqueImages,specialItems:specialTotal,metrics:{operations:totalOperations,estimatedWork:totalWork,cooperativeYields,clipTransitions},experimental:true};
 }
 
 async function verifyJpegDecode(bytes,info,signal){
