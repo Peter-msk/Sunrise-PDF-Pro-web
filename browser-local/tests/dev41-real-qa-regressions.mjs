@@ -63,7 +63,7 @@ test('DEV41 large SVG offers one-file explicit image recovery but no automatic d
  assert.equal(requested.recovery,true);
  assert.equal(requested.engine,'compat-raster');
  assert.deepEqual(requested.pending,[bad]);
- assert.match(localFailureAdvice(bad.error),/메모리/);
+ assert.match(localFailureAdvice(bad.error),/너무 복잡해|이미지 방식/);
 });
 
 async function mockedBackend(){
