@@ -49,3 +49,17 @@ Cloudflare Workers ‘sunrise-pdf-pro-web’의 이전 운영 버전 f91f4d0b-4b
 - Google Drive 대상: 9. Sunrise PDF PRO(web).
 - 업로드 대상: 최신 index.html(관련 CSS·JS 분리 소스는 GitHub), 작업지시서, 개발계획서, 인수인계서.
 - HTML 단독 다운로드는 외부 CSS·JS·WASM 없이 기능 실행되지 않는다. 브라우저 실행은 Cloudflare 서비스 URL을 사용한다.
+
+## 7. 공개 공지 및 기술 표현 표시 정책
+- src/public-release-copy.js의 publicPublicationRecord 함수는 공개 API 응답의 제목·본문에서 DEV, R, QA, WASM, RHWP 형태의 내부 표기를 제거한다.
+- src/admin/handler.js는 공개 공지/업데이트 조회에만 이를 적용한다. 데이터베이스의 원본 기록과 관리자 게시물 조회는 수정하지 않는다.
+- src/site-updates.js도 실제 사용자 화면에서 내부 표기를 필터링하며, 장애가 발생해도 저장된 게시물은 변경하지 않는다.
+- 이 수정 사항은 사용자 표시 계층에 한정되며 관리자 내부 진단·검증·문제 추적 정보는 유지한다.
+
+## 8. Google Drive 인계 확인
+- 폴더: https://drive.google.com/drive/folders/1ewq2W8ln78rZxw5O7wIudlB_q1Co-3F1
+- 최신 HTML: https://drive.google.com/file/d/1ZIMkQK9W43SbNnVGkJp4IXxfVuef2c8B/view
+- 작업지시서: https://docs.google.com/document/d/1P_ZBSUVTP9zFy7CL1R8NfyUrg85I2lYvSf7-yKzazDY/edit
+- 개발계획서: https://docs.google.com/document/d/1iR7SSEVL8RTGHSA2xarurCbxT8oJ2482l1SPlKwe2UU/edit
+- 인수인계서: https://docs.google.com/document/d/1TumOihZfofcSTVwbfusL3NxUJl33RtfV48_7rNiicCo/edit
+- HTML과 세 문서는 Google Drive에서 같은 부모 폴더 소속임을 조회해 확인했다. HTML은 CSS·JS 분리 소스와 서버 자산 없이 단독 실행할 수 없다.
