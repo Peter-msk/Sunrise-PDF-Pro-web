@@ -69,7 +69,8 @@ test('UI uses the plan for exactly one retry without changing global option',()=
  assert.match(src,/requested\?\.state==='done'\?requested/);
  assert.match(src,/plan\.recovery&&item===requested/);
  assert.match(html,/<option value="professional" selected>/);
- assert.match(html,/compat-retry/);
+ assert.match(src,/compat-retry/);
+ assert.doesNotMatch(html,/DEV[0-9]+/);
  assert.doesNotMatch(src,/\$\('pdf-engine'\)\.value='compat-raster'/);
 });
 
