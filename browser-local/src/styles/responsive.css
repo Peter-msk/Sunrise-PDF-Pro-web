@@ -1,0 +1,16 @@
+/* normalize.css principle: retain native controls while avoiding mobile
+   font-size adjustment and browser-dependent form font inheritance. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button,input,select,textarea{font-family:inherit}
+/* Accessible queue focus: the per-file retry remains visible via keyboard. */
+.files .file-row:focus-within{outline:2px solid #2779d9;outline-offset:-2px}
+.files .file-retry{border:1px solid #a7c6e8;background:#eef6ff;color:#194f82;font-weight:800}
+.files .file-retry:hover:not(:disabled){background:#ddebff}
+/* Animate.css accessibility principle without an animation dependency. */
+@media (prefers-reduced-motion:no-preference){
+ button,.download{transition:background-color .14s ease}
+ .files .file-row{transition:background-color .16s ease,border-color .16s ease}
+}
+@media (prefers-reduced-motion:reduce){
+ button,.download,.files .file-row{transition:none!important;animation:none!important}
+}
