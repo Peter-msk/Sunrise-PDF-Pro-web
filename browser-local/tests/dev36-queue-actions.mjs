@@ -61,10 +61,12 @@ test('DEV36: button toggles one file drawer and existing event listeners still w
 });
 test('DEV36: no old inline tools; both Worker and standalone CSS allow wrapped filenames',()=>{
  const standalone=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const externalCSS=readFileSync(new URL('../src/styles/file-queue.css',import.meta.url),'utf8');
  assert.doesNotMatch(OPERATIONS_R56_JS,/body\.append\(tools\)/);
  assert.match(OPERATIONS_R56_CSS,/file-action-panel/);
  assert.match(OPERATIONS_R56_CSS,/white-space:normal/);
  assert.match(OPERATIONS_R56_CSS,/overflow-wrap:anywhere/);
- assert.match(standalone,/<style id="r56-compact-file-queue">/);
- assert.ok(standalone.includes(OPERATIONS_R56_CSS));
+ assert.match(standalone,/href="\.\/src\/styles\/file-queue\.css"/);
+ assert.doesNotMatch(standalone,/<style\b/);
+ assert.equal(externalCSS.trim(),OPERATIONS_R56_CSS.trim());
 });
