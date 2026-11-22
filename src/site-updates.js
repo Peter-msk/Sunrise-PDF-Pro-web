@@ -10,6 +10,8 @@ export const updatesScript=String.raw`(()=>{
  const wide=matchMedia(document.body.classList.contains('pro-updates-local')?'(min-width: 1920px)':'(min-width: 1640px)');
  panel.open=release.open=wide.matches;
  const node=(tag,value)=>{const e=document.createElement(tag);e.textContent=value;return e;};
+ // Keep internal identifiers in published records but omit build labels on user pages.
+ const publicCopy=value=>String(value).replace(/\\b(?:DEV|R)[-_]?\\d{1,4}\\b/gi,'').replace(/\\b(?:QA|WASM|RHWP)\\b/gi,'').replace(/[ \\t]{2,}/g,' ').trim();
  function draw(id,items,empty){
   const root=document.getElementById(id);if(!root)return;
   root.replaceChildren();
@@ -18,7 +20,7 @@ export const updatesScript=String.raw`(()=>{
   if(!valid.length){root.append(node('p',empty));return;}
   for(const item of valid){
    const article=document.createElement('article');
-   article.append(node('h3',item.title.slice(0,200)));
+   article.append(node('h3',publicCopy(item.title).slice(0,200)||'업데이트 안내'));
    const seconds=Number(item.first_published_at);
    if(item.first_published_at!=null&&Number.isFinite(seconds)){
     const date=new Date(seconds*1000);
@@ -27,7 +29,7 @@ export const updatesScript=String.raw`(()=>{
      time.dateTime=date.toISOString();article.append(time);
     }
    }
-   article.append(node('p',item.body.slice(0,4000)));root.append(article);
+   article.append(node('p',publicCopy(item.body).slice(0,4000)));root.append(article);
   }
  }
  fetch('/api/public/updates',{method:'GET',cache:'no-store',credentials:'same-origin'}).then(r=>{
