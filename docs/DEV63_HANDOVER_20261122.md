@@ -63,3 +63,13 @@ Cloudflare Workers ‘sunrise-pdf-pro-web’의 이전 운영 버전 f91f4d0b-4b
 - 개발계획서: https://docs.google.com/document/d/1iR7SSEVL8RTGHSA2xarurCbxT8oJ2482l1SPlKwe2UU/edit
 - 인수인계서: https://docs.google.com/document/d/1TumOihZfofcSTVwbfusL3NxUJl33RtfV48_7rNiicCo/edit
 - HTML과 세 문서는 Google Drive에서 같은 부모 폴더 소속임을 조회해 확인했다. HTML은 CSS·JS 분리 소스와 서버 자산 없이 단독 실행할 수 없다.
+
+## 9. 최종 Cloudflare 운영 배포 확정 (2026-11-22)
+- 배포 결과: SUCCESS. Cloudflare Build ID baa7ada1-cce3-4c0d-bee3-c2d5c1bc3ed6, 결과 stopped / success.
+- 실제 배포 코드 커밋: b2ce8af0798128e19773584eea0484b45cf505dd (이후 GitHub 문서 갱신 커밋과 구분).
+- Cloudflare 배포 ID: 9be76c79-de6f-4eb7-9289-600fa0a7b46a.
+- 운영 Worker 버전: 8cdedea4-31a6-4042-88c7-148c107b260f, 배포 비중 100%.
+- 자동 시험: 총 592개 중 PASS 589개, FAIL 0개, SKIP 3개. 추가 배포·복구 회귀 20개 PASS, FAIL 0개.
+- Vite 빌드 및 정적 자산 37개 확인. Wrangler 정적 자산 업로드/Worker 배포 성공.
+- 기존 운영 버전 15f6f477-7d4f-497f-9e0b-221d6a850b11을 이번 배포 직전 복구 기준으로 보존한다. 최초 DEV62 기준 f91f4d0b-4bb2-4044-89f4-67bbbb8a34bc는 이전 복구 이력이다.
+- 문서/원본 25개 실제 시각적 동일성, 물리 Windows·Android 기기 시험, 대용량 성능 수치, 브라우저에서 별도 HTTP 렌더링 확인은 아직 PASS로 판정하지 않는다.
