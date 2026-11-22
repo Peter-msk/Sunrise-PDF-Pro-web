@@ -11,7 +11,7 @@ export const updatesScript=String.raw`(()=>{
  panel.open=release.open=wide.matches;
  const node=(tag,value)=>{const e=document.createElement(tag);e.textContent=value;return e;};
  // Keep internal identifiers in published records but omit build labels on user pages.
- const publicCopy=value=>String(value).replace(/\\b(?:DEV|R)[-_]?\\d{1,4}\\b/gi,'').replace(/\\b(?:QA|WASM|RHWP)\\b/gi,'').replace(/[ \\t]{2,}/g,' ').trim();
+ const publicCopy=value=>String(value).replace(/\b(?:DEV|R)[-_]?\d{1,4}\b/gi,'').replace(/\b(?:QA|WASM|RHWP)\b/gi,'').replace(/[ \t]{2,}/g,' ').trim();
  function draw(id,items,empty){
   const root=document.getElementById(id);if(!root)return;
   root.replaceChildren();
