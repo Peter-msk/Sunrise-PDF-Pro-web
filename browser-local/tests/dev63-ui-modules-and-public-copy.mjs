@@ -15,13 +15,13 @@ test('converter presentation is HTML + named CSS modules + JS, no inline styles'
   assert.ok(readFileSync(path,'utf8').length>500,name);
   assert.match(html,new RegExp('href="\\./src/styles/'+name+'\\.css"'));
  }
- assert.doesNotMatch(html,/<style(?:\\s|>)/i);
- assert.match(html,/type="module" src="\\.\/src\/main\\.js"/);
+ assert.doesNotMatch(html,/<style(?:\s|>)/i);
+ assert.match(html,/type="module" src="\.\/src\/main\.js"/);
 });
 test('user title and rendered page contain no engineering revision or exposed QA control',()=>{
  assert.doesNotMatch(html,/build-revision|DEV[0-9]+|WASM|RHWP/);
  assert.doesNotMatch(main,/document\.title\s*\+=|buildLabel/);
- assert.match(html,/id="qa-export"[^>]*\\bhidden\\b/);
+ assert.match(html,/id="qa-export"[^>]*\bhidden\b/);
  assert.match(html,/id="preview"/);
  assert.match(html,/id="active-download"/);
  assert.match(html,/id="pdf-engine"/);
@@ -52,7 +52,7 @@ test('public updates hide internal build labels without modifying feed payload',
   await new Promise(resolve=>setTimeout(resolve,0));
   const rendered=dom.window.document.getElementById('pro-release-items').textContent;
   assert.match(rendered,/PDF 변환 개선/);
-  assert.doesNotMatch(rendered,/DEV62|R66|\\bQA\\b/);
+  assert.doesNotMatch(rendered,/DEV62|R66|\bQA\b/);
   assert.equal(items[0].title,'DEV62 PDF 변환 개선');
  }finally{dom.window.close();}
 });
