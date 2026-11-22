@@ -1,4 +1,5 @@
 import {ADMIN_HTML,ADMIN_CSS,ADMIN_JS,CONTACT_HTML,NEWS_HTML,PUBLIC_JS} from './generated-assets.js';
+import {publicPublicationRecord} from '../public-release-copy.js';
 import {validSecrets,verifyPassword,createSession,findSession,destroySession,cookieSet,cookieClear,verifyCsrf,originMatches,isLocked,recordLoginFailure,loginSubject,sessionCsrf,now} from './auth.js';
 
 const SEC_HEADERS={
@@ -65,7 +66,7 @@ async function publicationsFeed(db){
  WHERE state='published' AND first_published_at IS NOT NULL AND first_published_at<=?
  AND (expire_at IS NULL OR expire_at>?) AND CAST((?+32400)/86400 AS INTEGER)-CAST((first_published_at+32400)/86400 AS INTEGER) BETWEEN 0 AND 6
  ORDER BY first_published_at DESC LIMIT 30`).bind(now(),now(),now()).all();
- const arr=rows.results||[];
+ const arr=(rows.results||[]).map(publicPublicationRecord);
  return {announcements:arr.filter(x=>x.kind==='announcement'),releases:arr.filter(x=>x.kind==='release')};
 }
 async function submitTelemetry(req,db){
