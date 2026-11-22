@@ -72,22 +72,22 @@ export function planSingleRetry(items,selectedEngine,target){
 export function localFailureAdvice(error){
  const message=String(error||'');
  if(/\bXLSX_ZIP_[A-Z0-9_]+\b/.test(message))
-  return 'XLSX 내부 ZIP 구조 검증 실패: 파일 손상·압축 구조·암호화 여부를 확인하고 정상 XLSX로 다시 저장하세요. 안전 검사는 생략하지 않습니다.';
+  return '엑셀 파일을 읽을 수 없습니다. 파일 손상·암호화 여부를 확인하고 일반 엑셀 파일로 다시 저장하세요.';
  if(/\bXLSX_PARSE_FAILED\b/.test(message))
-  return 'XLSX 시트 해석 실패: Excel 또는 호환 프로그램에서 일반 XLSX로 다시 저장한 후 해당 파일만 다시 시도하세요.';
+  return '엑셀 시트를 읽지 못했습니다. Excel 또는 호환 프로그램에서 다시 저장한 뒤 해당 파일만 재시도하세요.';
  if(/\bXLSX_ENGINE_UNAVAILABLE\b/.test(message))
   return '엑셀 처리 모듈 로드 실패: 네트워크 상태를 확인하고 페이지를 새로고침한 뒤 해당 파일을 다시 시도하세요.';
  if(/\b(?:FILE_READ_IDLE_TIMEOUT|FILE_READ_[A-Z0-9_]+)\b/.test(message))
   return '파일 읽기 실패: 파일 잠금·브라우저 메모리·저장장치 접근 상태를 확인하고 해당 파일만 다시 시도하세요.';
  if(/\bSVG_FILTER_EFFECT_UNSUPPORTED\b/.test(message))
-  return 'SVG 그림 효과가 기본 벡터 출력 엔진에서 지원되지 않습니다. 이 파일만 혼합 PDF로 복구하면 해당 쪽만 이미지가 되어 글자 검색이 제한됩니다. 혼합 출력도 실패한 경우 호환 이미지 PDF를 직접 선택하세요. 원본과 출력 결과를 확인하세요.';
+  return '문서에 기본 출력 방식으로 처리할 수 없는 그림 효과가 있습니다. 혼합 방식으로 재시도하면 일부 페이지가 이미지로 저장되어 글자 검색이 제한될 수 있습니다. 저장 후 원본과 비교해 주세요.';
  if(/\bFONT_GLYPH_MISSING\b/.test(message))
-  return '원본 서체의 일부 문자를 PDF에 넣을 수 없습니다. 원본 글꼴을 추가하거나 글자 검색이 불가능한 이미지 PDF 복구를 직접 선택하세요.';
+  return '원본 글꼴이 부족해 일부 문자를 출력하지 못했습니다. 원본 글꼴을 추가하거나 이미지 방식으로 재시도하세요. 이미지 방식은 글자 검색을 지원하지 않습니다.';
  if(/\bSVG_RENDER_SOURCE_CHARS_LIMIT\b/.test(message))
-  return 'SVG 페이지가 안전한 벡터 출력 한도를 초과했습니다. 동일 모드의 무조건 재시도는 피하세요. 이미지 호환 변환도 메모리를 많이 사용할 수 있으므로 다른 문서를 먼저 완료하고 이 파일만 별도로 시험하세요.';
+  return '일부 페이지가 너무 복잡해 기본 출력 방식으로 처리하지 못했습니다. 다른 문서를 먼저 완료하고 해당 문서만 이미지 방식으로 다시 시도하세요.';
  if(/\bWASM_INIT_FAILED\b/.test(message))
-  return '웹 엔진 초기화 단계에서 실패했습니다. 파일을 다시 업로드하지 않고 브라우저 메모리·자산 네트워크 상태를 점검한 뒤 해당 파일만 재시도하세요.';
+  return '변환 기능을 시작하지 못했습니다. 브라우저 메모리와 인터넷 연결을 확인한 뒤 다시 시도하세요.';
  if(/\bPDF_OUTPUT_[A-Z0-9_]+\b/.test(message))
-  return '생성된 PDF의 완전성 검사 실패: 잘린 파일은 제공하지 않습니다. 해당 파일만 다시 시도하세요.';
+  return '완성된 PDF를 확인하지 못했습니다. 불완전한 파일은 제공하지 않으며, 해당 파일을 다시 시도해 주세요.';
  return null;
 }
