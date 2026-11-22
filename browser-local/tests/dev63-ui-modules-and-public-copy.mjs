@@ -4,6 +4,7 @@ import {readFileSync,existsSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {describeConversionError,outputModeText} from '../src/user-output-copy.mjs';
 import {sitePage} from '../../src/site-home.js';
+import {publicPublicationRecord} from '../../src/public-release-copy.js';
 import {updatesScript} from '../../src/site-updates.js';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
@@ -55,4 +56,15 @@ test('public updates hide internal build labels without modifying feed payload',
   assert.doesNotMatch(rendered,/DEV62|R66|\bQA\b/);
   assert.equal(items[0].title,'DEV62 PDF 변환 개선');
  }finally{dom.window.close();}
+});
+
+test('public release API presentation never exposes internal codes; admin copy is unchanged',()=>{
+ const release={kind:'release',title:'DEV62 변환 개선',body:'R66 QA 안정화 WASM 작업'};
+ const clean=publicPublicationRecord(release);
+ assert.equal(clean.title,'변환 개선');
+ assert.equal(clean.body,'안정화 작업');
+ assert.equal(release.title,'DEV62 변환 개선');
+ const server=readFileSync(new URL('../../src/admin/handler.js',import.meta.url),'utf8');
+ assert.match(server,/rows\.results\|\|\[\]\)\.map\(publicPublicationRecord\)/);
+ assert.match(server,/const r=await db\.prepare\('SELECT \* FROM pro_publications/);
 });
