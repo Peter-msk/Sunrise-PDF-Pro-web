@@ -133,6 +133,12 @@ export default {
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       return localAsset(request,env,path.slice('/local'.length),method,'application/javascript; charset=utf-8');
     }
+    // Vite bundles source styles into a hashed CSS asset. Serve CSS under
+    // an explicit allowlist; never expose arbitrary source paths or JS files.
+    if(/^\/local\/assets\/[A-Za-z0-9_-]+\.css$/.test(path)){
+      if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
+      return localAsset(request,env,path.slice('/local'.length),method,'text/css; charset=utf-8');
+    }
     if(path==='/local/pdf-worker.mjs'||path==='/local/pdf-worker-legacy.mjs'){
       if(!['GET','HEAD'].includes(method))return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
       // Exact allowlist of the two self-hosted PDF.js workers. No wildcard
