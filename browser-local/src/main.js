@@ -1,5 +1,6 @@
 import './r56-ui.js';
 import {createPdfViewer} from './pdf-viewer.js';
+import {describeConversionError,outputModeText} from './user-output-copy.mjs';
 import {createConversionClock,formatDuration} from './conversion-clock.js';
 import {emitProEvent,startProTelemetry,classifyProError,proFeature} from './pro-telemetry.js';
 import {renderNativePrintPages} from './converter.js';
@@ -22,11 +23,8 @@ try{globalThis.navigator?.permissions?.query?.({name:'local-fonts'}).then(p=>{
  p.addEventListener?.('change',()=>verifiedPcFontData.clear());
 }).catch(()=>{});}catch{/* optional permission API */}
 const $=id=>document.getElementById(id);
-// Mark the actually executing JS bundle, not the HTML shell or the saved report date.
-const buildLabel=QA_BUILD_REVISION+' ('+qaDeploymentChannel()+')';
-$('qa-export').textContent='실기 검증 보고서 저장 · '+buildLabel;
-if($('build-revision'))$('build-revision').textContent=buildLabel;
-document.title+=' · '+buildLabel;
+// Technical revision is recorded in optional local QA output only.
+// Browser page title and user controls must not expose internal build IDs.
 const conversionClock=createConversionClock();
 const viewer=createPdfViewer($);
 let items=[],active=null,busy=false,ready=true,controller=null,printJob=null,archiveUrl=null,nextId=0;
@@ -110,7 +108,7 @@ function show(item){
  const link=$('active-download');link.hidden=!item?.result;
  if(!item?.result){link.removeAttribute('href');$('pages').textContent='';viewer.open(null);sync();return;}
  link.href=item.pdfUrl;link.download=getPdfNames()[items.indexOf(item)];
- const r=item.result;const mode=r.renderMode==='direct-trial'?'Direct PDF · 실기 검증':r.renderMode==='professional'?'글자·도형 보존':r.renderMode==='mixed'?'혼합 PDF · 일부 쪽 이미지, 해당 쪽 검색 불가':r.renderMode==='raster-compat'?'호환 이미지 PDF · 글자 검색 불가':r.renderMode==='raster'?'혼합 출력 결과 · 전체 쪽 이미지, 글자 검색 불가':r.renderMode==='spreadsheet-text'?'셀·글자 보존 · 원본 서식 제한':r.renderMode==='source-image'?'원본 이미지':'PDF';
+ const r=item.result;const mode=outputModeText[r.renderMode]||'PDF';
  $('pages').textContent=r.pages+'쪽 · '+mode;
 viewer.open(item.result.pdf);sync();
 }
@@ -146,7 +144,7 @@ function createFileRow(item,index,names){
   const body=document.createElement('div'),name=document.createElement('div'),meta=document.createElement('div');name.className='file-name';name.textContent=item.file.name;meta.className='file-meta';
   const labels={ready:'변환 대기',working:'변환 중',done:'변환 완료',failed:'변환 실패',invalid:'지원하지 않는 파일',cancelled:'취소됨 · 다시 변환 가능'};
   let message=labels[item.state]||'';
-  if(item.error){message+=' · '+item.error;meta.classList.add('error');const guidance=localFailureAdvice(item.error);if(guidance)message+=' · 점검 안내: '+guidance;if(isHwp(item.file)&&/SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT|FONT_GLYPH_MISSING|SVG_RENDER_SOURCE_CHARS_LIMIT/.test(item.error))message+=' · 아래 출력 및 글꼴 옵션에서 호환 방식 선택 후 다시 변환할 수 있습니다(이미지 PDF, 글자 검색 불가).';}
+  if(item.error){meta.classList.add('error');const guidance=localFailureAdvice(item.error);message+=' · '+(guidance||describeConversionError(item.error));if(isHwp(item.file)&&/SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT|FONT_GLYPH_MISSING|SVG_RENDER_SOURCE_CHARS_LIMIT/.test(item.error))message+=' · 아래 출력 및 글꼴 옵션에서 호환 방식 선택 후 다시 변환할 수 있습니다(이미지 PDF, 글자 검색 불가).';}
   // The output list is for users. Technical font/vector metrics and verbose
   // diagnostics remain available in the local QA report and engine logs.
   if(item.state==='done'&&isHwp(item.file)&&item.result?.rasterPages>0)
@@ -255,7 +253,7 @@ for(const event of ['dragenter','dragover'])$('drop').addEventListener(event,e=>
 for(const event of ['dragleave','drop'])$('drop').addEventListener(event,e=>{e.preventDefault();$('drop').classList.remove('drag');});
 $('drop').addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer?.files||[])));
 $('pdf-font').addEventListener('change',()=>{clearPrint();const files=Array.from($('pdf-font').files||[]);if(files.some(f=>!/\.(ttf|otf)$/i.test(f.name))){$('pdf-font').value='';$('font-info').textContent='TTF/OTF 글꼴만 선택할 수 있습니다.';}else $('font-info').textContent=files.length?'선택한 글꼴 '+files.length+'개를 기본 글꼴보다 우선합니다.':'원본과 같은 서체가 필요하면 TTF/OTF를 추가하세요. 없는 글꼴은 대체되며 결과에 표시됩니다.';draw();});
-$('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='direct-trial'?'Direct PDF 실기 검증 방식입니다. 원본 글꼴이 정확히 일치해야 하며 미지원 객체가 있으면 오류가 표시됩니다.':$('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');draw();});
+$('pdf-engine').addEventListener('change',()=>{clearPrint();status($('pdf-engine').value==='direct-trial'?'정밀 변환은 원본과 일치하는 글꼴이 필요하며 일부 문서의 특수 서식을 지원하지 않을 수 있습니다.':$('pdf-engine').value==='compat-raster'?'호환 이미지 PDF 방식이 선택됐습니다. 글자 검색·선택은 불가능하며 원본과 출력 결과를 비교하세요.':$('pdf-engine').value==='hybrid-filter'?'혼합 방식 선택: 미지원 필터가 있는 쪽만 이미지로 출력하고 나머지는 벡터로 보존합니다. 원본과 대조하세요.':'원본 글자·도형 보존 출력 방식을 선택했습니다.');draw();});
 // Export is an explicit, local user action. It works during a long-running
 // batch so the last recorded stage is not lost; it never sends source data.
 $('qa-export').addEventListener('click',()=>{
@@ -443,7 +441,7 @@ $('convert').addEventListener('click',async()=>{
    status('변환 완료 '+done+'개'+(failed?' · 확인 필요 '+failed+'개':'')+'. 각 파일을 다운로드할 수 있습니다.');
    if(done>1){try{status('완료 파일 ZIP을 준비하는 중입니다.');const blob=await makePdfArchive(items,signal,(i,n)=>status('ZIP 준비 중 · '+i+'/'+n+'개'));archiveUrl=URL.createObjectURL(blob);$('download-all').href=archiveUrl;$('download-all').hidden=false;status('완료 '+done+'개'+(failed?' · 확인 필요 '+failed+'개':'')+'. ZIP 또는 개별 PDF를 다운로드하세요.');}catch(error){if(error?.name!=='AbortError')status('개별 PDF 다운로드 가능 · ZIP 생성 실패: '+String(error.message||error));else status('ZIP 생성이 취소되었습니다. 완료한 PDF는 개별 다운로드할 수 있습니다.');}}
   }else status('작업이 취소되었습니다. 완료된 PDF는 개별 다운로드할 수 있습니다.');
- }catch(error){const cancelled=signal.aborted||error?.name==='AbortError';status(cancelled?'작업이 취소되었습니다. 완료 PDF는 개별 다운로드 가능합니다.':'작업 실패: '+String(error?.message||error));conversionClock.finish(cancelled?'cancelled':'failed');}
+ }catch(error){const cancelled=signal.aborted||error?.name==='AbortError';status(cancelled?'작업이 취소되었습니다. 완료 PDF는 개별 다운로드 가능합니다.':'작업 실패: '+describeConversionError(error?.message||error));conversionClock.finish(cancelled?'cancelled':'failed');}
  finally{
   if(conversionClock.active)conversionClock.finish(signal.aborted?'cancelled':pending.some(i=>i.state==='failed')?'partial':'done');
   localFontCache.clear();
@@ -465,10 +463,10 @@ $('print-prepare').addEventListener('click',async()=>{
  }catch(error){printFontNotice='설치 글꼴 접근 실패: 내장 글꼴로 인쇄합니다.';}
  controller=new AbortController();const signal=controller.signal;busy=true;clearPrint();draw();refreshBrowserLifecycle();
  try{let localFonts=null;if(fontsRequest){const access=await settleInstalledFonts(fontsRequest,{signal});localFonts=access.fonts;printFontNotice=access.notice||(localFonts?.length?'PC 설치 글꼴 '+localFonts.length+'개 접근 확인 · 일치하는 서체를 우선 사용합니다.':'');}const {pages,fontRegistry}=await renderNativePrintPages(file,info=>{status(file.name+' · 인쇄 준비 중'+(info.page?' '+info.page+'/'+info.total+'쪽':''));},signal,Array.from($('pdf-font').files||[]),localFonts);if(signal.aborted)throw new DOMException('취소됨','AbortError');printJob=await prepareNativePrint(pages,document,fontRegistry,signal);status('브라우저 인쇄 준비 완료. 해당 문서의 브라우저 PDF로 저장 버튼을 눌러 PDF 저장 대상을 직접 선택하세요. 필터·글꼴·배치를 원본과 대조해야 하며 앱의 실패 상태는 자동으로 성공 처리되지 않습니다.'+(printFontNotice?' · '+printFontNotice:''));}
- catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+String(error?.message||error));}
+ catch(error){clearPrint();status(error?.name==='AbortError'?'인쇄 준비가 취소되었습니다.':'인쇄 준비 실패: '+describeConversionError(error?.message||error));}
  finally{busy=false;controller=null;draw();}
 });
-$('print-save').addEventListener('click',()=>{if(printJob&&!busy){try{printJob.print();status('인쇄 창에서 PDF로 저장을 선택하세요.');}catch(error){status('인쇄 실패: '+String(error?.message||error));}}});
+$('print-save').addEventListener('click',()=>{if(printJob&&!busy){try{printJob.print();status('인쇄 창에서 PDF로 저장을 선택하세요.');}catch(error){status('인쇄 실패: '+describeConversionError(error?.message||error));}}});
 $('cancel').addEventListener('click',()=>{
  if(!controller||controller.signal.aborted)return;
  controller.abort();
