@@ -54,18 +54,19 @@ test('direct retry preserves explicitly selected engine, never auto-downgrades',
 
 test('fixed error guidance never copies arbitrary source content',()=>{
  const cases=[
-  ['XLSX_ZIP_LOCAL_HEADER_MISMATCH','XLSX 내부 ZIP'],
-  ['XLSX_PARSE_FAILED','XLSX 시트 해석'],
+  ['XLSX_ZIP_LOCAL_HEADER_MISMATCH','엑셀 파일을 읽을 수'],
+  ['XLSX_PARSE_FAILED','엑셀 시트를 읽지'],
   ['XLSX_ENGINE_UNAVAILABLE','모듈 로드'],
   ['FILE_READ_IDLE_TIMEOUT','파일 읽기 실패'],
-  ['FONT_GLYPH_MISSING','원본 서체'],
-  ['SVG_FILTER_EFFECT_UNSUPPORTED','SVG 그림 효과'],
-  ['PDF_OUTPUT_TRAILER_INCOMPLETE','완전성 검사']
+  ['FONT_GLYPH_MISSING','원본 글꼴이 부족'],
+  ['SVG_FILTER_EFFECT_UNSUPPORTED','그림 효과'],
+  ['PDF_OUTPUT_TRAILER_INCOMPLETE','완성된 PDF']
  ];
  for(const [code,phrase] of cases){
   const advice=localFailureAdvice('비밀_계좌_보고서.xlsx: '+code);
   assert.ok(advice.includes(phrase),code);
   assert.ok(!advice.includes('비밀_계좌'),code);
+  assert.doesNotMatch(advice,/\\b(?:SVG|WASM|ZIP)\\b/,code);
  }
  assert.equal(localFailureAdvice('비밀보고서.xlsx 오류 문자열'),null);
 });
@@ -95,12 +96,15 @@ test('source UI guards a single retry by explicit click and active list membersh
  assert.doesNotMatch(ui,/\$\('pdf-engine'\)\.value\s*=\s*'compat-raster'/);
 });
 
-test('UI follows normalize and motion-accessibility patterns without new packages',()=>{
+test('UI follows external stylesheet and motion-accessibility patterns without new packages',()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- assert.match(html,/id="dev30-native-ux-safety"/);
- assert.match(html,/prefers-reduced-motion:reduce/);
- assert.match(html,/focus-within/);
- assert.match(html,/text-size-adjust:100%/);
+ const cssFiles=['converter.css','file-queue.css','responsive.css'];
+ const css=cssFiles.map(name=>readFileSync(new URL('../src/styles/'+name,import.meta.url),'utf8')).join('\\n');
+ for(const name of cssFiles)assert.match(html,new RegExp('styles/'+name.replace('.', '\\\\.')));
+ assert.match(css,/prefers-reduced-motion:reduce/);
+ assert.match(css,/focus-within/);
+ assert.match(css,/text-size-adjust:100%/);
+ assert.doesNotMatch(html,/<style\\b/);
  const packageJson=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
  for(const lib of ['react','shadcn-ui','antd','@mui/material','animate.css','sortablejs','normalize.css'])
   assert.equal(Object.hasOwn(packageJson.dependencies||{},lib),false);
