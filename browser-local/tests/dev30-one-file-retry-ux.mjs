@@ -100,7 +100,7 @@ test('UI follows external stylesheet and motion-accessibility patterns without n
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const cssFiles=['converter.css','file-queue.css','responsive.css'];
  const css=cssFiles.map(name=>readFileSync(new URL('../src/styles/'+name,import.meta.url),'utf8')).join('\\n');
- for(const name of cssFiles)assert.match(html,new RegExp('styles/'+name.replace('.', '\\\\.')));
+ for(const name of cssFiles)assert.ok(html.includes('styles/'+name),name);
  assert.match(css,/prefers-reduced-motion:reduce/);
  assert.match(css,/focus-within/);
  assert.match(css,/text-size-adjust:100%/);
