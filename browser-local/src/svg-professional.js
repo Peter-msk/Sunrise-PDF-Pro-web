@@ -604,14 +604,18 @@ export async function tryProfessionalDocument(hwpDoc,count,{
       else if(!ended){ended=true;pdf.end();}
     }catch{/* Keep the primary failure reason and fail closed. */}
     // Fixed stage marker only; raw message remains local and never in QA.
-    const stackOverflow=error instanceof RangeError&&/maximum call stack size exceeded/i.test(String(error.message||''));
-    if(writerStep&&error?.name!=='AbortError'&&(!(error instanceof RangeError)||stackOverflow)){
+    if(writerStep&&error?.name!=='AbortError'){
       const original=String(error?.message||error);
-      // The structured stream timeout is already diagnostic and its leading
-      // token is consumed by existing recovery and integrity contracts.
+      // Preserve existing stable machine errors, especially PDF_STREAM_TIMEOUT.
       if(/^PDF_STREAM_TIMEOUT\b/.test(original))throw error;
+      // Some SVG-to-PDFKit/Fontkit exceptions only contain free text. Give
+      // their failed writer phase a fixed, privacy-safe code; never infer PDF
+      // success or silently replace this file with an image-only PDF.
+      const known=/\b(?:SVG|PDF|HWP|PNG|GIF|FONT)_[A-Z0-9_]{3,55}\b/.test(original);
+      const phaseCode=known?'':(writerStep==='svg-render'
+        ?'SVG_VECTOR_RENDER_FAILED ': 'PDF_WRITER_STEP_FAILED ');
       const detail=writerStep==='svg-render'?' [writer_reason='+classifySvgWriterReason(error)+']':'';
-      throw Error('[writer_step='+writerStep+']'+detail+' '+original,{cause:error});
+      throw Error(phaseCode+'[writer_step='+writerStep+']'+detail+' '+original,{cause:error});
     }
     throw error;
   }finally{
