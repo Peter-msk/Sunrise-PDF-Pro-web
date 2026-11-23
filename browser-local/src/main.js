@@ -123,7 +123,7 @@ function sync(){
  const bulk=$('recover-failed'),recoverable=items.filter(canRecoverFile).length;
  if(bulk){bulk.hidden=recoverable===0;bulk.disabled=!ready||busy||fontCheckPending||recoverable===0;
   bulk.textContent='실패 파일 '+recoverable+'개만 복구';
-  bulk.title='사용자가 직접 누를 때만 실패 파일을 다시 변환합니다. 글꼴 누락·PDF 스트림 오류는 문서 전체가 이미지 PDF로 저장되어 글자 검색이 불가능합니다. SVG 필터 오류는 먼저 해당 쪽만 이미지로 복구합니다.';}
+  bulk.title='사용자가 직접 누를 때만 실패 파일을 다시 변환합니다. 글꼴 누락·PDF 저장 오류는 문서 전체가 이미지 PDF로 저장되어 글자 검색이 불가능합니다. 지원되지 않는 그림 효과가 있으면 해당 쪽만 이미지로 복구할 수 있습니다.';}
  for(const id of ['source','pdf-font','pdf-engine'])$(id).disabled=busy;
  $('print-prepare').disabled=!ready||busy||fontCheckPending||!active||!isHwp(active.file)||active.state==='invalid';$('print-save').disabled=busy||!printJob;
  $('total-count').textContent=items.length;$('done-count').textContent=items.filter(i=>i.state==='done').length;
@@ -167,7 +167,7 @@ function createFileRow(item,index,names){
    const hybrid=recoveryEngine(item)==='hybrid-filter';
    recover.textContent=hybrid?'이 파일만 혼합 PDF로 복구':'이 파일만 이미지 PDF로 복구';
    recover.title=hybrid
-    ?'미지원 SVG 필터가 있는 쪽만 이미지로 출력하고 다른 쪽은 벡터로 유지합니다. 이미지 쪽은 검색 불가.'
+    ?'지원되지 않는 그림 효과가 있는 쪽만 이미지로 출력하고 다른 쪽은 글자·도형을 보존합니다. 이미지 쪽은 검색할 수 없습니다.'
     :'전체 페이지가 이미지로 변환되어 글자 검색·선택과 벡터 편집이 불가능합니다.';
    recover.setAttribute('aria-label',item.file.name+(hybrid
     ?' 혼합 PDF로 이 파일만 다시 변환 (필터가 있는 쪽만 이미지)'
@@ -206,7 +206,7 @@ function createFileRow(item,index,names){
     const native=document.createElement('button');
     native.type='button';native.className='secondary native-print-recovery';
     native.textContent='브라우저 PDF 인쇄 준비';
-    native.title='Chrome/Edge 인쇄 방식으로 준비합니다. 글꼴 부족 시 다른 글꼴로 보일 수 있고 일부 SVG 효과는 이미지화될 수 있습니다. PDF 저장 후 모든 페이지의 글꼴·표·그림을 원본과 반드시 대조하세요.';
+    native.title='Chrome/Edge 인쇄 방식으로 준비합니다. 글꼴이 부족하면 다른 서체로 보일 수 있고 일부 그림 효과는 이미지로 출력될 수 있습니다. PDF 저장 후 모든 페이지의 글꼴·표·그림을 원본과 반드시 대조하세요.';
     native.disabled=busy||!ready;
     native.addEventListener('click',()=>{
      if(busy||!ready||fontCheckPending||!items.includes(item)||item.state!=='failed'||!isHwp(item.file)||
@@ -307,7 +307,7 @@ $('convert').addEventListener('click',async()=>{
  if(!pending.length)return;
  conversionClock.start(pending.length);
  const fontFiles=Array.from($('pdf-font').files||[]);
- if(plan.bulk)status('실패한 문서 '+pending.length+'개만 명시적으로 복구합니다. SVG 필터 오류는 해당 쪽만 이미지로, 글꼴 누락·스트림 오류 또는 혼합 재실패는 전체 이미지 PDF로 출력되어 글자 검색이 불가능합니다. 성공 파일과 대기 파일은 제외됩니다.');
+ if(plan.bulk)status('실패한 문서 '+pending.length+'개만 선택적으로 복구합니다. 지원되지 않는 그림 효과가 있는 쪽은 이미지로 출력하며, 글꼴 누락·저장 오류 또는 혼합 변환 재실패 시 문서 전체가 이미지 PDF로 출력되어 글자 검색이 불가능합니다. 성공 파일과 대기 파일은 제외됩니다.');
  else if(plan.singleRetry)status('선택한 문서 1개만 동일한 출력 설정으로 다시 변환합니다. 완료 파일과 다른 실패·대기 파일은 유지합니다.');
  else if(plan.recovery)status(engine==='hybrid-filter'
   ?'선택한 문서 1개만 혼합 PDF로 다시 변환합니다. 미지원 필터 쪽만 이미지로 처리하며 나머지 쪽은 벡터로 유지합니다.'
@@ -379,15 +379,15 @@ $('convert').addEventListener('click',async()=>{
      info.detail==='bundled'?'기본 글꼴 준비 중':info.detail==='measure'?'PDF 측정용 글꼴 준비 중':
      info.detail==='complete'?'PDF 출력 시작 중':'문서에 필요한 글꼴 검색 중';
     const stepLabels={
-     svg_build:'문서 SVG 생성',svg_normalize:'SVG 전처리',
+     svg_build:'문서 페이지 생성',svg_normalize:'페이지 내용 준비',
      image_gif:'GIF 그림 확인',image_png:'PNG 그림 확인·조정',
-     image_filter:'그림 효과 검사',svg_sanitize:'SVG 안전 검사',
-     svg_preflight:'글꼴·벡터 사전 검사',svg_vector:'SVG 벡터 PDF 출력',
-     svg_vector_done:'페이지 PDF 출력 완료',direct_page_done:'Direct PDF 페이지 출력 완료',
+     image_filter:'그림 효과 검사',svg_sanitize:'문서 내용 검사',
+     svg_preflight:'글꼴·도형 검사',svg_vector:'PDF 페이지 출력',
+     svg_vector_done:'페이지 출력 완료',direct_page_done:'정밀 PDF 페이지 출력 완료',
      pdf_finalize:'PDF 최종 저장 준비',pdf_write:'페이지 PDF 작성 중',pdf_stream:'PDF 바이트 생성 중',
      pdf_done:'PDF 바이트 생성 완료',compat_raster:'호환 이미지 페이지 생성',compat_page_done:'호환 이미지 페이지 완료',compat_save:'호환 PDF 저장 중'
     };
-    const message=info.stage==='load'?(info.detail==='wasm_init'?'RHWP 웹 엔진 초기화 중 · 최초 이용 시 시간이 걸릴 수 있습니다':info.detail==='wasm_ready'?'RHWP 웹 엔진 준비 완료':'xlsx_package'===info.detail?'XLSX 압축 구조 안전 검사':info.detail==='xlsx_parse'?'XLSX 시트 해석':info.detail==='xlsx_layout'?'XLSX 인쇄 레이아웃 검사':'문서 읽는 중'):
+    const message=info.stage==='load'?(info.detail==='wasm_init'?'문서 변환 기능 준비 중 · 처음 이용할 때는 시간이 걸릴 수 있습니다':info.detail==='wasm_ready'?'문서 변환 기능 준비 완료':'xlsx_package'===info.detail?'엑셀 파일 검사':'xlsx_parse'===info.detail?'엑셀 시트 읽기':'xlsx_layout'===info.detail?'엑셀 페이지 구성 확인':'문서 읽는 중'):
      info.stage==='fonts'?fontStatus:
      stepLabels[info.detail]||'페이지 변환';
     const byteStatus=(info.detail==='pdf_stream'||info.detail==='pdf_write')&&Number.isSafeInteger(info.bytes)
