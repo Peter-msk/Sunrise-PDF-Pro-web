@@ -1,4 +1,5 @@
 import {safeFilterReason} from './svg-filter-diagnostics.mjs';
+import {stableSvgPipelineFailure} from './svg-runtime-error.mjs';
 import {cooperativeYield} from './cooperative-yield.mjs';
 import init, { HwpDocument } from '@rhwp/core';
 import {initializeRhwp} from './rhwp-wasm-loader.mjs';
@@ -272,7 +273,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
        const reason=safeFilterReason(error.filterReason);
        throw Error((meta.page||1)+'쪽에서 미지원 SVG 필터가 발견됐습니다 (SVG_FILTER_EFFECT_UNSUPPORTED; 분류: '+category+'). 혼합 출력 또는 이미지 PDF를 명시적으로 선택하세요.'+primitive+(reason?' [filter_reason='+reason+']':''));
       }
-      throw error;
+      throw stableSvgPipelineFailure(error,{stage:'image_filter',page:meta.page||1});
      }
      if(normalized.stats.filtersApplied)svgFilterStats.push(normalized.stats);
      progress('svg_sanitize');
