@@ -9,7 +9,8 @@ test('DEV36 WASM first use is classified separately from file reading',()=>{
  assert.match(converter,/detail:'wasm_init'/);
  assert.match(converter,/detail:'wasm_ready'/);
  assert.match(converter,/WASM_INIT_FAILED/);
- assert.match(main,/RHWP 웹 엔진 초기화 중/);
+ assert.match(main,/문서 변환 기능 준비 중/);
+ assert.doesNotMatch(main,/'RHWP 웹 엔진 초기화 중/);
  assert.match(main,/info\.detail==='wasm_init'/);
  assert.match(main,/info\.detail==='wasm_ready'/);
 });
