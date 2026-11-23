@@ -53,3 +53,15 @@
 - 최종 운영 Worker 버전 ID, 100% 트래픽, 실제 사이트 HTTP 200 및 기본 UI 미노출 표현·정적 자산 로드를 재조회.
 - 기존 Worker 9b71a2bf-c5e7-42bb-8c77-d2a8011d0c77을 직전 안정 복구 기준으로 유지.
 - 최종 빌드에 실패 시 이전 운영 버전을 유지하고 오류 소스/테스트만 수정 후 재실행.
+
+## 6. 실제 최종 Cloudflare 배포 결과 (2026-11-23)
+- 배포 대상 실행 소스 커밋: `295ffc4407f5a2d58ff54baddf2dd56203751e95`.
+- Cloudflare Build ID: `bc8cdec2-2f92-4112-b52f-fff2d51a041c`, stopped / success.
+- 전체 자동 회귀 테스트: 총 600건, PASS 597, FAIL 0, SKIP 3. SKIP 원인: 빌드 컨테이너에 pdftotext 2건 및 pdftoppm 1건 외부 실행 도구가 설치되지 않음.
+- 추가 배포전 확인: 20건 모두 PASS, 0 FAIL.
+- Vite/Cloudflare 자산: 37개 정적 파일 인식, 신규·변경 자산 /app.html 및 /assets/local-bundle.js 2개 업로드 성공.
+- Wrangler 실배포 완료: Worker deployment `69926bad-56a9-48f1-94d3-e0e30de5cc35`.
+- 신규 운영 Worker version `c63eba73-34ab-421d-956a-ac56f654b316`, 트래픽 100% 적용.
+- 배포 전 직전 정상 운영 버전 `9b71a2bf-c5e7-42bb-8c77-d2a8011d0c77`은 코드 롤백 기준으로 기록.
+- 최종 사용자화면 문구만 보완한 배포다. 기존 HWP/HWPX/XLS/XLSX/이미지 변환·안전 검사의 동작 변경 없음.
+- **주의**: 최종 배포 후 Cloudflare Browser Run은 429 제한으로 추가 브라우저 실기를 진행하지 못했음. 앞서 시행한 HWPX+XLSX+JPEG+PNG 혼합 4/4, 모바일 PNG 2/2, PNG 미리보기 1/1 실기는 이전 DEV64 운영 상태의 합격 결과임. 사용자 원본 HWP 두 실패 사례는 아직 입력별 재검증이 필요하다.
