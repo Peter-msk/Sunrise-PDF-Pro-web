@@ -5,7 +5,7 @@ import {inputKind} from './input-types.js';
  * any other document. The user's per-file click is the explicit consent to
  * create an image PDF: never infer consent from a failure or switch defaults.
  */
-const RECOVERABLE_ERROR = /\b(?:SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT|FONT_GLYPH_MISSING|SVG_RENDER_SOURCE_CHARS_LIMIT)\b/;
+const RECOVERABLE_ERROR = /\b(?:SVG_FILTER_EFFECT_UNSUPPORTED|SVG_FILTER_PIPELINE_FAILED|SVG_VECTOR_RENDER_FAILED|PDF_STREAM_TIMEOUT|FONT_GLYPH_MISSING|SVG_RENDER_SOURCE_CHARS_LIMIT)\b/;
 
 export function recoveryCode(error) {
  const message=String(error||'');
@@ -79,6 +79,8 @@ export function localFailureAdvice(error){
   return '엑셀 처리 모듈 로드 실패: 네트워크 상태를 확인하고 페이지를 새로고침한 뒤 해당 파일을 다시 시도하세요.';
  if(/\b(?:FILE_READ_IDLE_TIMEOUT|FILE_READ_[A-Z0-9_]+)\b/.test(message))
   return '파일 읽기 실패: 파일 잠금·브라우저 메모리·저장장치 접근 상태를 확인하고 해당 파일만 다시 시도하세요.';
+ if(/\b(?:SVG_FILTER_PIPELINE_FAILED|SVG_VECTOR_RENDER_FAILED)\b/.test(message))
+  return '이 문서의 그림·도형을 기본 출력 방식으로 끝까지 처리하지 못했습니다. 이 파일만 이미지 PDF로 다시 변환할 수 있습니다. 이미지 PDF는 글자 검색이 불가능하며 원본과 결과를 비교해야 합니다.';
  if(/\bSVG_FILTER_EFFECT_UNSUPPORTED\b/.test(message))
   return '문서에 기본 출력 방식으로 처리할 수 없는 그림 효과가 있습니다. 혼합 방식으로 재시도하면 일부 페이지가 이미지로 저장되어 글자 검색이 제한될 수 있습니다. 저장 후 원본과 비교해 주세요.';
  if(/\bFONT_GLYPH_MISSING\b/.test(message))
