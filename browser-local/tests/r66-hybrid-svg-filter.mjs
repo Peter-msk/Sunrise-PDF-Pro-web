@@ -40,7 +40,8 @@ test('DEV33 visible bulk hybrid is explicit and never changes professional defau
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  assert.match(html,/<option value="professional" selected>/);
  assert.match(html,/id="convert-hybrid"[^>]*hidden disabled/);
- assert.match(html,/필터 혼합 PDF로 시작/);
+ assert.match(html,/혼합 PDF로 변환/);
+ assert.doesNotMatch(html,/미지원 SVG 필터가 있는 페이지만/);
  assert.match(js,/\$\('convert-hybrid'\)\.addEventListener\('click'/);
  assert.match(js,/const hybridPending=items\.some\(/);
  assert.match(js,/requestedFileRecovery=null;requestedFileRetry=null;requestedBulkRecovery=false;/);
