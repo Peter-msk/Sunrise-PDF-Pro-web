@@ -144,11 +144,12 @@ function createFileRow(item,index,names){
   const body=document.createElement('div'),name=document.createElement('div'),meta=document.createElement('div');name.className='file-name';name.textContent=item.file.name;meta.className='file-meta';
   const labels={ready:'변환 대기',working:'변환 중',done:'변환 완료',failed:'변환 실패',invalid:'지원하지 않는 파일',cancelled:'취소됨 · 다시 변환 가능'};
   let message=labels[item.state]||'';
-  if(item.error){meta.classList.add('error');const guidance=localFailureAdvice(item.error);message+=' · '+(guidance||describeConversionError(item.error));if(isHwp(item.file)&&/SVG_FILTER_EFFECT_UNSUPPORTED|PDF_STREAM_TIMEOUT|FONT_GLYPH_MISSING|SVG_RENDER_SOURCE_CHARS_LIMIT/.test(item.error))message+=' · 아래 출력 및 글꼴 옵션에서 호환 방식 선택 후 다시 변환할 수 있습니다(이미지 PDF, 글자 검색 불가).';}
+  if(item.error){meta.classList.add('error');const guidance=localFailureAdvice(item.error);message+=' · '+(guidance||describeConversionError(item.error));if(isHwp(item.file)&&/SVG_FILTER_EFFECT_UNSUPPORTED|SVG_FILTER_PIPELINE_FAILED|SVG_VECTOR_RENDER_FAILED|PDF_STREAM_TIMEOUT|FONT_GLYPH_MISSING|SVG_RENDER_SOURCE_CHARS_LIMIT/.test(item.error))message+=' · 아래 출력 및 글꼴 옵션에서 호환 방식 선택 후 다시 변환할 수 있습니다(이미지 PDF, 글자 검색 불가).';}
   // The output list is for users. Technical font/vector metrics and verbose
   // diagnostics remain available in the local QA report and engine logs.
   if(item.state==='done'&&isHwp(item.file)&&item.result?.rasterPages>0)
    message+=' · 이미지 PDF: 해당 페이지는 글자 선택이 제한됩니다.';
+  if(item.state==='failed'&&Number.isSafeInteger(item._proLastPage)&&item._proLastPage>0)message+=' · 마지막 처리 '+item._proLastPage+'쪽';
   if(['done','failed','cancelled'].includes(item.state)&&Number.isFinite(item._proDurationMs))message+=' · 처리시간 '+formatDuration(item._proDurationMs);
   meta.textContent=message;body.append(name,meta);
   const actions=document.createElement('div');actions.className='file-actions';
@@ -333,7 +334,7 @@ $('convert').addEventListener('click',async()=>{
    const spec=recoverySpecs.get(item),itemEngine=spec?.engine||engine;
    item.lastEngine=itemEngine;
    item._proStartedMs=performance.now();
-   item._lastDiagPhase='parse';item._lastDiagSentMs=item._proStartedMs;
+   item._lastDiagPhase='parse';item._lastDiagSentMs=item._proStartedMs;item._proProgressEvents=0;
    emitProEvent('convert_start',{feature:proFeature(file),stage:itemEngine==='compat-raster'?'compat_raster':itemEngine==='hybrid-filter'?'svg_vector':'none'});
    emitProEvent('convert_progress',{feature:proFeature(file),stage:'parse',duration_ms:0});
    const result=await convertToPdf(file,info=>{
