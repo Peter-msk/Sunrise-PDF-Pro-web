@@ -126,7 +126,7 @@ async function submitTelemetry(req,db){
 // D1 uses positional placeholders; isolated, bounded personal data storage.
 async function saveInquiry(req,db){
  if(!originMatches(req))return deny('ORIGIN_DENIED',403);
- let b;try{b=await readBody(req,8192);}catch(e){return deny(e.message,400);}
+ let b;try{b=await readBody(req,24576);}catch(e){return deny(e.message,400);}
  if(b.company_website)return j({ok:true},202);
  const email=cleanText(b.email,160),subject=cleanText(b.subject,120),message=cleanText(b.message,3000);
  if(!email||!/^\S+@\S+\.\S+$/.test(email)||!subject||!message)return deny('INVALID_INQUIRY');
@@ -157,14 +157,22 @@ async function dashboard(db){
   published:topics?.n||0,top_errors:unresolved.results||[],telemetry_status:'counts_from_client_events_not_server_proof'};
 }
 async function visits(db,url){
- const days=clampedInt(url.searchParams.get('days'),1,30,14),t=now(),start=t-days*86400;
- const rows=await db.prepare(`SELECT CAST((happened_at+32400)/86400 AS INTEGER) AS kst_day,
+ const days=clampedInt(url.searchParams.get('days'),1,30,14),t=now(),endDay=kstDay(t),startDay=endDay-days+1;
+ const rows=await db.prepare(`WITH RECURSIVE dates(kst_day) AS (
+ SELECT ? UNION ALL SELECT kst_day+1 FROM dates WHERE kst_day<?
+ ), daily AS (
+ SELECT CAST((happened_at+32400)/86400 AS INTEGER) AS kst_day,
  COUNT(DISTINCT CASE WHEN event_kind='visit' THEN session_id END) AS visit_sessions,
  SUM(CASE WHEN event_kind='active_30s' THEN 30 ELSE 0 END) AS active_seconds,
  SUM(CASE WHEN event_kind='convert_start' THEN 1 ELSE 0 END) AS starts,
  SUM(CASE WHEN event_kind='convert_success' THEN 1 ELSE 0 END) AS successes,
  SUM(CASE WHEN event_kind='convert_failure' THEN 1 ELSE 0 END) AS failures
- FROM pro_telemetry WHERE happened_at>=? GROUP BY kst_day ORDER BY kst_day DESC LIMIT 30`).bind(start).all();
+ FROM pro_telemetry WHERE happened_at>=? AND happened_at<=? GROUP BY kst_day
+ ) SELECT dates.kst_day,COALESCE(daily.visit_sessions,0) AS visit_sessions,
+ COALESCE(daily.active_seconds,0) AS active_seconds,COALESCE(daily.starts,0) AS starts,
+ COALESCE(daily.successes,0) AS successes,COALESCE(daily.failures,0) AS failures
+ FROM dates LEFT JOIN daily ON dates.kst_day=daily.kst_day ORDER BY dates.kst_day DESC`)
+ .bind(startDay,endDay,startDay*86400-32400,t).all();
  return {days,rows:rows.results||[],definitions:{visits:'고유 브라우저 세션 수(사람 수와 다름)',active_seconds:'활성 이벤트 × 30초 추정값'}};
 }
 async function diagnostics(db,url){
@@ -189,7 +197,7 @@ async function adminListPublications(db){
  const r=await db.prepare('SELECT * FROM pro_publications ORDER BY created_at DESC LIMIT 150').all();return {items:r.results||[]};
 }
 async function savePublication(req,db,subjectId){
- let b;try{b=await readBody(req,12000);}catch(e){return deny(e.message,400);}
+ let b;try{b=await readBody(req,32768);}catch(e){return deny(e.message,400);}
  const kind=b.kind,state=b.state,title=cleanText(b.title,140),body=cleanText(b.body,5000);
  if(!allowedKinds.has(kind)||!allowedPublicationStates.has(state)||!title||!body)return deny('INVALID_PUBLICATION');
  const expire=b.expire_at==null?null:clampedInt(b.expire_at,1,9999999999,null);
@@ -209,7 +217,7 @@ async function savePublication(req,db,subjectId){
  return j({ok:true,id:rid,first_published_at:subjectId?undefined:(state==='published'?t:null)},subjectId?200:201);
 }
 async function changeInquiry(req,db,subjectId){
- let b;try{b=await readBody(req,4096);}catch(e){return deny(e.message==='PAYLOAD_TOO_LARGE'?'PAYLOAD_TOO_LARGE':'INVALID_JSON',400);}
+ let b;try{b=await readBody(req,16384);}catch(e){return deny(e.message==='PAYLOAD_TOO_LARGE'?'PAYLOAD_TOO_LARGE':'INVALID_JSON',400);}
  if(!allowedStatuses.has(b.status)||typeof b.admin_note!=='string'||b.admin_note.length>2000)return deny('INVALID_INQUIRY_UPDATE');
  const current=await db.prepare('SELECT id FROM pro_inquiries WHERE id=?').bind(subjectId).first();
  if(!current)return deny('INQUIRY_NOT_FOUND',404);
@@ -262,8 +270,8 @@ async function api(req,env,path,url){
  if(!dbReady(env))return deny('ADMIN_DB_NOT_CONFIGURED',503);
  try{
   if(path==='/api/public/updates'&&methodOnly(req,['GET','HEAD']))return j(await publicationsFeed(db));
-  if(path==='/api/public/telemetry'&&method==='POST')return submitTelemetry(req,db);
-  if(path==='/api/public/inquiries'&&method==='POST')return saveInquiry(req,db);
+  if(path==='/api/public/telemetry'&&method==='POST')return await submitTelemetry(req,db);
+  if(path==='/api/public/inquiries'&&method==='POST')return await saveInquiry(req,db);
   if(path==='/api/admin/setup-status'&&method==='GET')return await setupStatus(env,db);
   if(path==='/api/admin/setup'&&method==='POST')return await setup(req,env,db);
   if(path==='/api/admin/auth-challenge'&&method==='GET'){
@@ -297,11 +305,11 @@ async function api(req,env,path,url){
    const rows=await db.prepare('SELECT * FROM pro_inquiries ORDER BY created_at DESC LIMIT 150').all();return j({items:rows.results||[]});
   }
   const inquiry=/^\/api\/admin\/inquiries\/([a-f0-9-]{36})$/i.exec(path);
-  if(inquiry&&method==='PATCH')return changeInquiry(req,db,inquiry[1]);
+  if(inquiry&&method==='PATCH')return await changeInquiry(req,db,inquiry[1]);
   if(path==='/api/admin/publications'&&method==='GET')return j(await adminListPublications(db));
-  if(path==='/api/admin/publications'&&method==='POST')return savePublication(req,db,null);
+  if(path==='/api/admin/publications'&&method==='POST')return await savePublication(req,db,null);
   const publication=/^\/api\/admin\/publications\/([a-f0-9-]{36})$/i.exec(path);
-  if(publication&&method==='PATCH')return savePublication(req,db,publication[1]);
+  if(publication&&method==='PATCH')return await savePublication(req,db,publication[1]);
   if(path==='/api/admin/system'&&method==='GET')return j(await system(env,db));
   if(path==='/api/admin/security'&&method==='GET')return j(await security(db));
   if(path==='/api/admin/password'&&method==='POST')return await changePassword(req,db,env);
