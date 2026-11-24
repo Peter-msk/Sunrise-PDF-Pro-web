@@ -25,7 +25,7 @@ function mockDB(){
    else if(q.startsWith('INSERT INTO pro_admin_sessions'))sessions.set(args[0],{token_hash:args[0],csrf_hash:args[1],created_at:args[2],expires_at:args[3]});
    else if(q.startsWith('DELETE FROM pro_admin_sessions WHERE token_hash=?'))sessions.delete(args[0]);
    else if(q==='DELETE FROM pro_admin_sessions')sessions.clear();
-   else if(q.startsWith('INSERT INTO pro_admin_login_limits'))limits.set(args[0],{attempts:args[1],window_start:args[2],locked_until:args[3]});
+   else if(q.startsWith('INSERT INTO pro_admin_login_limits')){const [subject,t]=args,old=limits.get(subject);if(!old||old.window_start<=t-900&&old.locked_until<=t)limits.set(subject,{attempts:1,window_start:t,locked_until:0});else if(old.locked_until<=t){const attempts=Math.min(old.attempts+1,6);limits.set(subject,{attempts,window_start:old.window_start,locked_until:attempts>=6?t+900:0});}}
    else if(q.startsWith('DELETE FROM pro_admin_login_limits WHERE subject_hash=?'))limits.delete(args[0]);
    else if(q.startsWith('INSERT INTO pro_admin_audit'))audit.push(args);
    else throw Error('Unknown mutation: '+q);
