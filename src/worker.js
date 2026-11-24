@@ -1,3 +1,4 @@
+import {purgeRetention} from './admin/retention.js';
 import {handleProAdmin} from './admin/handler.js';
 import {adminEnvironment} from './admin/setup.js';
 import {sitePage,siteCSS} from './site-home.js';
@@ -188,13 +189,7 @@ export default {
     ctx.waitUntil((async()=>{
       const now=Math.floor(Date.now()/1000);
       try{
-        await env.PRO_ADMIN_DB.batch([
-          env.PRO_ADMIN_DB.prepare('DELETE FROM pro_trace_dev4 WHERE happened_at<?').bind(now-14*86400),
-          env.PRO_ADMIN_DB.prepare('DELETE FROM pro_trace_dev4_audit WHERE happened_at<?').bind(now-90*86400),
-          env.PRO_ADMIN_DB.prepare('DELETE FROM pro_telemetry WHERE happened_at<?').bind(now-30*86400),
-          env.PRO_ADMIN_DB.prepare('DELETE FROM pro_admin_sessions WHERE expires_at<?').bind(now)
-        ]);
-      }catch{console.warn('R56_RETENTION_FAILED');}
+        await purgeRetention(env.PRO_ADMIN_DB,now,'scheduled');      }catch{console.warn('R56_RETENTION_FAILED');}
     })());
   }
 };
