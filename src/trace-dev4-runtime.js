@@ -11,13 +11,14 @@ const DURATIONS=new Set(['0to99','100to499','500to1999','2000to9999','ge10000'])
 const STEPS=new Set(['select','load_start','load_ok','fonts_start','fonts_ok','parse_start','parse_ok','render_start','render_ok','pdf_start','pdf_ok','download_start','download_ok','failed','cancelled']);
 const STATES=new Set(['new','investigating','fix_candidate','verifying','resolved','reopened']);
 const KEYS=['schema','trace_id','operation_id','session_id','feature','code','phase','module','callsite','size_bucket','browser','client_release','duration_bucket','steps'];
-const output=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
+const TRACE_HEADERS={'cache-control':'no-store','x-content-type-options':'nosniff','x-frame-options':'DENY','referrer-policy':'no-referrer','x-robots-tag':'noindex, nofollow','content-security-policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"};
+const output=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{...TRACE_HEADERS,'content-type':'application/json; charset=utf-8'}});
 const fail=(code,status=400)=>output({error:code},status);
 const safeBody=async(req,limit)=>{
  if(!/^application\/json(?:\s*;|$)/i.test(req.headers.get('content-type')||''))throw Error('CONTENT_TYPE');
  const len=Number(req.headers.get('content-length')||0);if(len>limit)throw Error('SIZE');
  const reader=req.body?.getReader();if(!reader)throw Error('BODY');
- let n=0;const parts=[];while(true){const x=await reader.read();if(x.done)break;n+=x.value.byteLength;if(n>limit)throw Error('SIZE');parts.push(x.value);}
+ let n=0;const parts=[];try{while(true){const x=await reader.read();if(x.done)break;n+=x.value.byteLength;if(n>limit){try{await reader.cancel();}catch{}throw Error('SIZE');}parts.push(x.value);}}finally{reader.releaseLock();}
  const b=new Uint8Array(n);let at=0;for(const p of parts){b.set(p,at);at+=p.byteLength;}
  return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(b));
 };
@@ -88,7 +89,7 @@ export async function traceDev4Route(req,env){
  if(p==='/trace-dev4-client.js')return new Response(TRACE_CLIENT,{headers:{'content-type':'text/javascript; charset=utf-8','cache-control':'public, max-age=300','x-content-type-options':'nosniff'}});
  if(p==='/trace-dev4-admin.js')return new Response(TRACE_ADMIN_JS,{headers:{'content-type':'text/javascript; charset=utf-8','x-content-type-options':'nosniff'}});
  if(p==='/trace-dev4-admin.css')return new Response(TRACE_ADMIN_CSS,{headers:{'content-type':'text/css; charset=utf-8','x-content-type-options':'nosniff'}});
- if(p==='/admin/traces/'||p==='/admin/traces')return new Response(TRACE_ADMIN_HTML,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','x-frame-options':'DENY'}});
+ if(p==='/admin/traces/'||p==='/admin/traces')return new Response(TRACE_ADMIN_HTML,{headers:{...TRACE_HEADERS,'content-type':'text/html; charset=utf-8'}});
  if(p==='/api/public/trace-dev4')return submit(req,env);
  if(!db?.prepare)return fail('STORAGE_UNAVAILABLE',503);
  if(p==='/api/admin/trace-dev4/incidents'&&req.method==='GET')return list(db);
