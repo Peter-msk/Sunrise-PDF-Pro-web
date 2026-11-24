@@ -20,10 +20,13 @@ export function classifyProError(error){
  const match=String(error?.message||error||'').match(/\b(?:SVG|PDF|HWPX|HWP|XLSX|XLS|FILE|ZIP|PNG|GIF|FONT|PC_FONT|CSS_FONT|WASM)_[A-Z0-9_]{3,55}\b/);
  return match?match[0]:'CONVERSION_FAILED';
 }
-export function emitProEvent(kind,{feature='ui',stage='none',error_code='NONE',duration_ms=0}={}){
+export function newProOperationId(){try{return crypto.randomUUID();}catch{return null;}}
+export function emitProEvent(kind,{feature='ui',stage='none',error_code='NONE',duration_ms=0,operation_id=null}={}){
  try{
-  if(!acceptedFeatures.has(feature)||!acceptedStages.has(stage))return;
+  if(!acceptedFeatures.has(feature))return;
+  if(!acceptedStages.has(stage))stage='unknown';
   const body=JSON.stringify({event_id:crypto.randomUUID(),session_id:sid,kind,feature,stage,
+   ...(operation_id?{operation_id}:{}),
    error_code:/^(?:NONE|[A-Z][A-Z0-9_]{2,63})$/.test(error_code)?error_code:'CONVERSION_FAILED',
    duration_ms:Number.isSafeInteger(duration_ms)?Math.max(0,Math.min(3600000,duration_ms)):0});
   // Keep response opaque to the app; never stop conversion for telemetry failures.
