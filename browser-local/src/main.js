@@ -2,7 +2,7 @@ import './r56-ui.js';
 import {createPdfViewer} from './pdf-viewer.js';
 import {describeConversionError,outputModeText} from './user-output-copy.mjs';
 import {createConversionClock,formatDuration} from './conversion-clock.js';
-import {emitProEvent,startProTelemetry,classifyProError,proFeature} from './pro-telemetry.js';
+import {emitProEvent,startProTelemetry,classifyProError,proFeature,newProOperationId} from './pro-telemetry.js';
 import {renderNativePrintPages} from './converter.js';
 import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
@@ -333,10 +333,11 @@ $('convert').addEventListener('click',async()=>{
    item._proSourcePages=null;item._proLastPage=null;
    const spec=recoverySpecs.get(item),itemEngine=spec?.engine||engine;
    item.lastEngine=itemEngine;
-   item._proStartedMs=performance.now();
+   item._proOperationId=newProOperationId();
+    item._proStartedMs=performance.now();
    item._lastDiagPhase='parse';item._lastDiagSentMs=item._proStartedMs;item._proProgressEvents=0;
-   emitProEvent('convert_start',{feature:proFeature(file),stage:itemEngine==='compat-raster'?'compat_raster':itemEngine==='hybrid-filter'?'svg_vector':'none'});
-   emitProEvent('convert_progress',{feature:proFeature(file),stage:'parse',duration_ms:0});
+   emitProEvent('convert_start',{feature:proFeature(file),stage:itemEngine==='compat-raster'?'compat_raster':itemEngine==='hybrid-filter'?'svg_vector':'none',operation_id:item._proOperationId});
+   emitProEvent('convert_progress',{feature:proFeature(file),stage:'parse',duration_ms:0,operation_id:item._proOperationId});
    const result=await convertToPdf(file,info=>{
     const phases=new Set(['svg_build','svg_normalize','image_gif','image_png',
      'image_filter','svg_sanitize','svg_preflight','svg_vector','svg_vector_done',
@@ -367,7 +368,7 @@ $('convert').addEventListener('click',async()=>{
       ((changed&&(gap>=750||important))||gap>=45000)){
       emitProEvent('convert_progress',{feature:proFeature(file),
        stage:item._proDiagStage,
-       duration_ms:Math.max(0,Math.round(phaseNow-item._proStartedMs))});
+       duration_ms:Math.max(0,Math.round(phaseNow-item._proStartedMs)),operation_id:item._proOperationId});
       item._proProgressEvents=(item._proProgressEvents||0)+1;
       item._lastDiagPhase=item._proDiagStage;
       item._lastDiagSentMs=phaseNow;
@@ -422,18 +423,18 @@ $('convert').addEventListener('click',async()=>{
    }
    const durationMs=Number.isFinite(item._proStartedMs)?Math.max(0,Math.round(performance.now()-item._proStartedMs)):0;
    item._proDurationMs=durationMs;
-   if(item.state==='done')emitProEvent('convert_success',{feature:proFeature(item.file),stage:'pdf',duration_ms:durationMs});
+   if(item.state==='done')emitProEvent('convert_success',{feature:proFeature(item.file),stage:'pdf',duration_ms:durationMs,operation_id:item._proOperationId});
    if(item.state==='done'){
     item.pdfUrl=URL.createObjectURL(item.result.pdf);completed++;
     // PDF.js preview must not run concurrently with the next HWP WASM render.
    }
-   else if(item.state==='failed'){emitProEvent('convert_failure',{feature:proFeature(item.file),stage:item._proDiagStage||'unknown',error_code:classifyProError(item.error),duration_ms:durationMs});completed++;}
+   else if(item.state==='failed'){emitProEvent('convert_failure',{feature:proFeature(item.file),stage:item._proDiagStage||'unknown',error_code:classifyProError(item.error),duration_ms:durationMs,operation_id:item._proOperationId});completed++;}
    else if(item.state==='cancelled'){
     emitProEvent('convert_cancel',{feature:proFeature(item.file),
-     stage:item._proDiagStage||'unknown',duration_ms:durationMs});
+     stage:item._proDiagStage||'unknown',duration_ms:durationMs,operation_id:item._proOperationId});
     completed++;
    }
-   if(['done','failed','cancelled'].includes(item.state))conversionClock.itemDone(completed);
+   if(['done','failed','cancelled'].includes(item.state)){item._proOperationId=null;conversionClock.itemDone(completed);}
    draw(item);
   });
   if(!signal.aborted){
