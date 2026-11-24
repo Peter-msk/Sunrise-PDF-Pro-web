@@ -112,7 +112,14 @@ async function submitTelemetry(req,db){
  // Rate guard is per ephemeral browser session, without IP or other device tracking.
  const count=await db.prepare('SELECT COUNT(*) AS n FROM pro_telemetry WHERE session_id=? AND happened_at>?')
   .bind(b.session_id,now()-3600).first();
- if((count?.n||0)>=300)return deny('EVENT_RATE_LIMIT',429);
+ if((count?.n||0)>=300){
+  // Preserve the terminal state of a known attempt without growing the legacy log.
+  if(b.operation_id&&['convert_success','convert_failure','convert_cancel'].includes(b.kind)){
+   await operationStatement(db,b,t,{allowNew:false}).run();
+   return j({ok:true,legacy_rate_limited:true},202);
+  }
+  return deny('EVENT_RATE_LIMIT',429);
+ }
  // R65: progress events need a separate table. The historical telemetry table
  // has a CHECK that intentionally excludes 'convert_progress'; never mutate
  // or rebuild it just to change the diagnostic event schema.
