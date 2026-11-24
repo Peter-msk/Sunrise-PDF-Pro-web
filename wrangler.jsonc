@@ -15,5 +15,10 @@
       "database_name": "sunrise-pdf-pro-admin",
       "database_id": "d7fd7866-2ac2-485f-8d4b-4773b69d99e4"
     }
-  ]
+  ],
+  "triggers": {
+    "crons": [
+      "0 19 * * *"
+    ]
+  }
 }
