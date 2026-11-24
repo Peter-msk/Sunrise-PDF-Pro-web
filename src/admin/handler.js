@@ -34,7 +34,7 @@ async function readBody(request,limit=8192){
   }
  }finally{reader.releaseLock();}
  const bytes=new Uint8Array(size);let offset=0;for(const p of parts){bytes.set(p,offset);offset+=p.byteLength;}
- try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch(error){if(error?.message==='PAYLOAD_TOO_LARGE')throw error;throw new Error('INVALID_JSON');}
+ try{const value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('INVALID_JSON');return value;}catch{throw new Error('INVALID_JSON');}
 }
 function dbReady(env){return Boolean(env?.PRO_ADMIN_DB?.prepare&&env?.PRO_ADMIN_DB?.batch);}
 async function audit(db,action,subjectType='',subjectId='',outcome='success'){
@@ -75,7 +75,7 @@ async function setup(req,env,db){
  if(legacyConfigured(env)||await getAccount(db))return deny('ADMIN_ALREADY_CONFIGURED',409);
  const old=await db.prepare("SELECT value FROM pro_admin_settings WHERE key='password_hash'").first();
  if(old)return deny('ADMIN_ALREADY_CONFIGURED',409);
- let b;try{b=await readBody(req,4096);}catch(e){return deny(e.message,400);}
+ let b;try{b=await readBody(req,4096);}catch(e){return deny(e.message==='PAYLOAD_TOO_LARGE'?'PAYLOAD_TOO_LARGE':'INVALID_JSON',400);}
  const subject=await loginSubject(req,{ADMIN_SESSION_SECRET:await sessionSecret(env)});
  if(await isLocked(db,subject))return deny('LOGIN_TEMPORARILY_LOCKED',429);
  if(!await verifySetupToken(env,b.token)){await recordLoginFailure(db,subject);await audit(db,'admin_setup','','','denied');return deny('INVALID_SETUP_TOKEN',403);}
@@ -209,7 +209,7 @@ async function savePublication(req,db,subjectId){
  return j({ok:true,id:rid,first_published_at:subjectId?undefined:(state==='published'?t:null)},subjectId?200:201);
 }
 async function changeInquiry(req,db,subjectId){
- let b;try{b=await readBody(req,4096);}catch(e){return deny(e.message,400);}
+ let b;try{b=await readBody(req,4096);}catch(e){return deny(e.message==='PAYLOAD_TOO_LARGE'?'PAYLOAD_TOO_LARGE':'INVALID_JSON',400);}
  if(!allowedStatuses.has(b.status)||typeof b.admin_note!=='string'||b.admin_note.length>2000)return deny('INVALID_INQUIRY_UPDATE');
  const current=await db.prepare('SELECT id FROM pro_inquiries WHERE id=?').bind(subjectId).first();
  if(!current)return deny('INQUIRY_NOT_FOUND',404);
@@ -233,7 +233,7 @@ async function system(env,db){
   caveat:'배포 메타데이터는 배포 시 주입된 값이 있는 경우에만 표시; Cloudflare 원격 상태는 별도 검증 필요'};
 }
 async function changePassword(req,db,env){
- let b;try{b=await readBody(req,4096);}catch(e){return deny(e.message,400);}
+ let b;try{b=await readBody(req,4096);}catch(e){return deny(e.message==='PAYLOAD_TOO_LARGE'?'PAYLOAD_TOO_LARGE':'INVALID_JSON',400);}
  if(env.ADMIN_BROWSER_ACCOUNT){
   const old=env.ADMIN_BROWSER_ACCOUNT;
   if(!await verifyProof(env,old,b.current_proof))return deny('INVALID_CREDENTIALS',401);
@@ -264,15 +264,15 @@ async function api(req,env,path,url){
   if(path==='/api/public/updates'&&methodOnly(req,['GET','HEAD']))return j(await publicationsFeed(db));
   if(path==='/api/public/telemetry'&&method==='POST')return submitTelemetry(req,db);
   if(path==='/api/public/inquiries'&&method==='POST')return saveInquiry(req,db);
-  if(path==='/api/admin/setup-status'&&method==='GET')return setupStatus(env,db);
-  if(path==='/api/admin/setup'&&method==='POST')return setup(req,env,db);
+  if(path==='/api/admin/setup-status'&&method==='GET')return await setupStatus(env,db);
+  if(path==='/api/admin/setup'&&method==='POST')return await setup(req,env,db);
   if(path==='/api/admin/auth-challenge'&&method==='GET'){
    if(!validSecrets(env))return deny('ADMIN_AUTH_NOT_CONFIGURED',503);
    return j(env.ADMIN_BROWSER_ACCOUNT?{mode:'browser',salt:env.ADMIN_BROWSER_ACCOUNT.salt,iterations:ITERATIONS}:{mode:'legacy'});
   }
   if(path==='/api/admin/login'&&method==='POST'){
    if(!validSecrets(env))return deny('ADMIN_AUTH_NOT_CONFIGURED',503);
-   return login(req,env);
+   return await login(req,env);
   }
   if(!path.startsWith('/api/admin/'))return deny('ROUTE_NOT_FOUND',404);
   if(!validSecrets(env))return deny('ADMIN_AUTH_NOT_CONFIGURED',503);
@@ -304,7 +304,7 @@ async function api(req,env,path,url){
   if(publication&&method==='PATCH')return savePublication(req,db,publication[1]);
   if(path==='/api/admin/system'&&method==='GET')return j(await system(env,db));
   if(path==='/api/admin/security'&&method==='GET')return j(await security(db));
-  if(path==='/api/admin/password'&&method==='POST')return changePassword(req,db,env);
+  if(path==='/api/admin/password'&&method==='POST')return await changePassword(req,db,env);
   if(path==='/api/admin/retention/purge'&&method==='POST'){
    const before=now()-30*86400;
    await db.prepare('DELETE FROM pro_telemetry WHERE happened_at<?').bind(before).run();
