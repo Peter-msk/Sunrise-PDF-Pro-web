@@ -89,10 +89,11 @@ async function setup(req,env,db){
  return j({ok:true},201);
 }
 async function publicationsFeed(db){
+ const t=now();
  const rows=await db.prepare(`SELECT id,kind,title,body,first_published_at FROM pro_publications
  WHERE state='published' AND first_published_at IS NOT NULL AND first_published_at<=?
  AND (expire_at IS NULL OR expire_at>?) AND CAST((?+32400)/86400 AS INTEGER)-CAST((first_published_at+32400)/86400 AS INTEGER) BETWEEN 0 AND 6
- ORDER BY first_published_at DESC LIMIT 30`).bind(now(),now(),now()).all();
+ ORDER BY first_published_at DESC,id DESC LIMIT 30`).bind(t,t,t).all();
  const arr=(rows.results||[]).map(publicPublicationRecord);
  return {announcements:arr.filter(x=>x.kind==='announcement'),releases:arr.filter(x=>x.kind==='release')};
 }
@@ -145,11 +146,12 @@ async function saveInquiry(req,db){
  if(b.company_website)return j({ok:true},202);
  const email=cleanText(b.email,160),subject=cleanText(b.subject,120),message=cleanText(b.message,3000);
  if(!email||!/^\S+@\S+\.\S+$/.test(email)||!subject||!message)return deny('INVALID_INQUIRY');
- const count=await db.prepare('SELECT COUNT(*) AS n FROM pro_inquiries WHERE email=? AND created_at>?').bind(email,now()-3600).first();
- if((count?.n||0)>=3)return deny('INQUIRY_RATE_LIMIT',429);
  const t=now(),rid=id();
- await db.prepare(`INSERT INTO pro_inquiries(id,created_at,updated_at,email,subject,message,status,admin_note)
- VALUES(?,?,?,?,?,?,'new','')`).bind(rid,t,t,email,subject,message).run();
+ // One atomic statement prevents concurrent requests bypassing the per-address limit.
+ const inserted=await db.prepare(`INSERT INTO pro_inquiries(id,created_at,updated_at,email,subject,message,status,admin_note)
+ SELECT ?,?,?,?,?,?,'new','' WHERE (SELECT COUNT(*) FROM pro_inquiries WHERE lower(email)=lower(?) AND created_at>?)<3`)
+ .bind(rid,t,t,email,subject,message,email,t-3600).run();
+ if(inserted.meta?.changes!==1)return deny('INQUIRY_RATE_LIMIT',429);
  return j({ok:true,reference:rid},201);
 }
 async function dashboard(db){
@@ -163,7 +165,7 @@ async function dashboard(db){
   SUM(CASE WHEN event_kind='active_30s' AND happened_at>=? THEN 30 ELSE 0 END) AS active_seconds_today FROM pro_telemetry`)
   .bind(todayStart,weekStart,todayStart,todayStart,todayStart,todayStart).first(),
   db.prepare("SELECT status,COUNT(*) AS n FROM pro_inquiries GROUP BY status").all(),
-  db.prepare("SELECT COUNT(*) AS n FROM pro_publications WHERE state='published'").first(),
+  db.prepare("SELECT COUNT(*) AS n FROM pro_publications WHERE state='published' AND first_published_at IS NOT NULL AND first_published_at<=? AND (expire_at IS NULL OR expire_at>?) AND CAST((?+32400)/86400 AS INTEGER)-CAST((first_published_at+32400)/86400 AS INTEGER) BETWEEN 0 AND 6").bind(t,t,t).first(),
   db.prepare("SELECT error_code,stage,COUNT(*) AS n FROM pro_telemetry WHERE event_kind IN('convert_failure','render_error') AND happened_at>? GROUP BY error_code,stage ORDER BY n DESC LIMIT 8").bind(weekStart).all()
  ]);
  return {period:'KST',visits_today:stats?.visits_today||0,visits_7d:stats?.visits_7d||0,
@@ -215,21 +217,26 @@ async function savePublication(req,db,subjectId){
  let b;try{b=await readBody(req,32768);}catch(e){return deny(e.message,400);}
  const kind=b.kind,state=b.state,title=cleanText(b.title,140),body=cleanText(b.body,5000);
  if(!allowedKinds.has(kind)||!allowedPublicationStates.has(state)||!title||!body)return deny('INVALID_PUBLICATION');
- const expire=b.expire_at==null?null:clampedInt(b.expire_at,1,9999999999,null);
- if(b.expire_at!=null&&expire===null)return deny('INVALID_EXPIRY');
+ const hasExpiry=Object.hasOwn(b,'expire_at');
+ if(hasExpiry&&b.expire_at!==null&&(!Number.isSafeInteger(b.expire_at)||b.expire_at<1||b.expire_at>9999999999))return deny('INVALID_EXPIRY');
  const t=now(),rid=subjectId||id();
+ let expire=hasExpiry?b.expire_at:null;
+ let first=state==='published'?t:null;
  if(subjectId){
-  const existing=await db.prepare('SELECT id,first_published_at FROM pro_publications WHERE id=?').bind(subjectId).first();
+  const existing=await db.prepare('SELECT id,first_published_at,expire_at FROM pro_publications WHERE id=?').bind(subjectId).first();
   if(!existing)return deny('PUBLICATION_NOT_FOUND',404);
-  const first=existing.first_published_at||(state==='published'?t:null);
+  if(!hasExpiry)expire=existing.expire_at;
+  first=existing.first_published_at||(state==='published'?t:null);
+  if(expire!==null&&first!==null&&expire<=first)return deny('INVALID_EXPIRY');
   await db.prepare('UPDATE pro_publications SET kind=?,state=?,title=?,body=?,updated_at=?,first_published_at=?,expire_at=? WHERE id=?')
    .bind(kind,state,title,body,t,first,expire,rid).run();
  }else{
+  if(expire!==null&&first!==null&&expire<=first)return deny('INVALID_EXPIRY');
   await db.prepare('INSERT INTO pro_publications(id,kind,title,body,state,created_at,updated_at,first_published_at,expire_at) VALUES(?,?,?,?,?,?,?,?,?)')
    .bind(rid,kind,title,body,state,t,t,state==='published'?t:null,expire).run();
  }
  await audit(db,subjectId?'publication_update':'publication_create','publication',rid);
- return j({ok:true,id:rid,first_published_at:subjectId?undefined:(state==='published'?t:null)},subjectId?200:201);
+ return j({ok:true,id:rid,first_published_at:first,expire_at:expire},subjectId?200:201);
 }
 async function changeInquiry(req,db,subjectId){
  let b;try{b=await readBody(req,16384);}catch(e){return deny(e.message==='PAYLOAD_TOO_LARGE'?'PAYLOAD_TOO_LARGE':'INVALID_JSON',400);}
