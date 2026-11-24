@@ -30,6 +30,7 @@ let server = null;
 let browser = null;
 let context = null;
 let stderr = '';
+const blocked = [], pageErrors = [], wasmResponses = [];
 
 async function waitForLocalServer() {
   for (let i = 0; i < 100; i++) {
@@ -80,9 +81,6 @@ try {
   result.browser = launched.channel;
   context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads:true });
   const page = await context.newPage();
-  const blocked = [];
-  const pageErrors = [];
-  const wasmResponses = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
   page.on('response', response => {
     if (RHWP_PARTS.some(p=>new URL(response.url()).pathname.endsWith('/'+p.name)))
@@ -105,17 +103,26 @@ try {
   await page.locator('#source').setInputFiles({name:'public-fixture.hwpx',mimeType:'application/zip',buffer:fixture});
   await page.locator('#convert').click();
   await page.waitForFunction(()=>Number(document.querySelector('#done-count')?.textContent||0)+Number(document.querySelector('#failed-count')?.textContent||0)===1,null,{timeout:90000});
-  const exported=page.waitForEvent('download');
-  await page.locator('#qa-export').click();
-  const qa=JSON.parse(readFileSync(await (await exported).path(),'utf8'));
   result.appStatus=await page.locator('#status').innerText();
+  result.counts={done:Number(await page.locator('#done-count').innerText()),failed:Number(await page.locator('#failed-count').innerText())};
+  const control=page.locator('#qa-export');
+  // DEV63 deliberately hides the engineering-only QA control in production.
+  if(!await control.isHidden())throw Error('Engineering QA control exposed in production');
+  if(await control.isDisabled())throw Error('QA control disabled after conversion');
+  await control.evaluate(node=>{node.hidden=false;});
+  let exported;
+  try{
+    [exported]=await Promise.all([page.waitForEvent('download',{timeout:10000}),control.click({timeout:10000})]);
+  }finally{await control.evaluate(node=>{node.hidden=true;});}
+  const qa=JSON.parse(readFileSync(await exported.path(),'utf8'));
+  result.assertions.push('engineering QA export works in isolated test without exposing the production control');
   result.qa={build_revision:qa.build_revision,rhwp_version:qa.rhwp_version,totals:qa.totals,files:qa.files};
   if(qa.rhwp_version!=='0.9.0')throw Error('Verified RHWP 0.9.0 failed to initialize');
   result.assertions.push('real RHWP 0.9.0 initialization succeeded');
   if(qa.totals.done!==1||qa.totals.failed!==0)throw Error('Built app public fixture conversion failed: '+JSON.stringify(result.qa));
-  const downloaded=page.waitForEvent('download');
-  await page.locator('#file-list a.download').click();
-  const pdf=await PDFDocument.load(readFileSync(await (await downloaded).path()));
+  const download=page.locator('#file-list a.download');
+  const [downloaded]=await Promise.all([page.waitForEvent('download',{timeout:15000}),download.click({timeout:15000})]);
+  const pdf=await PDFDocument.load(readFileSync(await downloaded.path()));
   if(pdf.getPageCount()!==qa.files[0].pages||qa.files[0].raster_pages!==0)throw Error('Built app PDF page/engine mismatch');
   result.assertions.push('built app converted public HWPX and downloaded PDF with matching vector page count');
   result.wasmResponses = wasmResponses;
@@ -129,6 +136,9 @@ try {
 } catch (error) {
   result.error = String(error?.message || error).slice(0,1500);
   if (stderr) result.serverStderr = stderr;
+  result.wasmResponses=wasmResponses;
+  result.pageErrors=pageErrors.map(x=>x.slice(0,300));
+  result.blockedOrigins=[...new Set(blocked.map(x=>{try{return new URL(x).origin;}catch{return 'invalid-url';}}))];
 } finally {
   try { await context?.close(); } catch { /* cleanup best effort */ }
   try { await browser?.close(); } catch { /* cleanup best effort */ }
