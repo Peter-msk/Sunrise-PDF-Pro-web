@@ -1,0 +1,37 @@
+name: DEV73 isolated integration checks
+on:
+  pull_request:
+    branches: [fix/dev72-security-audit-20261125]
+permissions:
+  contents: read
+jobs:
+  admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Administrator regression
+        run: node --test scripts/test-admin-setup.mjs scripts/test-admin-retention.mjs scripts/test-admin-operations.mjs scripts/test-dev69-trace-recovery.mjs scripts/test-dev70-admin-content.mjs scripts/test-dev71-admin-ui.mjs scripts/test-dev72-security.mjs
+      - name: Worker asset contracts
+        run: node scripts/test-worker-assets.mjs
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Install PDF inspection utilities
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - name: Browser converter tests and distribution
+        run: npm run build
+      - name: Install Chromium for local public-fixture test
+        run: npm --prefix browser-local exec -- playwright install --with-deps chromium
+      - name: Built WASM smoke test with public fixture only
+        run: npm --prefix browser-local run test:wasm
+      - name: Desktop and mobile admin browser acceptance with synthetic API
+        run: node browser-local/tests/dev73-admin-browser.mjs

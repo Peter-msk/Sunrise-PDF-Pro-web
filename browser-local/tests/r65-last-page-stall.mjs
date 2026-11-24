@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {retentionStatements} from '../../src/admin/retention.js';
 import {normalizeEmbeddedPngSvg} from '../src/svg-embedded-raster-budget.mjs';
 import {tryProfessionalDocument} from '../src/svg-professional.js';
 
@@ -82,7 +83,13 @@ test('R65 progress migration does not rebuild old telemetry table',()=>{
  assert.doesNotMatch(migrate,/DROP TABLE|ALTER TABLE|DELETE FROM pro_telemetry/i);
  assert.match(admin,/if\(b\.kind==='convert_progress'\)/);
  assert.match(admin,/INSERT OR IGNORE INTO pro_telemetry_progress/);
- assert.match(admin,/DELETE FROM pro_telemetry_progress WHERE happened_at/);
+ const db={prepare:sql=>({bind:(...args)=>({sql,args})})};
+ for(const mode of ['scheduled','manual']){
+  const statements=retentionStatements(db,1800000000,mode);
+  const progress=statements.find(x=>/DELETE FROM pro_telemetry_progress WHERE happened_at</.test(x.sql));
+  assert.ok(progress,'progress retention must be present in '+mode);
+  assert.deepEqual(progress.args,[1800000000-30*86400]);
+ }
  for(const key of ['image_png','svg_vector','pdf_finalize','pdf_stream'])
   assert.ok(admin.includes("'"+key+"'")&&client.includes("'"+key+"'"));
 });
