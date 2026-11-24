@@ -62,6 +62,11 @@ test('operator-only registration, browser proof, protected session, rotation and
  assert.equal((await call(env,'/api/admin/setup',{method:'POST',body,from:'https://other.example'})).status,403);
  assert.equal((await call(env,'/api/admin/setup',{method:'POST',body:{...body,token:hex(32)}})).status,403);
  assert.equal(env.PRO_ADMIN_DB.settings.size,0);
+ for(const malformed of [null,[],true,42,'bad']){
+  const rejected=await call(env,'/api/admin/setup',{method:'POST',body:malformed});
+  assert.equal(rejected.status,400);assert.equal((await rejected.json()).error,'INVALID_JSON');
+ }
+ assert.equal(env.PRO_ADMIN_DB.settings.size,0);
  assert.equal((await call(env,'/api/admin/setup',{method:'POST',body})).status,201);
  assert.equal((await call(env,'/api/admin/setup',{method:'POST',body})).status,409);
  const stored=env.PRO_ADMIN_DB.settings.get('browser_admin_v1');
@@ -70,10 +75,19 @@ test('operator-only registration, browser proof, protected session, rotation and
  assert.deepEqual(await (await call(env,'/api/admin/auth-challenge')).json(),{mode:'browser',salt:s,iterations:600000});
  assert.equal((await call(env,'/api/admin/session')).status,401);
  assert.equal((await call(env,'/api/admin/login',{method:'POST',body:{username,proof:hex(32)}})).status,401);
+ for(const malformed of [null,[],true,42,'bad']){
+  const rejected=await call(env,'/api/admin/login',{method:'POST',body:malformed});
+  assert.equal(rejected.status,400);assert.equal((await rejected.json()).error,'INVALID_JSON');
+ }
  const login=await call(env,'/api/admin/login',{method:'POST',body:{username,proof}});
  assert.equal(login.status,200);
  const setCookie=login.headers.get('set-cookie');assert.match(setCookie,/HttpOnly; Secure; SameSite=Strict/);
  const cookie=setCookie.split(';')[0],{csrf}=await login.json();
+ assert.equal((await call(env,'/api/admin/session',{cookie})).status,200);
+ for(const malformed of [null,[],true,42,'bad']){
+  const rejected=await call(env,'/api/admin/password',{method:'POST',body:malformed,cookie,csrf});
+  assert.equal(rejected.status,400);assert.equal((await rejected.json()).error,'INVALID_JSON');
+ }
  assert.equal((await call(env,'/api/admin/session',{cookie})).status,200);
  const new_salt=salt(),new_proof=await derive(password2,new_salt,600000),change={current_proof:proof,new_salt,new_proof};
  assert.equal((await call(env,'/api/admin/password',{method:'POST',body:change,cookie})).status,403);
@@ -98,4 +112,14 @@ test('Korean setup assets and login scripts parse; secrets are never embedded',(
  assert.doesNotThrow(()=>new vm.Script(ADMIN_JS));
  assert.match(ADMIN_HTML,/\/admin\/setup\//);
  assert.match(ADMIN_HTML,/\/admin\/static\/credential\.js/);
+});
+
+test('asynchronous admin database rejection is contained in a generic JSON 500',async()=>{
+ const db=mockDB();
+ const failure='private database failure detail';
+ db.prepare=()=>({bind(){return this;},async first(){throw Error(failure);}});
+ const response=await call({PRO_ADMIN_DB:db},'/api/admin/setup-status');
+ assert.equal(response.status,500);
+ assert.deepEqual(await response.json(),{ok:false,error:'ADMIN_OPERATION_FAILED'});
+ assert.equal(response.headers.get('cache-control'),'no-store');
 });
