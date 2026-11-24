@@ -7,7 +7,7 @@ export const UPSERT_SQL=`INSERT INTO pro_conversion_operations
  (operation_id,session_id,feature,started_at,ended_at,outcome,stage,error_code,duration_ms,updated_at)
  SELECT ?,?,?,?,?,?,?,?,?,?
  WHERE EXISTS(SELECT 1 FROM pro_conversion_operations WHERE operation_id=?)
- OR (SELECT COUNT(*) FROM pro_conversion_operations WHERE session_id=? AND updated_at>=?)<300
+ OR (?=1 AND (SELECT COUNT(*) FROM pro_conversion_operations WHERE session_id=? AND updated_at>=?)<300)
  ON CONFLICT(operation_id) DO UPDATE SET
  started_at=COALESCE(pro_conversion_operations.started_at,excluded.started_at),
  ended_at=COALESCE(pro_conversion_operations.ended_at,excluded.ended_at),
@@ -19,9 +19,9 @@ export const UPSERT_SQL=`INSERT INTO pro_conversion_operations
  WHERE pro_conversion_operations.session_id=excluded.session_id AND pro_conversion_operations.feature=excluded.feature
  AND ((excluded.started_at IS NOT NULL AND pro_conversion_operations.started_at IS NULL)
  OR (pro_conversion_operations.outcome IS NULL AND (excluded.outcome IS NOT NULL OR (excluded.started_at IS NULL AND excluded.duration_ms>pro_conversion_operations.duration_ms))))`;
-export function operationStatement(db,b,t){
+export function operationStatement(db,b,t,{allowNew=true}={}){
  const outcome=outcomes[b.kind]||null;
- return db.prepare(UPSERT_SQL).bind(b.operation_id,b.session_id,b.feature,b.kind==='convert_start'?t:null,outcome?t:null,outcome,b.stage,b.error_code,b.duration_ms,t,b.operation_id,b.session_id,t-3600);
+ return db.prepare(UPSERT_SQL).bind(b.operation_id,b.session_id,b.feature,b.kind==='convert_start'?t:null,outcome?t:null,outcome,b.stage,b.error_code,b.duration_ms,t,b.operation_id,allowNew?1:0,b.session_id,t-3600);
 }
 export const SUMMARY_SQL=`SELECT feature,COUNT(*) AS started,
  SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END) AS successes,
