@@ -64,14 +64,14 @@ export const isLocked=async(db,subject)=>{
  const row=await db.prepare('SELECT locked_until FROM pro_admin_login_limits WHERE subject_hash=?').bind(subject).first();
  return row&&row.locked_until>now();
 };
-export async function recordLoginFailure(db,subject){
- const t=now();
- const row=await db.prepare('SELECT attempts,window_start FROM pro_admin_login_limits WHERE subject_hash=?').bind(subject).first();
- const attempts=row&&t-row.window_start<900?row.attempts+1:1;
- const start=row&&t-row.window_start<900?row.window_start:t;
- await db.prepare(`INSERT INTO pro_admin_login_limits(subject_hash,attempts,window_start,locked_until) VALUES(?,?,?,?)
- ON CONFLICT(subject_hash) DO UPDATE SET attempts=excluded.attempts,window_start=excluded.window_start,locked_until=excluded.locked_until`)
- .bind(subject,attempts,start,attempts>=6?t+900:0).run();
+// Atomic failure accounting: concurrent denied logins cannot lose increments.
+export const LOGIN_FAILURE_SQL=`INSERT INTO pro_admin_login_limits(subject_hash,attempts,window_start,locked_until) VALUES(?,1,?,0)
+ ON CONFLICT(subject_hash) DO UPDATE SET
+ attempts=CASE WHEN locked_until>excluded.window_start THEN attempts WHEN window_start>excluded.window_start-900 THEN MIN(attempts+1,6) ELSE 1 END,
+ window_start=CASE WHEN locked_until>excluded.window_start OR window_start>excluded.window_start-900 THEN window_start ELSE excluded.window_start END,
+ locked_until=CASE WHEN locked_until>excluded.window_start THEN locked_until WHEN window_start>excluded.window_start-900 AND attempts>=5 THEN excluded.window_start+900 ELSE 0 END`;
+export async function recordLoginFailure(db,subject,t=now()){
+ await db.prepare(LOGIN_FAILURE_SQL).bind(subject,t).run();
 }
 export async function loginSubject(req,env){
  const ip=req.headers.get('CF-Connecting-IP')||'local-unknown';
