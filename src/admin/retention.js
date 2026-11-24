@@ -8,6 +8,7 @@ export function retentionStatements(db,now,mode){
  const shared=[
   stmt('DELETE FROM pro_telemetry WHERE happened_at<?',now-RETENTION_DAYS.telemetry*DAY),
   stmt('DELETE FROM pro_telemetry_progress WHERE happened_at<?',now-RETENTION_DAYS.progress*DAY),
+  stmt('DELETE FROM pro_conversion_operations WHERE updated_at<?',now-RETENTION_DAYS.telemetry*DAY),
   stmt('DELETE FROM pro_admin_sessions WHERE expires_at<=?',now),
   db.prepare('DELETE FROM pro_admin_login_limits WHERE window_start<? AND locked_until<=?').bind(now-RETENTION_DAYS.loginLimits*DAY,now)
  ];
