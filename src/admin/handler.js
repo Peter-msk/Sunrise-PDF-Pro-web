@@ -1,3 +1,4 @@
+import {operationEventValid,operationStatement,operationSummary} from './operations.js';
 import {purgeRetention} from './retention.js';
 import {ADMIN_HTML,ADMIN_CSS,ADMIN_JS,CONTACT_HTML,NEWS_HTML,PUBLIC_JS} from './generated-assets.js';
 import {publicPublicationRecord} from '../public-release-copy.js';
@@ -102,6 +103,12 @@ async function submitTelemetry(req,db){
   typeof b.error_code!=='string'||!/^(?:NONE|[A-Z][A-Z0-9_]{2,63})$/.test(b.error_code)||
   !Number.isSafeInteger(b.duration_ms)||b.duration_ms<0||b.duration_ms>3600000)
   return deny('INVALID_TELEMETRY_SCHEMA');
+ if(b.operation_id!==undefined&&!operationEventValid(b))return deny('INVALID_OPERATION_ID');
+ const t=now();
+ const persist=async statement=>{
+  if(b.operation_id===undefined)return await statement.run();
+  return await db.batch([statement,operationStatement(db,b,t)]);
+ };
  // Rate guard is per ephemeral browser session, without IP or other device tracking.
  const count=await db.prepare('SELECT COUNT(*) AS n FROM pro_telemetry WHERE session_id=? AND happened_at>?')
   .bind(b.session_id,now()-3600).first();
@@ -114,14 +121,14 @@ async function submitTelemetry(req,db){
    'SELECT COUNT(*) AS n FROM pro_telemetry_progress WHERE session_id=? AND happened_at>?')
    .bind(b.session_id,now()-3600).first();
   if((recent?.n||0)>=240)return deny('EVENT_RATE_LIMIT',429);
-  await db.prepare(`INSERT OR IGNORE INTO pro_telemetry_progress
+  await persist(db.prepare(`INSERT OR IGNORE INTO pro_telemetry_progress
    (event_id,session_id,happened_at,feature,stage,duration_ms) VALUES(?,?,?,?,?,?)`)
-   .bind(b.event_id,b.session_id,now(),b.feature,b.stage,b.duration_ms).run();
+   .bind(b.event_id,b.session_id,t,b.feature,b.stage,b.duration_ms));
   return j({ok:true},202);
  }
- await db.prepare(`INSERT OR IGNORE INTO pro_telemetry
+ await persist(db.prepare(`INSERT OR IGNORE INTO pro_telemetry
  (event_id,session_id,happened_at,event_kind,feature,stage,error_code,duration_ms) VALUES(?,?,?,?,?,?,?,?)`)
- .bind(b.event_id,b.session_id,now(),b.kind,b.feature,b.stage,b.error_code,b.duration_ms).run();
+ .bind(b.event_id,b.session_id,t,b.kind,b.feature,b.stage,b.error_code,b.duration_ms));
  return j({ok:true},202);
 }
 // D1 uses positional placeholders; isolated, bounded personal data storage.
@@ -298,6 +305,7 @@ async function api(req,env,path,url){
    return j({ok:true,reauthentication_required:true},200,{'Set-Cookie':cookieClear()});
   }
   if(path==='/api/admin/dashboard'&&method==='GET')return j(await dashboard(db));
+   if(path==='/api/admin/operations'&&method==='GET')return j(await operationSummary(db,now()));
   if(path==='/api/admin/visits'&&method==='GET')return j(await visits(db,url));
   if(path==='/api/admin/diagnostics'&&method==='GET'){
    const data=await diagnostics(db,url);return data?j(data):deny('INVALID_ERROR_FILTER');
