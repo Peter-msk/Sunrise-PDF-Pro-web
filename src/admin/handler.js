@@ -2,6 +2,8 @@ import {ADMIN_HTML,ADMIN_CSS,ADMIN_JS,CONTACT_HTML,NEWS_HTML,PUBLIC_JS} from './
 import {publicPublicationRecord} from '../public-release-copy.js';
 import {validSecrets,verifyPassword,createSession,findSession,destroySession,cookieSet,cookieClear,verifyCsrf,originMatches,isLocked,recordLoginFailure,loginSubject,sessionCsrf,now} from './auth.js';
 
+import {ITERATIONS,rootConfigured,legacyConfigured,getAccount,verifySetupToken,sessionSecret,makeAccount,verifyProof,registerAccount,replaceAccount,SETUP_HTML,CREDENTIAL_JS,SETUP_JS} from './setup.js';
+
 const SEC_HEADERS={
  'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
  'X-Frame-Options':'DENY','Permissions-Policy':'camera=(), microphone=(), geolocation=(), local-fonts=()',
@@ -52,7 +54,7 @@ async function login(req,env){
  const password=typeof input.password==='string'?input.password:'';
  // A wrong username still runs expensive verification to reduce account enumeration.
  let valid=false;
- try{valid=await verifyPassword(password,await initialHash(env,db));}catch{valid=false;}
+ try{valid=env.ADMIN_BROWSER_ACCOUNT?await verifyProof(env,env.ADMIN_BROWSER_ACCOUNT,input.proof):await verifyPassword(password,await initialHash(env,db));}catch{valid=false;}
  if(!valid||username!==env.ADMIN_USER){
   await recordLoginFailure(db,subject);await audit(db,'login','','','denied');
   return deny('INVALID_CREDENTIALS',401);
@@ -60,6 +62,29 @@ async function login(req,env){
  await db.prepare('DELETE FROM pro_admin_login_limits WHERE subject_hash=?').bind(subject).run();
  const session=await createSession(db,env);await audit(db,'login');
  return j({ok:true,csrf:session.csrf,expires_at:session.expires_at},200,{'Set-Cookie':cookieSet(session.raw)});
+}
+async function setupStatus(env,db){
+ const account=await getAccount(db);
+ const old=await db.prepare("SELECT value FROM pro_admin_settings WHERE key='password_hash'").first();
+ const configured=Boolean(account||old||legacyConfigured(env));
+ return j({configured,setup_enabled:!configured&&rootConfigured(env)});
+}
+async function setup(req,env,db){
+ if(!originMatches(req))return deny('ORIGIN_DENIED',403);
+ if(!rootConfigured(env))return deny('ADMIN_SETUP_DISABLED',503);
+ if(legacyConfigured(env)||await getAccount(db))return deny('ADMIN_ALREADY_CONFIGURED',409);
+ const old=await db.prepare("SELECT value FROM pro_admin_settings WHERE key='password_hash'").first();
+ if(old)return deny('ADMIN_ALREADY_CONFIGURED',409);
+ let b;try{b=await readBody(req,4096);}catch(e){return deny(e.message,400);}
+ const subject=await loginSubject(req,{ADMIN_SESSION_SECRET:await sessionSecret(env)});
+ if(await isLocked(db,subject))return deny('LOGIN_TEMPORARILY_LOCKED',429);
+ if(!await verifySetupToken(env,b.token)){await recordLoginFailure(db,subject);await audit(db,'admin_setup','','','denied');return deny('INVALID_SETUP_TOKEN',403);}
+ const account=await makeAccount(env,b.username,b.proof,b.salt);
+ if(!account)return deny('INVALID_SETUP_INPUT',400);
+ if(!await registerAccount(db,account))return deny('ADMIN_ALREADY_CONFIGURED',409);
+ await db.prepare('DELETE FROM pro_admin_login_limits WHERE subject_hash=?').bind(subject).run();
+ await audit(db,'admin_setup');
+ return j({ok:true},201);
 }
 async function publicationsFeed(db){
  const rows=await db.prepare(`SELECT id,kind,title,body,first_published_at FROM pro_publications
@@ -209,6 +234,16 @@ async function system(env,db){
 }
 async function changePassword(req,db,env){
  let b;try{b=await readBody(req,4096);}catch(e){return deny(e.message,400);}
+ if(env.ADMIN_BROWSER_ACCOUNT){
+  const old=env.ADMIN_BROWSER_ACCOUNT;
+  if(!await verifyProof(env,old,b.current_proof))return deny('INVALID_CREDENTIALS',401);
+  const next=await makeAccount(env,old.username,b.new_proof,b.new_salt);
+  if(!next||next.salt===old.salt)return deny('INVALID_PASSWORD_INPUT');
+  if(!await replaceAccount(db,old,next))return deny('PASSWORD_CHANGE_CONFLICT',409);
+  await db.prepare('DELETE FROM pro_admin_sessions').run();
+  await audit(db,'password_changed');
+  return j({ok:true,reauthentication_required:true},200,{'Set-Cookie':cookieClear()});
+ }
  if(typeof b.current_password!=='string'||typeof b.new_password!=='string'||b.new_password.length<14||b.new_password.length>256)return deny('INVALID_PASSWORD_INPUT');
  if(!await verifyPassword(b.current_password,await initialHash(env,db)))return deny('INVALID_CREDENTIALS',401);
  const salt=crypto.getRandomValues(new Uint8Array(16));const bytes=new TextEncoder().encode(b.new_password);
@@ -229,13 +264,19 @@ async function api(req,env,path,url){
   if(path==='/api/public/updates'&&methodOnly(req,['GET','HEAD']))return j(await publicationsFeed(db));
   if(path==='/api/public/telemetry'&&method==='POST')return submitTelemetry(req,db);
   if(path==='/api/public/inquiries'&&method==='POST')return saveInquiry(req,db);
+  if(path==='/api/admin/setup-status'&&method==='GET')return setupStatus(env,db);
+  if(path==='/api/admin/setup'&&method==='POST')return setup(req,env,db);
+  if(path==='/api/admin/auth-challenge'&&method==='GET'){
+   if(!validSecrets(env))return deny('ADMIN_AUTH_NOT_CONFIGURED',503);
+   return j(env.ADMIN_BROWSER_ACCOUNT?{mode:'browser',salt:env.ADMIN_BROWSER_ACCOUNT.salt,iterations:ITERATIONS}:{mode:'legacy'});
+  }
   if(path==='/api/admin/login'&&method==='POST'){
    if(!validSecrets(env))return deny('ADMIN_AUTH_NOT_CONFIGURED',503);
    return login(req,env);
   }
   if(!path.startsWith('/api/admin/'))return deny('ROUTE_NOT_FOUND',404);
   if(!validSecrets(env))return deny('ADMIN_AUTH_NOT_CONFIGURED',503);
-  const session=await findSession(req,db);
+  const session=await findSession(req,db,env);
   if(!session)return deny('ADMIN_LOGIN_REQUIRED',401);
   if(method!=='GET'&&method!=='HEAD'&&(!originMatches(req)||!await verifyCsrf(req,session)))return deny('CSRF_DENIED',403);
   if(path==='/api/admin/session'&&method==='GET')return j({authenticated:true,csrf:await sessionCsrf(req,env),expires_at:session.expires_at});
@@ -282,6 +323,9 @@ async function api(req,env,path,url){
 export async function handleProAdmin(req,env){
  const url=new URL(req.url),p=url.pathname,method=req.method.toUpperCase();
  if(p.startsWith('/api/admin/')||p.startsWith('/api/public/'))return api(req,env,p,url);
+ if(p==='/admin/static/credential.js')return methodOnly(req,['GET','HEAD'])?file(CREDENTIAL_JS,'text/javascript; charset=utf-8'):deny('METHOD_NOT_ALLOWED',405);
+ if(p==='/admin/static/setup.js')return methodOnly(req,['GET','HEAD'])?file(SETUP_JS,'text/javascript; charset=utf-8'):deny('METHOD_NOT_ALLOWED',405);
+ if(p==='/admin/setup'||p==='/admin/setup/')return methodOnly(req,['GET','HEAD'])?html(SETUP_HTML):deny('METHOD_NOT_ALLOWED',405);
  if(p==='/admin/static/admin.css')return methodOnly(req,['GET','HEAD'])?file(ADMIN_CSS,'text/css; charset=utf-8'):deny('METHOD_NOT_ALLOWED',405);
  if(p==='/admin/static/admin.js')return methodOnly(req,['GET','HEAD'])?file(ADMIN_JS,'text/javascript; charset=utf-8'):deny('METHOD_NOT_ALLOWED',405);
  if(p==='/admin/static/public.js')return methodOnly(req,['GET','HEAD'])?file(PUBLIC_JS,'text/javascript; charset=utf-8'):deny('METHOD_NOT_ALLOWED',405);
@@ -292,7 +336,7 @@ export async function handleProAdmin(req,env){
  if(isLogin||page){
   if(!methodOnly(req,['GET','HEAD']))return deny('METHOD_NOT_ALLOWED',405);
   if(!isLogin){if(!dbReady(env)||!validSecrets(env))return deny('ADMIN_NOT_CONFIGURED',503);
-   try{if(!await findSession(req,env.PRO_ADMIN_DB))return Response.redirect(new URL('/admin/login/',req.url),302);}catch{return deny('ADMIN_OPERATION_FAILED',500);}
+   try{if(!await findSession(req,env.PRO_ADMIN_DB,env))return Response.redirect(new URL('/admin/login/',req.url),302);}catch{return deny('ADMIN_OPERATION_FAILED',500);}
   }
   return html(ADMIN_HTML);
  }
