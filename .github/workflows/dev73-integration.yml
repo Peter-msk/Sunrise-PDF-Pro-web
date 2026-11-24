@@ -33,3 +33,5 @@ jobs:
         run: npm --prefix browser-local exec -- playwright install --with-deps chromium
       - name: Built WASM smoke test with public fixture only
         run: npm --prefix browser-local run test:wasm
+      - name: Desktop and mobile admin browser acceptance with synthetic API
+        run: node browser-local/tests/dev73-admin-browser.mjs
