@@ -1,3 +1,4 @@
+import {purgeRetention} from './retention.js';
 import {ADMIN_HTML,ADMIN_CSS,ADMIN_JS,CONTACT_HTML,NEWS_HTML,PUBLIC_JS} from './generated-assets.js';
 import {publicPublicationRecord} from '../public-release-copy.js';
 import {validSecrets,verifyPassword,createSession,findSession,destroySession,cookieSet,cookieClear,verifyCsrf,originMatches,isLocked,recordLoginFailure,loginSubject,sessionCsrf,now} from './auth.js';
@@ -314,12 +315,7 @@ async function api(req,env,path,url){
   if(path==='/api/admin/security'&&method==='GET')return j(await security(db));
   if(path==='/api/admin/password'&&method==='POST')return await changePassword(req,db,env);
   if(path==='/api/admin/retention/purge'&&method==='POST'){
-   const before=now()-30*86400;
-   await db.prepare('DELETE FROM pro_telemetry WHERE happened_at<?').bind(before).run();
-   await db.prepare('DELETE FROM pro_telemetry_progress WHERE happened_at<?').bind(before).run();
-   await db.prepare('DELETE FROM pro_admin_sessions WHERE expires_at<?').bind(now()).run();
-   await db.prepare('DELETE FROM pro_admin_login_limits WHERE window_start<?').bind(now()-86400).run();
-   await db.prepare("DELETE FROM pro_inquiries WHERE status='resolved' AND updated_at<?").bind(now()-90*86400).run();
+   await purgeRetention(db,now(),'manual');
    await audit(db,'retention_purge');return j({ok:true,telemetry_retention_days:30,resolved_inquiry_retention_days:90});
   }
   return deny('ROUTE_NOT_FOUND',404);
