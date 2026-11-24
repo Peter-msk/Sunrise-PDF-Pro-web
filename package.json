@@ -4,8 +4,8 @@
   "version": "0.41.0-dev1",
   "type": "module",
   "scripts": {
-    "build": "npm --prefix browser-local ci --no-audit --no-fund --ignore-scripts && npm --prefix browser-local test && npm --prefix browser-local run build && npm --prefix browser-local run verify:dist && node scripts/verify-browser-build.mjs && node scripts/test-worker-assets.mjs",
-    "test": "npm --prefix browser-local test && node scripts/test-worker-assets.mjs"
+    "build": "node --test scripts/test-admin-setup.mjs && npm --prefix browser-local ci --no-audit --no-fund --ignore-scripts && npm --prefix browser-local test && npm --prefix browser-local run build && npm --prefix browser-local run verify:dist && node scripts/verify-browser-build.mjs && node scripts/test-worker-assets.mjs",
+    "test": "node --test scripts/test-admin-setup.mjs && npm --prefix browser-local test && node scripts/test-worker-assets.mjs"
   },
   "devDependencies": {}
 }
