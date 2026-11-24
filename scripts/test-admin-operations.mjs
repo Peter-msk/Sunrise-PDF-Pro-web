@@ -8,7 +8,7 @@ const t=2000000000,uuid=n=>'00000000-0000-4000-8000-'+n.toString(16).padStart(12
 function fixture(){
  const sql=new DatabaseSync(':memory:');sql.exec(schema);sql.exec(schema);
  const db={prepare:q=>({bind:(...a)=>({run:()=>sql.prepare(q).run(...a),all:async()=>({results:sql.prepare(q).all(...a)}),first:async()=>sql.prepare(q).get(...a)})})};
- const send=(kind,n,opts={})=>operationStatement(db,{operation_id:uuid(n),session_id:uuid(999),feature:'hwp',kind,stage:'render',error_code:'NONE',duration_ms:0,...opts},opts.time??t).run();
+ const send=(kind,n,opts={})=>operationStatement(db,{operation_id:uuid(n),session_id:uuid(999),feature:'hwp',kind,stage:'render',error_code:'NONE',duration_ms:0,...opts},opts.time??t,{allowNew:opts.allowNew!==false}).run();
  return {db,send,row:n=>sql.prepare('SELECT * FROM pro_conversion_operations WHERE operation_id=?').get(uuid(n)),close:()=>sql.close()};
 }
 test('valid operation ids only',()=>{
@@ -57,5 +57,13 @@ test('new-operation hourly guard still permits existing attempt terminal',()=>{
  const f=fixture();try{
  for(let n=1;n<=301;n++)f.send('convert_start',n);
  assert.equal(f.row(301),undefined);f.send('convert_success',1,{duration_ms:1});assert.equal(f.row(1).outcome,'success');
+ }finally{f.close();}
+});
+
+test('legacy rate cap fallback completes known attempts without inserting new ones',()=>{
+ const f=fixture();try{
+ f.send('convert_start',1);f.send('convert_success',1,{duration_ms:10,allowNew:false});
+ f.send('convert_failure',2,{duration_ms:20,allowNew:false});
+ assert.equal(f.row(1).outcome,'success');assert.equal(f.row(2),undefined);
  }finally{f.close();}
 });
