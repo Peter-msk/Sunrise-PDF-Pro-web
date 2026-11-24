@@ -13,7 +13,7 @@ const safeEqual=(a,b)=>{
 };
 export const sha256=async str=>hex(await crypto.subtle.digest('SHA-256',encoder.encode(str)));
 export const now=()=>Math.floor(Date.now()/1000);
-export const validSecrets=env=>typeof env.ADMIN_USER==='string'&&env.ADMIN_USER.length>0&&
+export const validSecrets=env=>Boolean(env.ADMIN_BROWSER_ACCOUNT&&typeof env.ADMIN_SESSION_SECRET==='string'&&env.ADMIN_SESSION_SECRET.length>=64)||typeof env.ADMIN_USER==='string'&&env.ADMIN_USER.length>0&&
  typeof env.ADMIN_SESSION_SECRET==='string'&&env.ADMIN_SESSION_SECRET.length>=64&&
  typeof env.ADMIN_PASSWORD_HASH==='string'&&/^pbkdf2-sha256\$\d+\$[0-9a-f]{32,}\$[0-9a-f]{64}$/i.test(env.ADMIN_PASSWORD_HASH);
 export async function verifyPassword(input,stored){
@@ -41,9 +41,10 @@ export async function createSession(db,env){
   .bind(await sha256(raw),await sha256(csrf),issued,issued+TTL).run();
  return {raw,csrf,expires_at:issued+TTL};
 }
-export async function findSession(req,db){
+export async function findSession(req,db,env){
  const raw=cookieValue(req);if(!raw)return null;
  const stored=await db.prepare('SELECT token_hash,csrf_hash,expires_at FROM pro_admin_sessions WHERE token_hash=? AND expires_at>?').bind(await sha256(raw),now()).first();
+ if(stored&&env?.ADMIN_BROWSER_ACCOUNT&&!safeEqual(stored.csrf_hash,await sha256(await sessionCsrf(req,env))))return null;
  return stored||null;
 }
 export async function destroySession(req,db){
