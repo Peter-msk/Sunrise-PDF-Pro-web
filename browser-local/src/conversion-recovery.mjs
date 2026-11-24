@@ -5,7 +5,7 @@ import {inputKind} from './input-types.js';
  * any other document. The user's per-file click is the explicit consent to
  * create an image PDF: never infer consent from a failure or switch defaults.
  */
-const RECOVERABLE_ERROR = /\b(?:SVG_FILTER_EFFECT_UNSUPPORTED|SVG_FILTER_PIPELINE_FAILED|SVG_VECTOR_RENDER_FAILED|PDF_STREAM_TIMEOUT|FONT_GLYPH_MISSING|SVG_RENDER_SOURCE_CHARS_LIMIT)\b/;
+const RECOVERABLE_ERROR = /\b(?:SVG_FILTER_EFFECT_UNSUPPORTED|SVG_FILTER_PIPELINE_FAILED|SVG_VECTOR_RENDER_FAILED|PDF_STREAM_TIMEOUT|FONT_FAMILY_OR_VARIANT_UNAVAILABLE|FONT_GLYPH_MISSING|SVG_RENDER_SOURCE_CHARS_LIMIT)\b/;
 
 export function recoveryCode(error) {
  const message=String(error||'');
@@ -83,6 +83,10 @@ export function localFailureAdvice(error){
   return '이 문서의 그림·도형을 기본 출력 방식으로 끝까지 처리하지 못했습니다. 이 파일만 이미지 PDF로 다시 변환할 수 있습니다. 이미지 PDF는 글자 검색이 불가능하며 원본과 결과를 비교해야 합니다.';
  if(/\bSVG_FILTER_EFFECT_UNSUPPORTED\b/.test(message))
   return '문서에 기본 출력 방식으로 처리할 수 없는 그림 효과가 있습니다. 혼합 방식으로 재시도하면 일부 페이지가 이미지로 저장되어 글자 검색이 제한될 수 있습니다. 저장 후 원본과 비교해 주세요.';
+ if(/\bFONT_FAMILY_OR_VARIANT_UNAVAILABLE\b/.test(message))
+  return '원본 글꼴 또는 굵기·기울임 스타일을 찾지 못했습니다. 해당 TTF/OTF를 추가한 뒤 기본 방식으로 재시도하세요. 필요한 경우 이 파일만 이미지 PDF로 변환할 수 있으며 글자 검색이 불가능합니다.';
+ if(/\bPDF_STREAM_TIMEOUT\b/.test(message))
+  return 'PDF 저장 완료 신호를 받지 못했습니다. 불완전한 PDF는 제공하지 않습니다. 해당 파일만 이미지 PDF로 다시 시도할 수 있습니다.';
  if(/\bFONT_GLYPH_MISSING\b/.test(message))
   return '원본 글꼴이 부족해 일부 문자를 출력하지 못했습니다. 원본 글꼴을 추가하거나 이미지 방식으로 재시도하세요. 이미지 방식은 글자 검색을 지원하지 않습니다.';
  if(/\bSVG_RENDER_SOURCE_CHARS_LIMIT\b/.test(message))
