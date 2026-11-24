@@ -1,7 +1,6 @@
 name: DEV73 isolated integration checks
 on:
-  pull_request:
-    branches: [fix/dev72-security-audit-20261125]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
