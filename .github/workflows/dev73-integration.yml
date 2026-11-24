@@ -25,5 +25,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
+      - name: Install PDF inspection utilities
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - name: Browser converter tests and distribution
         run: npm run build
+      - name: Install Chromium for local public-fixture test
+        run: npm --prefix browser-local exec -- playwright install --with-deps chromium
+      - name: Built WASM smoke test with public fixture only
+        run: npm --prefix browser-local run test:wasm
