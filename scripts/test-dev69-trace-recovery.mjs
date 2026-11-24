@@ -30,11 +30,11 @@ test('trace observer correlates DEV68 operations and reports only accepted trace
 test('recovery keeps professional default and requires explicit per-file or bulk choice',()=>{
  const item=(error,engine='professional',name='sample.hwp',state='failed')=>({state,error,lastEngine:engine,file:{name}});
  const family=item('FONT_FAMILY_OR_VARIANT_UNAVAILABLE'),svg=item('SVG_FILTER_EFFECT_UNSUPPORTED'),hybrid=item('SVG_FILTER_EFFECT_UNSUPPORTED','hybrid-filter'),timeout=item('PDF_STREAM_TIMEOUT'),done=item('FONT_FAMILY_OR_VARIANT_UNAVAILABLE','professional','sample.hwp','done'),xlsx=item('FONT_FAMILY_OR_VARIANT_UNAVAILABLE','professional','sample.xlsx'),ready=item('FONT_FAMILY_OR_VARIANT_UNAVAILABLE','professional','sample.hwp','ready');
- assert.ok(canRecoverFile(family));assert.equal(recoveryEngine(family),'compat-raster');
+ assert.equal(canRecoverFile(family),false);assert.equal(recoveryEngine(family),null);
  assert.equal(recoveryEngine(svg),'hybrid-filter');assert.equal(recoveryEngine(hybrid),'compat-raster');
  assert.equal(recoveryEngine(timeout),'compat-raster');assert.ok(!canRecoverFile(xlsx)&&!canRecoverFile(done));
  assert.equal(planConversion([family,ready],'professional').engine,'professional');
- assert.equal(planBulkRecovery([family,svg,done,xlsx,ready]).pending.length,2);
- assert.match(localFailureAdvice(family.error),/TTF\/OTF/);assert.match(localFailureAdvice(family.error),/글자 검색이 불가능/);
+ assert.equal(planBulkRecovery([family,svg,done,xlsx,ready]).pending.length,1);
+ assert.match(localFailureAdvice(family.error),/TTF\/OTF/);assert.match(localFailureAdvice(family.error),/원본 모양을 보장하지 못하므로/);
  assert.match(localFailureAdvice(timeout.error),/불완전한 PDF/);
 });
