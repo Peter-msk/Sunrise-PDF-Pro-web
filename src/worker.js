@@ -110,12 +110,15 @@ export default {
       return traceDev4Route(request,env);
     if(path==='/api/public/trace-dev4')return traceDev4Route(request,env);
     if(path==='/admin/traces'||path==='/admin/traces/'||path.startsWith('/api/admin/trace-dev4/')){
-      if(!env?.PRO_ADMIN_DB?.prepare||!validSecrets(env))return new Response('ADMIN_NOT_CONFIGURED',{status:503});
-      let session;try{session=await findSession(request,env.PRO_ADMIN_DB,env);}catch{return new Response('ADMIN_SESSION_FAILED',{status:500});}
-      if(!session)return path.startsWith('/admin/traces')?Response.redirect(new URL('/admin/login/',request.url),302):new Response('ADMIN_LOGIN_REQUIRED',{status:401});
-      if(!['GET','HEAD'].includes(method)&&(!originMatches(request)||!await verifyCsrf(request,session)))
-        return new Response('CSRF_DENIED',{status:403});
-      return traceDev4Route(request,env);
+      const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY','Content-Type':'application/json; charset=utf-8'};
+      const denied=(error,status)=>new Response(JSON.stringify({error}),{status,headers});
+      try{
+        if(!env?.PRO_ADMIN_DB?.prepare||!validSecrets(env))return denied('ADMIN_NOT_CONFIGURED',503);
+        const session=await findSession(request,env.PRO_ADMIN_DB,env);
+        if(!session)return path.startsWith('/admin/traces')?new Response(null,{status:302,headers:{...headers,Location:new URL('/admin/login/',request.url).href}}):denied('ADMIN_LOGIN_REQUIRED',401);
+        if(!['GET','HEAD'].includes(method)&&(!originMatches(request)||!await verifyCsrf(request,session)))return denied('CSRF_DENIED',403);
+        return await traceDev4Route(request,env);
+      }catch{return denied('TRACE_ADMIN_OPERATION_FAILED',500);}
     }
     const adminResponse=await handleProAdmin(request,env);
     if(adminResponse){
