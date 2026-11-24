@@ -1,62 +1,87 @@
-# Sunrise PDF PRO (Web) — DEV26 Final Integrated Source
+# Sunrise PDF PRO (Web) — DEV73 개발 마감 후보
 
-> **개발 후보 / NO DEPLOY.** 본 브랜치의 코드는 검증된 DEV26 누적 패치가 **실제 소스 파일에 적용된 상태**입니다. `main` 병합, Cloudflare 운영 배포 및 D1 변경은 이번 통합 범위에 없습니다.
+> CODE COMPLETE / OWNER ACCEPTANCE PENDING / NO DEPLOY
+>
+> 개발 범위 DEV66~DEV73의 누적 소스와 마지막 시험 코드 수정이 반영된 후보입니다. 사용자가 최종 검증을 직접 수행하기로 결정했습니다. 새 회귀 시험, Actions 실행, main 병합, 운영 D1 변경 및 Cloudflare 배포는 하지 않았습니다.
 
-## 기준 및 증거
+## 인수 기준
 
-| 항목 | 값 |
-| --- | --- |
-| 저장소 | `Peter-msk/Sunrise-PDF-Pro-web` |
-| 원본 베이스 | R65 `2a11edbdb3d1413b3ef4a6eccb150dd442c2f7cf` |
-| 검토된 QA 부모 | `8961f8fbf697fcdf5c1c9ce70734f48af11d2354` |
-| 최초 실소스 통합 커밋 | `615e8a17016ed474cc0639d6f83f82a840ef7c84` |
-| QA 근거 | [Chromium + font/hybrid 검사 PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web/actions/runs/43181829604) |
-| 소스 통합 근거 | [누적 패치 + 전체 빌드 PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web/actions/runs/43189647119) |
-| 기존 운영 URL | https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/ |
+- 저장소: `Peter-msk/Sunrise-PDF-Pro-web`
+- 최종 개발 브랜치: `release/dev73-code-complete-20261125`
+- 기존 버전 표기: `0.41.0-dev1` (정식 출시 버전은 별도 승인 시 결정)
+- 기존 운영 URL: https://sunrise-pdf-pro-web.ko-pg.workers.dev/local/
+- 운영 관리자 URL: https://sunrise-pdf-pro-web.ko-pg.workers.dev/admin/
+- DEV73 직전 전체 자동 시험: [629/629 PASS, 빌드 PASS](https://github.com/Peter-msk/Sunrise-PDF-Pro-web/actions/runs/45425221846). 이 실행은 Chromium 설치에서 실패했으므로 전체 워크플로 PASS가 아닙니다.
+- [후속 CI](https://github.com/Peter-msk/Sunrise-PDF-Pro-web/actions/runs/45425728870): Chromium 설치 성공, 숨겨진 QA 버튼의 다운로드 대기에서 실패, 관리자 브라우저 시험 미실행. 시험 코드 수정은 `70fa41c423ab51a93bba521229a8d92e658d54cb`에 반영. 이후 전체 E2E 재실행 없음.
 
-### 엔진과 현재 기능
+## 구현 범위
 
-- 브라우저 내부 `@rhwp/core@0.8.7` WASM의 HWP/HWPX 페이지 SVG를 PDFKit으로 출력.
-- 기본 `professional` 모드는 글자/도형 보존을 우선하고, 지원되지 않는 SVG/글꼴 오류를 **명시적으로 실패**시킴. 임의 이미지 출력 전환 금지.
-- 사용자 선택 `hybrid-filter`: 지원되지 않는 SVG 필터가 있는 페이지에 한하여 이미지 출력. 이미지로 바뀐 페이지는 검색 가능 텍스트가 소실될 수 있음.
-- 사용자 선택 `compat-raster`: 전체 페이지 이미지 PDF. 사용자 동의 후 실패한 HWP/HWPX 파일 하나만 복구 재시도 가능.
-- 추가 입력 `xls`, `xlsx`, `jpg`, `jpeg`, `png`. **PPT/PPTX 미지원**.
-- PC 설치 글꼴 접근은 브라우저 기능/사용자 권한에 의존. TTC는 PostScript 글꼴 이름을 식별하여 사용. 글꼴 검색 성공 자체가 PDF의 완전한 원문 동일성을 증명하지는 않음.
-- 대량 문서 일괄 변환, 개별 PDF, ZIP, 취소, 진행 표시 및 진단 이벤트 지원. 원본 문서가 서버로 업로드되는 일반 변환 경로는 없음.
+| 단계 | 개발 내용 |
+|---|---|
+| DEV66 | 관리자 계정 최초 설정, 인증, 세션, 입력 및 예외 처리 |
+| DEV67 | 방문 통계 기간 경계, 공통 데이터 보존 정책 |
+| DEV68 | 개별 변환 작업 UUID, 종료 상태 및 중복 방지, 통계 API |
+| DEV69 | 작업과 오류 추적 연결, 오류 분류, 명시적 복구 |
+| DEV70 | 문의 접수 제한, 게시 종료일 보존, 검색·상태 필터 |
+| DEV71 | 관리자 대시보드, 그래프, 반응형 CSS, 화면 전환 보호 |
+| DEV72 | 로그인 실패 원자적 기록, JSON 요청 제한, 보안 헤더, 문의 인덱스 |
+| DEV73 | 통합 시험 결함 수정, 브라우저 시험 보완, 인수 절차 정리 |
 
-## 개발 브랜치에서 검증·빌드
+## 제품 계약
 
-Node.js 24 기준으로 검증됨. 저장소 루트에서:
+- 브라우저 내부 `@rhwp/core@0.9.0` WASM 기반 HWP/HWPX 및 XLS/XLSX/JPG/JPEG/PNG → PDF. PPT/PPTX 미지원.
+- 기본 professional 출력은 원본 글자·도형 보존 우선. 지원되지 않는 경우 명시적 실패; 자동 이미지 변환 금지.
+- 혼합·이미지 PDF는 사용자의 명시적 선택으로만 실행. 원본 글꼴 누락(FONT_FAMILY_OR_VARIANT_UNAVAILABLE)은 자동 복구 대상이 아니며 원본 글꼴을 추가한 뒤 재시도.
+- 원본 문서, 파일명, 경로, 본문은 일반 변환·익명 진단 전송 대상이 아님.
+- 기존 관리자 계정, ADMIN_SETUP_KEY, 운영 D1 보존. PDF Editor와 별도 서비스.
 
-```sh
-npm run build
-# 빌드와 테스트 후 결과물 및 Worker 정적 자산 검증
-npm --prefix browser-local run verify:dist
-node scripts/verify-browser-build.mjs
-node scripts/test-worker-assets.mjs
+## Windows CMD 인수 및 빌드
+
+Node.js 22.16.0 환경을 권장합니다. Git과 npm이 필요합니다.
+
+```cmd
+git clone --branch release/dev73-code-complete-20261125 --single-branch https://github.com/Peter-msk/Sunrise-PDF-Pro-web.git
+cd Sunrise-PDF-Pro-web
+npm run build:release
 ```
 
-**주의:** 이 브랜치에서는 `.release/build-dev26-cloudflare.sh`를 다시 실행하지 마세요. 이 스크립트는 R65 원본에 패치를 최초로 적용하기 위한 도구이며, 이미 패치가 반영된 소스에서 재실행하면 중복 적용 오류가 발생합니다.
+`build:release`는 기존 잠금 파일 기준 의존성 설치와 배포용 Vite 빌드만 수행합니다. 전체 검증이 포함된 기존 `npm run build`도 유지됩니다. 출력 디렉터리는 `browser-local/dist`입니다.
 
-`npx wrangler deploy`, `npm run deploy`, 배포 워크플로의 `workflow_dispatch`는 승인 전 실행하지 않습니다. 기본 워크플로의 실제 운영 배포 스텝은 이 개발 브랜치에서 사용하지 않습니다.
+## 사용자 최종 검증 (필요할 때 직접 실행)
 
-## 검증과 품질 승인을 구분
+```cmd
+npm test
+npm --prefix browser-local run verify:dist
+node scripts/verify-browser-build.mjs
+npm --prefix browser-local exec -- playwright install chromium
+npm run test:browser
+```
 
-기존 QA에서 PASS인 것:
-- 누적 패치 해시·적용 순서, Node 단위 테스트, PDF/WASM 정적 자산 빌드
-- 공개 HWP/HWPX 샘플의 Chromium 기본 벡터·하이브리드 PDF 변환
-- TTC 개별 서체 선택 및 PDFKit 임베딩, 브라우저 hidden/frozen-resume 실험
-- 운영 health/WASM/번들 스모크(운영에 이미 배포된 이전 버전 대상)
+PDF 문자·색상 검증 3개는 Poppler의 pdftotext, pdftoppm이 PATH에 있어야 실행됩니다. 미실행은 PASS가 아닙니다. 사용자 실제 HWP/HWPX는 로컬에서만 검증하세요.
 
-**추가 확인이 필요한 것:**
-- 실제 Windows Chrome/Edge의 글꼴 접근·원문 동일성, 장시간 최소화·절전·탭 폐기
-- 고객의 다쪽 HWP/HWPX 표·도면·글꼴과 한컴 PDF 기준본의 페이지별 비교
-- `SVG_FILTER_EFFECT_UNSUPPORTED`, `PDF_STREAM_TIMEOUT` 실제 실패 원본의 품질/장기 반복 검증
-- 관리자 문서 오픈 오류 4건 재현과 관리자 인증·CSRF·권한·7개 화면 E2E
-- 정식 한컴 엔진 연동 요구와 현재 browser-only 아키텍처의 제품 계약 간 차이
+```cmd
+npm --prefix browser-local run test:hwp -- "C:\QA\sample.hwpx" "C:\QA\reference.pdf"
+```
 
-최종 출시에 대한 PASS는 위 증거가 추가되고 사용자의 명시적 승인이 있을 때만 선언합니다.
+기존 DEV73 워크플로는 이 후보 브랜치에서 수동 실행 전용으로 변경되었습니다. GitHub UI의 workflow_dispatch는 기본 브랜치에서 워크플로가 등록되어야 사용할 수 있으므로 검증은 위 CMD 방식으로도 가능합니다.
 
-## 운영 보호
+## 검증 승인 후 배포 순서 (자동 실행하지 않음)
 
-기존 Worker `sunrise-pdf-pro-web` 및 별도 `sunrise-pdf-editor`는 이번 개발 브랜치에서 변경되지 않았습니다. 운영 장애 시의 롤백 대상은 해당 PDF PRO Worker로 제한합니다. 운영 D1, 관리자 인증 비밀값 및 실사용 문서 정보는 형상관리 파일에 포함하지 않습니다.
+1. Cloudflare Dashboard에서 실제 활성 Worker 버전, D1 백업 또는 Time Travel 복구 지점, 관리자 비밀키 존재 여부를 확인합니다. 비밀값을 복사하거나 새로 생성하지 않습니다.
+2. 아래 두 추가형 마이그레이션을 **정확한 PDF PRO D1**에 순서대로 적용합니다. 이미 존재하는 경우에도 재적용할 수 있도록 IF NOT EXISTS를 사용합니다.
+3. 신규 테이블과 인덱스 존재 및 기존 관리자 계정 보존을 확인한 후 배포합니다.
+4. 후보 브랜치에서 빌드한 산출물을 사용합니다. 이전 main은 오래된 상태이므로 검토 없이 main에서 배포하지 않습니다.
+5. 실제 운영 서비스와 관리자 7개 메뉴의 동작, 로그인, 고객 문의, 공지 및 변환을 확인합니다. 문제가 있으면 배포 직전 확보한 Worker 버전으로 롤백하고 추가형 DB 스키마를 삭제하지 않습니다.
+
+```cmd
+npx wrangler whoami
+npx wrangler d1 execute sunrise-pdf-pro-admin --remote --file=migrations/dev68-operation-telemetry.sql
+npx wrangler d1 execute sunrise-pdf-pro-admin --remote --file=migrations/dev72-inquiry-index.sql
+npx wrangler d1 execute sunrise-pdf-pro-admin --remote --command="SELECT name,type FROM sqlite_master WHERE name IN ('pro_conversion_operations','idx_pro_inquiries_email_time')"
+```
+
+위 명령은 운영 DB 변경을 포함하므로 최종 검증 승인 전에는 실행하지 않습니다. 배포 또한 명시적으로 별도 수행합니다. 기존 비밀키 및 환경 변수 보존을 확인하고 `wrangler.jsonc` 대상 Worker에만 배포합니다.
+
+**남은 수락시험:** 실제 Windows Chrome/Edge, 모바일 해상도 및 실제 기기, 공개 HWPX E2E, 실제 사용자 문서의 원본 대비 출력 품질, 운영 마이그레이션 및 배포 후 동작. 최근 150건 범위의 문의·공지 검색, 관리자 메모 중심 회신(자동 메일 발송 미구현), 고정 proof 재전송 방어 고도화는 별도 후속 범위입니다.
+
+이 후보는 개발 마감 상태이지 정식 출시 승인 또는 최종 품질 인증을 뜻하지 않습니다.
