@@ -1,4 +1,5 @@
 import {handleProAdmin} from './admin/handler.js';
+import {adminEnvironment} from './admin/setup.js';
 import {sitePage,siteCSS} from './site-home.js';
 import {updatesCSS,updatesScript} from './site-updates.js';
 import {traceDev4Route,TRACE_DEV4_RELEASE} from './trace-dev4-runtime.js';
@@ -93,6 +94,9 @@ async function localAsset(request, env, assetPath, method, contentType) {
 export default {
   async fetch(request,env){
     const url=new URL(request.url),path=url.pathname,method=request.method.toUpperCase();
+    if(path.startsWith('/api/admin/')||path==='/admin'||(path.startsWith('/admin/')&&!path.startsWith('/admin/static/'))){
+      try{env=await adminEnvironment(env);}catch{return new Response('ADMIN_AUTH_UNAVAILABLE',{status:503,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
+    }
     // R56 UI adapter, preserving the existing converter assets.
     if(path==='/ops-r56.js'||path==='/ops-r56.css'){
       if(method!=='GET'&&method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:LOCAL_POLICY});
@@ -106,7 +110,7 @@ export default {
     if(path==='/api/public/trace-dev4')return traceDev4Route(request,env);
     if(path==='/admin/traces'||path==='/admin/traces/'||path.startsWith('/api/admin/trace-dev4/')){
       if(!env?.PRO_ADMIN_DB?.prepare||!validSecrets(env))return new Response('ADMIN_NOT_CONFIGURED',{status:503});
-      let session;try{session=await findSession(request,env.PRO_ADMIN_DB);}catch{return new Response('ADMIN_SESSION_FAILED',{status:500});}
+      let session;try{session=await findSession(request,env.PRO_ADMIN_DB,env);}catch{return new Response('ADMIN_SESSION_FAILED',{status:500});}
       if(!session)return path.startsWith('/admin/traces')?Response.redirect(new URL('/admin/login/',request.url),302):new Response('ADMIN_LOGIN_REQUIRED',{status:401});
       if(!['GET','HEAD'].includes(method)&&(!originMatches(request)||!await verifyCsrf(request,session)))
         return new Response('CSRF_DENIED',{status:403});
