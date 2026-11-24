@@ -133,7 +133,7 @@ test('valid Korean inquiry at the character limit is accepted and database error
  assert.equal(accepted.status,201);assert.equal(inserted[5],body.message);
  const invalid=await call(env,'/api/public/inquiries',{method:'POST',body:{...body,message:'한'.repeat(3001)}});
  assert.equal(invalid.status,400);
- db.prepare=()=>({bind(){return this;},async first(){throw Error('private database detail');}});
+ db.prepare=()=>({bind(){return this;},async run(){throw Error('private database detail');}});
  const failed=await call(env,'/api/public/inquiries',{method:'POST',body});
  assert.equal(failed.status,500);assert.deepEqual(await failed.json(),{ok:false,error:'ADMIN_OPERATION_FAILED'});
 });
