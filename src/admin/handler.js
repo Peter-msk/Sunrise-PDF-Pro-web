@@ -159,7 +159,7 @@ async function dashboard(db){
 async function visits(db,url){
  const days=clampedInt(url.searchParams.get('days'),1,30,14),t=now(),endDay=kstDay(t),startDay=endDay-days+1;
  const rows=await db.prepare(`WITH RECURSIVE dates(kst_day) AS (
- SELECT ? UNION ALL SELECT kst_day+1 FROM dates WHERE kst_day<?
+ SELECT CAST(? AS INTEGER) UNION ALL SELECT kst_day+1 FROM dates WHERE kst_day<CAST(? AS INTEGER)
  ), daily AS (
  SELECT CAST((happened_at+32400)/86400 AS INTEGER) AS kst_day,
  COUNT(DISTINCT CASE WHEN event_kind='visit' THEN session_id END) AS visit_sessions,
@@ -167,7 +167,7 @@ async function visits(db,url){
  SUM(CASE WHEN event_kind='convert_start' THEN 1 ELSE 0 END) AS starts,
  SUM(CASE WHEN event_kind='convert_success' THEN 1 ELSE 0 END) AS successes,
  SUM(CASE WHEN event_kind='convert_failure' THEN 1 ELSE 0 END) AS failures
- FROM pro_telemetry WHERE happened_at>=? AND happened_at<=? GROUP BY kst_day
+ FROM pro_telemetry WHERE happened_at>=CAST(? AS INTEGER) AND happened_at<=CAST(? AS INTEGER) GROUP BY kst_day
  ) SELECT dates.kst_day,COALESCE(daily.visit_sessions,0) AS visit_sessions,
  COALESCE(daily.active_seconds,0) AS active_seconds,COALESCE(daily.starts,0) AS starts,
  COALESCE(daily.successes,0) AS successes,COALESCE(daily.failures,0) AS failures
