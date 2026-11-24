@@ -123,3 +123,17 @@ test('asynchronous admin database rejection is contained in a generic JSON 500',
  assert.deepEqual(await response.json(),{ok:false,error:'ADMIN_OPERATION_FAILED'});
  assert.equal(response.headers.get('cache-control'),'no-store');
 });
+
+// DEV67: route-level regression for UTF-8 size limits and public failure containment.
+test('valid Korean inquiry at the character limit is accepted and database errors are sanitized',async()=>{
+ const db=mockDB();let inserted=null;
+ db.prepare=sql=>({bind(...args){return {async first(){if(sql.includes('COUNT(*) AS n FROM pro_inquiries'))return {n:0};throw Error('private database detail');},async run(){if(sql.includes('INSERT INTO pro_inquiries')){inserted=args;return {success:true,meta:{changes:1}};}throw Error('unexpected mutation');}};}});
+ const env={PRO_ADMIN_DB:db};const body={email:'test@example.invalid',subject:'가'.repeat(120),message:'한'.repeat(3000)};
+ const accepted=await call(env,'/api/public/inquiries',{method:'POST',body});
+ assert.equal(accepted.status,201);assert.equal(inserted[5],body.message);
+ const invalid=await call(env,'/api/public/inquiries',{method:'POST',body:{...body,message:'한'.repeat(3001)}});
+ assert.equal(invalid.status,400);
+ db.prepare=()=>({bind(){return this;},async first(){throw Error('private database detail');}});
+ const failed=await call(env,'/api/public/inquiries',{method:'POST',body});
+ assert.equal(failed.status,500);assert.deepEqual(await failed.json(),{ok:false,error:'ADMIN_OPERATION_FAILED'});
+});
