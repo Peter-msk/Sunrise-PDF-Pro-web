@@ -28,11 +28,14 @@ const allowedPublicationStates=new Set(['draft','published','archived']);
 const allowedKinds=new Set(['announcement','release']);
 function clampedInt(value,min,max,fallback){const n=Number(value);return Number.isSafeInteger(n)&&n>=min&&n<=max?n:fallback;}
 async function readBody(request,limit=8192){
- if(!request.body)return {};
+ if(!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type')||''))throw new Error('INVALID_JSON');
+ const declared=Number(request.headers.get('content-length')||0);
+ if(declared>limit)throw new Error('PAYLOAD_TOO_LARGE');
+ if(!request.body)throw new Error('INVALID_JSON');
  const reader=request.body.getReader();const parts=[];let size=0;
  try{
   while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;
-   if(size>limit)throw new Error('PAYLOAD_TOO_LARGE');parts.push(value);
+   if(size>limit){try{await reader.cancel();}catch{}throw new Error('PAYLOAD_TOO_LARGE');}parts.push(value);
   }
  }finally{reader.releaseLock();}
  const bytes=new Uint8Array(size);let offset=0;for(const p of parts){bytes.set(p,offset);offset+=p.byteLength;}
@@ -258,9 +261,10 @@ async function system(env,db){
  const health=await db.prepare('SELECT 1 AS ok').first();
  return {service:'Sunrise PDF PRO(web)',worker_status:'request_reached_worker',d1_status:health?.ok===1?'reachable':'unverified',
   git_sha:typeof env.DEPLOY_GIT_SHA==='string'?env.DEPLOY_GIT_SHA:null,
-  worker_version:typeof env.DEPLOY_VERSION==='string'?env.DEPLOY_VERSION:null,
+  worker_version:typeof env.CF_VERSION_METADATA?.id==='string'?env.CF_VERSION_METADATA.id:typeof env.DEPLOY_VERSION==='string'?env.DEPLOY_VERSION:null,
   last_deploy_at:typeof env.DEPLOYED_AT==='string'?env.DEPLOYED_AT:null,
-  caveat:'배포 메타데이터는 배포 시 주입된 값이 있는 경우에만 표시; Cloudflare 원격 상태는 별도 검증 필요'};
+  worker_version_created_at:typeof env.CF_VERSION_METADATA?.timestamp==='string'?env.CF_VERSION_METADATA.timestamp:null,
+  caveat:'Worker 버전 ID 및 생성 시각은 버전 메타데이터에서 확인합니다. 버전 생성 시각은 실제 트래픽 배포 시각과 다릅니다.'};
 }
 async function changePassword(req,db,env){
  let b;try{b=await readBody(req,4096);}catch(e){return deny(e.message==='PAYLOAD_TOO_LARGE'?'PAYLOAD_TOO_LARGE':'INVALID_JSON',400);}
