@@ -10,7 +10,8 @@ const IMAGE_OPERATION_TIMEOUT_MS = 20_000;
 const PNG_SIGNATURE = [137,80,78,71,13,10,26,10];
 const MAX_RASTER_PIXELS = 9_000_000;
 const MAX_CANVAS_SIDE = 8192;
-const MAX_ENCODED_BYTES = 48 * 1024 * 1024;
+// Allow large legitimate picture payloads, with aggregate page and output-pixel guards unchanged.
+const MAX_ENCODED_BYTES = 96 * 1024 * 1024;
 const MAX_UNIQUE_OVERSIZE_PNGS_PER_PAGE = 128;
 // A per-object limit alone allowed up to 128 decoded 9MP images in one page.
 // Bound total pixels and compressed input to keep work predictable and fail
@@ -57,7 +58,9 @@ function decodeDataPng(dataUrl,atobImpl){
   let raw;
   try{raw=atobImpl(encoded);}catch{throw Error('PNG_EMBEDDED_DATA_INVALID');}
   if(raw.length>MAX_ENCODED_BYTES)throw Error('PNG_EMBEDDED_BYTES_LIMIT');
-  return Uint8Array.from(raw,c=>c.charCodeAt(0));
+  const bytes=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+  return bytes;
 }
 
 async function browserDataURL(blob){
