@@ -7,7 +7,8 @@
     "build": "node --test scripts/test-admin-setup.mjs scripts/test-admin-retention.mjs scripts/test-admin-operations.mjs scripts/test-dev69-trace-recovery.mjs scripts/test-dev70-admin-content.mjs scripts/test-dev71-admin-ui.mjs scripts/test-dev72-security.mjs && npm --prefix browser-local ci --no-audit --no-fund --ignore-scripts && npm --prefix browser-local test && npm --prefix browser-local run build && npm --prefix browser-local run verify:dist && node scripts/verify-browser-build.mjs && node scripts/test-worker-assets.mjs",
     "test": "node --test scripts/test-admin-setup.mjs scripts/test-admin-retention.mjs scripts/test-admin-operations.mjs scripts/test-dev69-trace-recovery.mjs scripts/test-dev70-admin-content.mjs scripts/test-dev71-admin-ui.mjs scripts/test-dev72-security.mjs && npm --prefix browser-local test && node scripts/test-worker-assets.mjs",
     "build:release": "npm --prefix browser-local ci --no-audit --no-fund --ignore-scripts && npm --prefix browser-local run build",
-    "test:browser": "npm --prefix browser-local run test:wasm && node browser-local/tests/dev73-admin-browser.mjs"
+    "test:browser": "npm --prefix browser-local run test:wasm && node browser-local/tests/dev73-admin-browser.mjs",
+    "test:large": "node --test browser-local/tests/dev74-large-complex-files.mjs"
   },
   "devDependencies": {}
 }
