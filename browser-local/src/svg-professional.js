@@ -1,3 +1,4 @@
+import {waitForPdfStreamIdle} from './pdf-stream-idle.mjs';
 import {cooperativeYield} from './cooperative-yield.mjs';
 /**
  * Sunrise PDF PRO - R37 DEV5, opt-in high-fidelity vector candidate.
@@ -536,7 +537,7 @@ export async function tryProfessionalDocument(hwpDoc,count,{
           }catch{/* Original timeout/abort remains authoritative. */}
         },1000);
       }
-      blob=await waitForImageOperation(pending,signal,finalizeTimeoutMs,'PDF_STREAM_TIMEOUT');
+      blob=await waitForPdfStreamIdle(pending,signal,finalizeTimeoutMs,streamProbe);
     }catch(error){
       if(error?.message==='PDF_STREAM_TIMEOUT'){
         // Background-tab timer clamping can fire the timeout before the
