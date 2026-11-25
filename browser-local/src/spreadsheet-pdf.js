@@ -36,7 +36,7 @@ export function planSheet(sheet,name,XLSX,font){
   range.e.r=Math.max(range.e.r,merge.e.r);range.e.c=Math.max(range.e.c,merge.e.c);
  }
  const rowsN=range.e.r-range.s.r+1,colsN=range.e.c-range.s.c+1;
- if(rowsN<1||colsN<1)throw Error(name+': 사용 범위가 20만 셀을 초과합니다. 불필요한 빈 범위를 정리해 주세요.');
+ if(rowsN<1||colsN<1)throw Error(name+': 시트 사용 범위가 유효하지 않습니다.');
  const cols=[];
  for(let c=range.s.c;c<=range.e.c;c++)if(!sheet['!cols']?.[c]?.hidden)cols.push(c);
  if(!cols.length)return [];
@@ -91,7 +91,7 @@ export function planSheet(sheet,name,XLSX,font){
   const width=widthPrefix[merge.endC+1]-widthPrefix[c];
   const lines=wrapCell(text,width-PAD*2*scale,font,size);
   const required=lines.length*lineHeight+PAD*2*scale;
-  const current=heights.slice(r,merge.endR+1).reduce((a,b)=>a+b,0);
+  let current=0;for(let i=r;i<=merge.endR;i++)current+=heights[i];
   if(required>current){const extra=(required-current)/(merge.endR-r+1);for(let i=r;i<=merge.endR;i++)heights[i]+=extra;}
   cells.push({...merge,lines,width});
  }
@@ -113,7 +113,8 @@ export function planSheet(sheet,name,XLSX,font){
   while(pageIndex<pages.length-1&&cell.r>pages[pageIndex].end)pageIndex++;
   const start=pages[pageIndex].start;
   if(cell.r<start||cell.endR>pages[pageIndex].end)throw Error(name+': 병합 셀이 페이지 경계를 넘었습니다.');
-  assigned[pageIndex].push({...cell,r:cell.r-start,endR:cell.endR-start});
+  // Transfer ownership, rather than allocating a duplicate object for every cell.
+  cell.r-=start;cell.endR-=start;assigned[pageIndex].push(cell);
  }
  return pages.map((p,index)=>({name,paper,size,lineHeight,index:index+1,cols:widths,rows:heights.slice(p.start,p.end+1),cells:assigned[index]}));
 }
@@ -126,18 +127,18 @@ export async function drawSheetPages(pdf,plan,font,signal,onProgress=()=>{},fami
   for(let i=0;i<plan.length;i++){
    cancelled(signal);const p=plan[i],page=pdf.addPage(p.paper),title=p.name+' · '+p.index;
    page.drawText(title,{x:MARGIN,y:p.paper[1]-MARGIN-12,size:11,font,color:rgb(.08,.2,.33)});
-   const shapes=[];
+   const shapes=makePreviewSvg&&i===0?[]:null;
    if(p.cols!==previousCols){columnPrefix=[0];for(const width of p.cols)columnPrefix.push(columnPrefix.at(-1)+width);previousCols=p.cols;}
    const rowPrefix=[0];for(const height of p.rows)rowPrefix.push(rowPrefix.at(-1)+height);
    for(const cell of p.cells){const g=geometry(cell,columnPrefix,rowPrefix);page.drawRectangle({x:g.x,y:p.paper[1]-g.top-g.height,width:cell.width,height:g.height,borderColor:rgb(.72,.76,.8),borderWidth:.4});
-    if(makePreviewSvg)shapes.push(`<rect x="${g.x}" y="${g.top}" width="${cell.width}" height="${g.height}" fill="white" stroke="#b8c2cc" stroke-width=".4"/>`);
+    if(shapes)shapes.push(`<rect x="${g.x}" y="${g.top}" width="${cell.width}" height="${g.height}" fill="white" stroke="#b8c2cc" stroke-width=".4"/>`);
     for(let n=0;n<cell.lines.length;n++){
      const text=cell.lines[n],baseline=g.top+PAD*p.size/FONT+p.size+n*p.lineHeight;
      if(text)page.drawText(text,{x:g.x+PAD*p.size/FONT,y:p.paper[1]-baseline,size:p.size,font});
-     if(makePreviewSvg)shapes.push(`<text x="${g.x+PAD*p.size/FONT}" y="${baseline}" font-size="${p.size}">${escape(text)}</text>`);
+     if(shapes)shapes.push(`<text x="${g.x+PAD*p.size/FONT}" y="${baseline}" font-size="${p.size}">${escape(text)}</text>`);
     }
    }
-   if(i===0&&makePreviewSvg){const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${p.paper[0]}pt" height="${p.paper[1]}pt" viewBox="0 0 ${p.paper[0]} ${p.paper[1]}" font-family="${escape(family)}"><rect width="100%" height="100%" fill="white"/><text x="32" y="44" font-size="11">${escape(title)}</text>${shapes.join('')}</svg>`;firstSvg=svg;}
+   if(shapes){const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${p.paper[0]}pt" height="${p.paper[1]}pt" viewBox="0 0 ${p.paper[0]} ${p.paper[1]}" font-family="${escape(family)}"><rect width="100%" height="100%" fill="white"/><text x="32" y="44" font-size="11">${escape(title)}</text>${shapes.join('')}</svg>`;firstSvg=svg;}
    onProgress({stage:'pdf',page:i+1,total:plan.length});await cooperativeYield({signal});
   }
  return firstSvg;
@@ -180,7 +181,9 @@ export async function convertSpreadsheet(file,onProgress,signal,kind){
   const plan=[];let hidden=0;
   for(let index=0;index<book.SheetNames.length;index++){
    cancelled(signal);if(book.Workbook?.Sheets?.[index]?.Hidden){hidden++;continue;}
-   const name=book.SheetNames[index];plan.push(...planSheet(book.Sheets[name],name,XLSX,font));
+   const name=book.SheetNames[index];// Avoid the JS argument-count limit on very long workbooks.
+   for(const page of planSheet(book.Sheets[name],name,XLSX,font))plan.push(page);
+   delete book.Sheets[name];
    
    await cooperativeYield({signal});
   }
