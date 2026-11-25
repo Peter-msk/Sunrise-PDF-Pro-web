@@ -59,6 +59,8 @@ export async function makePdfArchive(items,signal,onProgress=()=>{}){
  if(!ready.length)throw Error('다운로드할 변환 결과가 없습니다.');
  // ZIP32's actual format representation range, not a product file-count limit.
  const ZIP32_MAX=0xffffffff;
+ // 0xffff is the ZIP64 sentinel, not a valid unambiguous ZIP32 entry count.
+ if(ready.length>=0xffff)throw Error('ZIP_FORMAT_LIMIT: 표준 ZIP 파일 수 범위를 초과합니다. PDF를 개별 다운로드하거나 나누어 저장하세요.');
  const names=uniquePdfNames(ready.map(item=>item.file));
  let expectedBytes=22;
  for(let i=0;i<ready.length;i++){
