@@ -2,7 +2,9 @@
  * No SVG parsing or rewriting here. The existing sanitizer remains authoritative.
  * These checks fail closed before especially expensive synchronous PDFKit work.
  */
-export const MAX_SVG_SOURCE_CHARS = 64 * 1024 * 1024;
+// Align raw SVG with the 128 MiB per-page embedded PNG source budget plus base64 overhead.
+// This is a per-page safety budget, NOT a document input-size or page-count cap.
+export const MAX_SVG_SOURCE_CHARS = 192 * 1024 * 1024;
 export const MAX_SINGLE_PATH_CHARS = 2 * 1024 * 1024;
 export const MAX_PAGE_PATH_CHARS = 8 * 1024 * 1024;
 
