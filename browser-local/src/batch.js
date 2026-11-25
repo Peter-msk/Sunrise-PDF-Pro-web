@@ -50,6 +50,17 @@ export async function runBatch(items,convert,signal,onChange=()=>{}){
  return items;
 }
 
+// Automatic packaging is a convenience, not a file-size limit. For large results
+// leave individual PDFs available immediately; explicit ZIP remains supported.
+export function shouldAutoArchive(items,autoBytes=128*1024*1024){
+ let bytes=0,count=0;
+ for(const item of items){if(item.state!=='done'||!(item.result?.pdf instanceof Blob))continue;
+  count++;bytes+=item.result.pdf.size;
+  if(bytes>autoBytes||count>=0xffff)return false;
+ }
+ return count>1;
+}
+
 // ZIP is generated only for complete PDFs. Store rather than recompress already
 // compressed PDF data. Callers retain individual results if archive creation fails.
 // Stream each finished PDF into the store-only ZIP writer. Avoid duplicating
