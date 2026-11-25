@@ -90,7 +90,7 @@ export function localFailureAdvice(error){
  if(/\bFONT_GLYPH_MISSING\b/.test(message))
   return '원본 글꼴이 부족해 일부 문자를 출력하지 못했습니다. 원본 글꼴을 추가하거나 이미지 방식으로 재시도하세요. 이미지 방식은 글자 검색을 지원하지 않습니다.';
  if(/\bSVG_RENDER_SOURCE_CHARS_LIMIT\b/.test(message))
-  return '일부 페이지가 너무 복잡해 기본 출력 방식으로 처리하지 못했습니다. 다른 문서를 먼저 완료하고 해당 문서만 이미지 방식으로 다시 시도하세요.';
+  return '일부 페이지의 이미지·도형 데이터가 브라우저 렌더링 안전 범위를 초과했습니다. 문서 전체 용량 제한은 아닙니다. 해당 파일만 이미지 방식으로 다시 시도하거나 원본에서 큰 그림을 최적화하세요.';
  if(/\bWASM_INIT_FAILED\b/.test(message))
   return '변환 기능을 시작하지 못했습니다. 브라우저 메모리와 인터넷 연결을 확인한 뒤 다시 시도하세요.';
  if(/\bPDF_OUTPUT_[A-Z0-9_]+\b/.test(message))
