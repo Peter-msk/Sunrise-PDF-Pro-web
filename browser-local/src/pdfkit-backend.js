@@ -99,7 +99,7 @@ export async function loadBrowserPdfBackend(importModule) {
           if(streamProbe){
             streamProbe.bytes=emittedBytes;
             streamProbe.chunks++;
-            streamProbe.lastChunkAt=Date.now();
+            if(chunk.byteLength>0)streamProbe.lastChunkAt=Date.now();
           }
           reportBytes(false);
         };
