@@ -7,7 +7,7 @@ import {renderNativePrintPages} from './converter.js';
 import {convertAnyToPdf as convertToPdf} from './convert-any.js';
 import {inputKind,isHwp} from './input-types.js';
 import {prepareNativePrint} from './native-print.js';
-import {runBatch,makePdfArchive,uniquePdfNames} from './batch.js';
+import {runBatch,makePdfArchive,uniquePdfNames,shouldAutoArchive} from './batch.js';
 import {buildLocalBatchQaReport,QA_BUILD_REVISION,qaDeploymentChannel} from './local-batch-qa.mjs';
 import {canRecoverFile,planConversion,planBulkRecovery,planSingleRetry,localFailureAdvice,recoveryEngine,recoveryCode} from './conversion-recovery.mjs';
 import {createLocalFontCache,requestLocalFontAccess} from './local-fonts.js';
@@ -128,6 +128,7 @@ function sync(){
  $('print-prepare').disabled=!ready||busy||fontCheckPending||!active||!isHwp(active.file)||active.state==='invalid';$('print-save').disabled=busy||!printJob;
  $('total-count').textContent=items.length;$('done-count').textContent=items.filter(i=>i.state==='done').length;
  $('failed-count').textContent=items.filter(i=>['failed','invalid'].includes(i.state)).length;
+ const zipPrepare=$('prepare-archive');if(zipPrepare){zipPrepare.hidden=busy||!!archiveUrl||items.filter(i=>i.state==='done').length<2;zipPrepare.disabled=busy;}
  $('queue-count').textContent=items.length+'개 파일';$('summary-state').textContent=busy?'처리 중':items.some(i=>i.state==='failed'||i.state==='invalid')?'확인 필요':items.some(i=>i.state==='done')?'결과 준비':'대기 중';
 }
 let pdfNameCache=null,pdfNameList=null,pdfNameCount=-1;
@@ -441,7 +442,8 @@ $('convert').addEventListener('click',async()=>{
    $('progress').value=100;
    const done=items.filter(i=>i.state==='done').length,failed=items.filter(i=>i.state==='failed'||i.state==='invalid').length;
    status('변환 완료 '+done+'개'+(failed?' · 확인 필요 '+failed+'개':'')+'. 각 파일을 다운로드할 수 있습니다.');
-   if(done>1){try{status('완료 파일 ZIP을 준비하는 중입니다.');const blob=await makePdfArchive(items,signal,(i,n)=>status('ZIP 준비 중 · '+i+'/'+n+'개'));archiveUrl=URL.createObjectURL(blob);$('download-all').href=archiveUrl;$('download-all').hidden=false;status('완료 '+done+'개'+(failed?' · 확인 필요 '+failed+'개':'')+'. ZIP 또는 개별 PDF를 다운로드하세요.');}catch(error){if(error?.name!=='AbortError')status('개별 PDF 다운로드 가능 · ZIP 생성 실패: '+String(error.message||error));else status('ZIP 생성이 취소되었습니다. 완료한 PDF는 개별 다운로드할 수 있습니다.');}}
+   if(done>1&&shouldAutoArchive(items)){try{status('완료 파일 ZIP을 준비하는 중입니다.');const blob=await makePdfArchive(items,signal,(i,n)=>status('ZIP 준비 중 · '+i+'/'+n+'개'));archiveUrl=URL.createObjectURL(blob);$('download-all').href=archiveUrl;$('download-all').hidden=false;status('완료 '+done+'개'+(failed?' · 확인 필요 '+failed+'개':'')+'. ZIP 또는 개별 PDF를 다운로드하세요.');}catch(error){if(error?.name!=='AbortError')status('개별 PDF 다운로드 가능 · ZIP 생성 실패: '+String(error.message||error));else status('ZIP 생성이 취소되었습니다. 완료한 PDF는 개별 다운로드할 수 있습니다.');}}
+   else if(done>1)status('완료 '+done+'개 · 개별 PDF를 즉시 다운로드하거나 ZIP 준비 버튼을 누르세요. 대용량 ZIP은 필요한 경우에만 생성합니다.');
   }else status('작업이 취소되었습니다. 완료된 PDF는 개별 다운로드할 수 있습니다.');
  }catch(error){const cancelled=signal.aborted||error?.name==='AbortError';status(cancelled?'작업이 취소되었습니다. 완료 PDF는 개별 다운로드 가능합니다.':'작업 실패: '+describeConversionError(error?.message||error));conversionClock.finish(cancelled?'cancelled':'failed');}
  finally{
@@ -454,6 +456,16 @@ $('convert').addEventListener('click',async()=>{
    if(selected)show(selected);
   }catch(error){console.warn('R63_FINAL_PREVIEW_FAILED',error?.name||'Error');}
  }
+});
+$('prepare-archive')?.addEventListener('click',async()=>{
+ if(busy||archiveUrl||items.filter(i=>i.state==='done').length<2)return;
+ controller=new AbortController();const signal=controller.signal;busy=true;draw();
+ try{status('ZIP 준비 중 · 완료 PDF는 유지됩니다.');
+  const blob=await makePdfArchive(items,signal,(i,n)=>status('ZIP 준비 중 · '+i+'/'+n+'개'));
+  if(signal.aborted)throw new DOMException('취소됨','AbortError');
+  archiveUrl=URL.createObjectURL(blob);$('download-all').href=archiveUrl;$('download-all').hidden=false;status('ZIP 준비 완료 · ZIP 또는 개별 PDF를 다운로드하세요.');
+ }catch(error){status(signal.aborted?'ZIP 생성 취소 · 개별 PDF 유지':'개별 PDF 다운로드 가능 · ZIP 생성 실패: '+String(error?.message||error));}
+ finally{busy=false;controller=null;draw();}
 });
 $('print-prepare').addEventListener('click',async()=>{
  if(!active||!isHwp(active.file)||!ready||busy||fontCheckPending)return;const file=active.file;
