@@ -98,7 +98,7 @@ function clearPrint(){
 }
 function clearArchive(){if(archiveUrl)URL.revokeObjectURL(archiveUrl);archiveUrl=null;$('download-all').hidden=true;$('download-all').removeAttribute('href');}
 function release(item){if(item.pdfUrl)URL.revokeObjectURL(item.pdfUrl);if(item.imgUrl)URL.revokeObjectURL(item.imgUrl);}
-function show(item){
+function show(item,{deferLargePreview=false}={}){
  // A reselect of the same document must not discard its already prepared
  // browser-print frame; switching documents must always dispose that frame.
  if(active!==item)clearPrint();
@@ -110,7 +110,10 @@ function show(item){
  link.href=item.pdfUrl;link.download=getPdfNames()[items.indexOf(item)];
  const r=item.result;const mode=outputModeText[r.renderMode]||'PDF';
  $('pages').textContent=r.pages+'쪽 · '+mode;
-viewer.open(item.result.pdf);sync();
+// PDF.js currently loads the whole Blob into an ArrayBuffer. Do not make
+ // that extra copy automatically after a large conversion; explicit preview remains available.
+ if(deferLargePreview&&r.pdf?.size>128*1024*1024){viewer.open(null);$('viewer-file').textContent=item.file.name+' · PDF 검토 버튼을 눌러 미리보기';}
+ else viewer.open(item.result.pdf);sync();
 }
 function sync(){
  if($('font-check'))$('font-check').disabled=!deviceFontsAvailable||busy||fontCheckPending;
@@ -453,7 +456,7 @@ $('convert').addEventListener('click',async()=>{
   try{
    draw();
    const selected=plan.recovery&&requested?.state==='done'?requested:active?.state==='done'?active:items.find(i=>i.state==='done');
-   if(selected)show(selected);
+   if(selected)show(selected,{deferLargePreview:true});
   }catch(error){console.warn('R63_FINAL_PREVIEW_FAILED',error?.name||'Error');}
  }
 });
