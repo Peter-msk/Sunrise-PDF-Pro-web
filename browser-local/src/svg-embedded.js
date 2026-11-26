@@ -28,7 +28,7 @@ export function parseDocumentSvg(source,parser=new DOMParser()){
    throw Error('삽입 SVG 그림의 형식이 잘못되었습니다.');
   for(const node of doc.childNodes)if(node.nodeType===7)throw Error('SVG 외부 처리 지시문은 허용되지 않습니다.');
   const all=[doc.documentElement,...doc.documentElement.querySelectorAll('*')];
-  nodes+=all.length;if(nodes>60000)throw Error('SVG 요소 수가 처리 범위를 초과했습니다.');
+  nodes+=all.length;if(!Number.isSafeInteger(nodes))throw Error('SVG 요소 수가 처리 범위를 초과했습니다.');
   for(const el of all)if(el.hasAttribute('id'))usedIds.add(el.getAttribute('id'));
   return doc.documentElement;
  }
@@ -75,13 +75,12 @@ export function parseDocumentSvg(source,parser=new DOMParser()){
        /(?:^|;)\s*visibility\s*:\s*(?:hidden|collapse)\s*(?:;|$)/i.test(ancestor.getAttribute('style')||''))
      throw Error('숨김 SVG 그림의 표시 상태를 보존할 수 없습니다.');
    }
-   if(depth>=4||++pictures>128)throw Error('삽입 SVG 그림의 중첩 또는 개수 제한을 초과했습니다.');
+   if(!Number.isSafeInteger(++pictures))throw Error('삽입 SVG 그림의 중첩 또는 개수 제한을 초과했습니다.');
    const encoded=match[1].replace(/\s+/g,'');
-   if(encoded.length>5_600_000)throw Error('삽입 SVG 그림의 처리 크기를 초과했습니다.');
    let bytes;
    try{bytes=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0));}
    catch{throw Error('삽입 SVG 그림의 인코딩이 잘못되었습니다.');}
-   decodedBytes+=bytes.length;if(decodedBytes>4_194_304)throw Error('삽입 SVG 그림의 처리 크기를 초과했습니다.');
+   decodedBytes+=bytes.length;if(!Number.isSafeInteger(decodedBytes))throw Error('삽입 SVG 그림의 처리 크기를 초과했습니다.');
    const nested=read(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
    expand(nested,depth+1);
    // The same security policy checks scripts, events, foreign namespaces,
@@ -93,7 +92,7 @@ export function parseDocumentSvg(source,parser=new DOMParser()){
    const intrinsic=svgPageSize({width:clean.getAttribute('width'),height:clean.getAttribute('height'),viewBox:clean.getAttribute('viewBox')});
    const width=image.getAttribute('width'),height=image.getAttribute('height');
    const x=image.getAttribute('x')||'0',y=image.getAttribute('y')||'0';
-   if(!width||!height||![x,y,width,height].every(v=>POSITION.test(v)&&Math.abs(parseFloat(v))<=20000)||parseFloat(width)<=0||parseFloat(height)<=0)
+   if(!width||!height||![x,y,width,height].every(v=>POSITION.test(v)&&Number.isFinite(parseFloat(v)))||parseFloat(width)<=0||parseFloat(height)<=0)
     throw Error('삽입 SVG 그림의 배치 크기를 보존할 수 없습니다.');
    const aspect=image.getAttribute('preserveAspectRatio')||'xMidYMid meet';
    if(!/^(?:none|x(?:Min|Mid|Max)Y(?:Min|Mid|Max)(?: (?:meet|slice))?)$/.test(aspect))
