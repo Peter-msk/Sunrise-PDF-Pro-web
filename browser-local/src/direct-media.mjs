@@ -4,7 +4,7 @@
 const fail=tag=>{throw Error('DIRECT_PDF_MEDIA_'+tag);};
 import {isCoordinate as finite,isRgbHex as color,isIdentityShapeTransform as identity,hasOnlyKeys as only} from './direct-contract.mjs';
 const sameBox=(a,b)=>['x','y','width','height'].every(k=>finite(a?.[k])&&finite(b?.[k])&&Math.abs(a[k]-b[k])<=.002);
-const MAX_BYTES=8*1024*1024,MAX_PIXELS=12_000_000,MAX_DIMENSION=8192;
+const MAX_BYTES=Number.MAX_SAFE_INTEGER,MAX_PIXELS=Number.MAX_SAFE_INTEGER,MAX_DIMENSION=0x7fffffff;
 function size(w,h){if(!Number.isSafeInteger(w)||!Number.isSafeInteger(h)||w<1||h<1||w>MAX_DIMENSION||h>MAX_DIMENSION||w*h>MAX_PIXELS)fail('IMAGE_DIMENSIONS');}
 const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 export function decodeImageBase64(s){
@@ -25,7 +25,7 @@ export function inspectDirectPng(bytes){
  if(bytes.length<45||v.getUint32(0)!==0x89504e47||v.getUint32(4)!==0x0d0a1a0a)fail('PNG_SIGNATURE');
  let width=0,height=0,channels=0,ended=false;const chunks=[];
  for(let pos=8,n=0;pos<bytes.length;n++){
-  if(n>=4096||pos>bytes.length-12)fail('PNG_CHUNK');
+  if(pos>bytes.length-12)fail('PNG_CHUNK');
   const length=v.getUint32(pos),type=v.getUint32(pos+4),start=pos+8;
   if(length>bytes.length-start-4||crc(bytes,pos+4,start+length)!==v.getUint32(start+length))fail('PNG_CRC');
   if(n===0){
@@ -64,7 +64,7 @@ export function inspectDirectJpeg(b){
  if(b.length<20||b[0]!==255||b[1]!==216||b[b.length-2]!==255||b[b.length-1]!==217)fail('JPEG_SIGNATURE');
  let p=2,frame=null,jfif=false;
  const u16=i=>(b[i]<<8)|b[i+1];
- for(let n=0;n<1024&&p<b.length-2;n++){
+ for(let n=0;p<b.length-2;n++){
   if(b[p++]!==255)fail('JPEG_MARKER');while(b[p]===255)p++;
   const marker=b[p++];if(p+2>b.length)fail('JPEG_MARKER');
   const len=u16(p),end=p+len,start=p+2;
@@ -106,7 +106,7 @@ export function planDirectImage(op,resources,{allowLayers=false}={}){
  // key entries may supplement a missing payload; never infer from index or URL.
  if(op.sourceImageKey!==undefined){
   if(typeof op.sourceImageKey!=='string'||!op.sourceImageKey||op.sourceImageKey.length>256)fail('IMAGE_KEY');
-  if(Array.isArray(resources?.imageKeys)&&Array.isArray(resources?.images)&&resources.imageKeys.length===resources.images.length&&resources.imageKeys.length<=4096){
+  if(Array.isArray(resources?.imageKeys)&&Array.isArray(resources?.images)&&resources.imageKeys.length===resources.images.length){
    const matches=resources.imageKeys.map((k,i)=>k===op.sourceImageKey?i:-1).filter(i=>i>=0);
    if(matches.length>1)fail('IMAGE_KEY');
    if(matches.length===1){
@@ -137,7 +137,7 @@ export function planDirectShape(op){
   (!s.fillColor&&!s.strokeColor)||!finite(s.strokeWidth)||s.strokeWidth<0||(s.strokeColor&&s.strokeWidth===0)||s.strokeDash!=='solid'||s.opacity!==1)fail('SHAPE_STYLE');
  const plan={plane:1,kind:op.type,x:b.x,y:b.y,width:b.width,height:b.height,fill:s.fillColor,stroke:s.strokeColor,strokeWidth:s.strokeWidth};
  if(op.type==='ellipse'){if(b.width<=0||b.height<=0)fail('SHAPE_BOUNDS');return plan;}
- if(op.type!=='path'||!Array.isArray(op.commands)||op.commands.length<2||op.commands.length>4096)fail('PATH_COMMANDS');
+ if(op.type!=='path'||!Array.isArray(op.commands)||op.commands.length<2)fail('PATH_COMMANDS');
  let open=false,segments=0;const commands=[];
  for(const c of op.commands){
   const keys={moveTo:['x','y'],lineTo:['x','y'],curveTo:['x1','y1','x2','y2','x3','y3'],closePath:[]}[c?.type];
