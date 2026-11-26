@@ -2,11 +2,11 @@
  * A deadline does not interrupt synchronous Canvas/native codec work.
  * It only bounds asynchronous waits and leaves the caller owning canvas cleanup.
  */
-export const SVG_RASTER_LOAD_TIMEOUT_MS = 25_000;
-export const SVG_RASTER_ENCODE_TIMEOUT_MS = 25_000;
+export const SVG_RASTER_LOAD_TIMEOUT_MS = Infinity;
+export const SVG_RASTER_ENCODE_TIMEOUT_MS = Infinity;
 const aborted = () => new DOMException('PDF 변환이 취소되었습니다.', 'AbortError');
 function duration(ms){
- if(!Number.isSafeInteger(ms) || ms < 1 || ms > 120_000)
+ if(ms!==Infinity&&(!Number.isSafeInteger(ms) || ms < 1 || ms > 120_000))
   throw Error('SVG_RASTER_TIMEOUT_INVALID');
  return ms;
 }
@@ -27,7 +27,7 @@ export function loadSvgRasterImage(image, url, signal, timeoutMs=SVG_RASTER_LOAD
   image.onload=()=>finish();
   image.onerror=()=>finish(Error('SVG_RASTER_IMAGE_DECODE_FAILED'));
   signal?.addEventListener('abort',onAbort,{once:true});
-  timer=setTimeout(()=>finish(Error('SVG_RASTER_IMAGE_LOAD_TIMEOUT')),timeoutMs);
+  if(timeoutMs!==Infinity)timer=setTimeout(()=>finish(Error('SVG_RASTER_IMAGE_LOAD_TIMEOUT')),timeoutMs);
   if(signal?.aborted){onAbort();return;}
   try{image.src=url;}catch(error){finish(error);}
  });
@@ -46,7 +46,7 @@ export function encodeSvgRasterPng(canvas,signal,timeoutMs=SVG_RASTER_ENCODE_TIM
   };
   const onAbort=()=>finish(aborted());
   signal?.addEventListener('abort',onAbort,{once:true});
-  timer=setTimeout(()=>finish(Error('SVG_RASTER_PNG_ENCODE_TIMEOUT')),timeoutMs);
+  if(timeoutMs!==Infinity)timer=setTimeout(()=>finish(Error('SVG_RASTER_PNG_ENCODE_TIMEOUT')),timeoutMs);
   if(signal?.aborted){onAbort();return;}
   try{canvas.toBlob(blob=>finish(blob?null:Error('SVG_RASTER_PNG_ENCODE_FAILED'),blob),'image/png');}
   catch(error){finish(error);}
