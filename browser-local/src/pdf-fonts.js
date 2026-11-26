@@ -200,7 +200,6 @@ export function resolveFontRuns(registry,family,weight,style,text){
   if(!face)return null;
   if(runs.length&&runs.at(-1).face.name===face.name)runs.at(-1).text+=char;
   else runs.push({text:char,face});
-  if(runs.length>256)return null;
  }
  return runs;
 }
