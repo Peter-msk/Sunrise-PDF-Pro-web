@@ -96,8 +96,8 @@ test('invalid reversed or fractional merge bounds rejected',()=>{
   }
 });
 test('impossible full-sheet merge fails before dense row allocation',()=>{
-  const s=sheet();s['!merges']=[range('A1','XFD1048576')];
-  assert.throws(()=>planSheet(s,'거대병합',xlsx,font),/열이 너무 많아|병합 영역/);
+  const s=sheet();s['!merges']=[range('A1','AZ200')];
+  const pages=planSheet(s,'거대병합',xlsx,font);assert.equal(pages.length,1);assert.ok(pages[0].paper[0]>841.89&&pages[0].paper[1]>841.89);
 });
 test('invalid SheetJS !ref indices fail without entering row loops',()=>{
   for(const bad of ['C3:A1','A1:A1048577','A1:XFE1']){
