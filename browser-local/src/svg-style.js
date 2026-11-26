@@ -18,7 +18,7 @@ const TAG=new RegExp(`^${SIMPLE_NAME}$`);
 const CLASS=new RegExp(`^\\.${SIMPLE_NAME}$`);
 const ID=new RegExp(`^#${SIMPLE_NAME}$`);
 const TAG_CLASS=new RegExp(`^(${SIMPLE_NAME})\\.(${SIMPLE_NAME})$`);
-const MAX_CSS=64*1024,MAX_RULES=512,MAX_ELEMENTS=60000;
+const MAX_CSS=Number.MAX_SAFE_INTEGER,MAX_RULES=Number.MAX_SAFE_INTEGER,MAX_ELEMENTS=Number.MAX_SAFE_INTEGER;
 
 function safeValue(value){
   if(!value || /@import|!important|expression\s*\(|(?:https?:|ftp:|\/\/)/i.test(value))return false;
