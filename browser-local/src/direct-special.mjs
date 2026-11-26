@@ -14,7 +14,7 @@ export function planDirectSpecial(op){
  const d=op.drawing;
  if(!only(op,['type','bbox','formType','caption','text','foreColor','backColor','value','enabled','drawing'])||
   !['pushButton','checkBox','radioButton','comboBox','edit'].includes(op.formType)||
-  !box(op.bbox)||!only(d,['primitives','label'])||!Array.isArray(d.primitives)||d.primitives.length>128||
+  !box(op.bbox)||!only(d,['primitives','label'])||!Array.isArray(d.primitives)||
   !Object.hasOwn(d,'label'))fail('FORM_DRAWING');
  const items=[];
  for(const p of d.primitives){
@@ -26,7 +26,7 @@ export function planDirectSpecial(op){
    if(!only(p,['kind','x','y','radius','color'])||![p.x,p.y,p.radius].every(finite)||p.radius<=0)fail('FORM_CIRCLE');
    items.push({kind:'ellipse',x:p.x-p.radius,y:p.y-p.radius,width:2*p.radius,height:2*p.radius,fill:p.color,stroke:null,strokeWidth:0});
   }else if(p.kind==='polyline'){
-   if(!only(p,['kind','points','color','width','closed'])||!Array.isArray(p.points)||p.points.length<2||p.points.length>256||
+   if(!only(p,['kind','points','color','width','closed'])||!Array.isArray(p.points)||p.points.length<2||
     !p.points.every(a=>Array.isArray(a)&&a.length===2&&a.every(finite))||!finite(p.width)||p.width<0||
     typeof p.closed!=='boolean'||(p.width===0&&(!p.closed||p.points.length<3)))fail('FORM_POLYLINE');
    // RHWP uses width=0 closed polygon for filled dropdown arrow.
