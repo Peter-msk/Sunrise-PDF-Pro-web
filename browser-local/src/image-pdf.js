@@ -2,7 +2,7 @@ import {PDFDocument} from 'pdf-lib';
 import {verifyOtherHeader,cancelled} from './input-types.js';
 import {readDocumentBuffer} from './file-reader.js';
 import {assertCompletePdfBytes} from './pdf-output-integrity.mjs';
-import {jpegSourceInfo,MAX_JPEG_HEADER_BYTES} from './jpeg-header.mjs';
+import {readJpegSourceInfo} from './jpeg-header.mjs';
 import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 
 const MAX_DECODE_PIXELS=Number.MAX_SAFE_INTEGER,MAX_CANVAS_SIDE=0x7fffffff;
@@ -49,10 +49,10 @@ export async function convertImage(file,onProgress,signal,kind,{
  cancelled(signal);
  verifyOtherHeader(kind,await file.slice(0,8).arrayBuffer());cancelled(signal);
  // Parse only a small image header *before* allocating a full file ArrayBuffer.
- const jpegHeader=kind==='png'?null:await file.slice(0,MAX_JPEG_HEADER_BYTES).arrayBuffer();
+ const jpegInfo=kind==='png'?null:await readJpegSourceInfo(file,signal);
  const pngHeader=kind==='png'?await file.slice(0,24).arrayBuffer():null;
  cancelled(signal);
- const jpegInfo=jpegHeader?jpegSourceInfo(new Uint8Array(jpegHeader)):null;
+ 
  const rawSize=kind==='png'?pngDimensions(pngHeader):
     {width:jpegInfo.displayWidth,height:jpegInfo.displayHeight};
  if(!rawSize)throw Error('PNG_HEADER_DIMENSIONS_INVALID');
