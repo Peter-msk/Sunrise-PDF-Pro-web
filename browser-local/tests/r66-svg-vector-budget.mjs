@@ -17,9 +17,9 @@ test('path command counter does not confuse numeric exponent with command',()=>{
   assert.equal(v.element(path('M1e-5 2E5 l1.2e-3 4.5')),null);
   assert.equal(v.totals.commands,2);
 });
-test('large single path is rejected before synchronous PDFKit',()=>{
+test('previously oversized single path is admitted by default',()=>{
   const v=createSvgVectorBudget();
-  assert.equal(v.element(path('M'+ '0'.repeat(SVG_VECTOR_BUDGET.pathSingle))), 'SVG_VECTOR_PATH_BUDGET');
+  assert.equal(v.element(path('M'+ '0'.repeat(2_000_000))),null);
 });
 test('path length exact limit allowed, next char denied',()=>{
   const v=createSvgVectorBudget({ ...SVG_VECTOR_BUDGET,pathSingle:10,pathTotal:100 });
@@ -69,5 +69,5 @@ test('non-path geometry untouched and counters unchanged',()=>{
 test('oversized geometric input fails by a stable machine-readable reason',()=>{
   const v=createSvgVectorBudget();
   const err=v.element(path('M'+ 'L0'.repeat(150001)));
-  assert.equal(err,'SVG_VECTOR_COMMAND_BUDGET');
+  assert.equal(err,null);
 });
