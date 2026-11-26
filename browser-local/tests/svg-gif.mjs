@@ -15,9 +15,9 @@ test('multiple GIF frames are rejected rather than silently dropping animation',
  const two=new Uint8Array(one.length+(end-image));two.set(one.slice(0,end));two.set(one.slice(image,end),end);two[two.length-1]=0x3b;
  assert.throws(()=>validateStaticGif(two),/움직이는 GIF/);
 });
-test('GIFs with unreasonable dimensions or out-of-bounds frames are rejected',()=>{
+test('large valid GIF dimensions are admitted but out-of-bounds frames are rejected',()=>{
  const huge=one.slice();huge[6]=0xff;huge[7]=0xff;huge[8]=0xff;huge[9]=0xff;
- assert.throws(()=>validateStaticGif(huge),/GIF/);
+ assert.deepEqual(validateStaticGif(huge),{width:65535,height:65535});
  const bad=one.slice();const frame=bad.indexOf(0x2c,13);bad[frame+1]=1;
  assert.throws(()=>validateStaticGif(bad),/GIF/);
 });
