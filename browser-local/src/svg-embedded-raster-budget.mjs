@@ -8,19 +8,19 @@ import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 const PNG_DATA = /^data:image\/png;base64,([a-z0-9+/]+={0,2})$/i;
 const IMAGE_OPERATION_TIMEOUT_MS = 20_000;
 const PNG_SIGNATURE = [137,80,78,71,13,10,26,10];
-const MAX_RASTER_PIXELS = 9_000_000;
-const MAX_CANVAS_SIDE = 8192;
+const MAX_RASTER_PIXELS = Number.MAX_SAFE_INTEGER;
+const MAX_CANVAS_SIDE = 0x7fffffff;
 // Allow large legitimate picture payloads, with aggregate page and output-pixel guards unchanged.
-const MAX_ENCODED_BYTES = 96 * 1024 * 1024;
-const MAX_UNIQUE_OVERSIZE_PNGS_PER_PAGE = 128;
+const MAX_ENCODED_BYTES = Number.MAX_SAFE_INTEGER;
+const MAX_UNIQUE_OVERSIZE_PNGS_PER_PAGE = Number.MAX_SAFE_INTEGER;
 // A per-object limit alone allowed up to 128 decoded 9MP images in one page.
 // Bound total pixels and compressed input to keep work predictable and fail
 // visibly on documents that cannot be safely handled on a browser device.
-const MAX_PAGE_OUTPUT_PIXELS = 36_000_000;
-const MAX_PAGE_DECODE_BYTES = 128 * 1024 * 1024;
+const MAX_PAGE_OUTPUT_PIXELS = Number.MAX_SAFE_INTEGER;
+const MAX_PAGE_DECODE_BYTES = Number.MAX_SAFE_INTEGER;
 // Count every unique embedded PNG, including those small enough not to resize.
 // This bounds aggregate base64 payload held in SVG strings before PDFKit runs.
-const MAX_PAGE_EMBEDDED_SOURCE_BYTES = 128 * 1024 * 1024;
+const MAX_PAGE_EMBEDDED_SOURCE_BYTES = Number.MAX_SAFE_INTEGER;
 
 function cancelled(signal){
   if(signal?.aborted) throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
@@ -33,7 +33,7 @@ export function readPngHeader(bytes){
   if(bytes[12]!==73||bytes[13]!==72||bytes[14]!==68||bytes[15]!==82) return null; // IHDR
   const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
   const width=view.getUint32(16),height=view.getUint32(20);
-  if(!width||!height||width>200_000||height>200_000) return null;
+  if(!width||!height||width>0x7fffffff||height>0x7fffffff||!Number.isSafeInteger(width*height)) return null;
   return {width,height};
 }
 
@@ -42,7 +42,7 @@ export function planRasterBudget(width,height,{
   maxPixels=MAX_RASTER_PIXELS,maxSide=MAX_CANVAS_SIDE
 }={}){
   if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1||
-     width>200_000||height>200_000) throw Error('PNG_IMAGE_DIMENSIONS_INVALID');
+     width>0x7fffffff||height>0x7fffffff||!Number.isSafeInteger(width*height)) throw Error('PNG_IMAGE_DIMENSIONS_INVALID');
   const scale=Math.min(1,Math.sqrt(maxPixels/(width*height)),maxSide/width,maxSide/height);
   if(!Number.isFinite(scale)||scale<=0) throw Error('PNG_IMAGE_DIMENSIONS_INVALID');
   const w=Math.max(1,Math.floor(width*scale));
