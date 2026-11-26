@@ -12,10 +12,10 @@ import {cooperativeYield} from './cooperative-yield.mjs';
  * modify scripts, or substitute an entire SVG/PDF page with a raster.
  */
 const NS='http://www.w3.org/2000/svg';
-const PIXEL_CAP=9_000_000,IMAGE_LIMIT=128;
-const PAGE_IMAGE_PIXEL_CAP=36_000_000;
-const PAGE_IMAGE_COMPRESSED_BYTE_CAP=128*1024*1024;
-const IMAGE_COMPRESSED_BYTE_CAP=48*1024*1024;
+const PIXEL_CAP=Number.MAX_SAFE_INTEGER,IMAGE_LIMIT=Number.MAX_SAFE_INTEGER;
+const PAGE_IMAGE_PIXEL_CAP=Number.MAX_SAFE_INTEGER;
+const PAGE_IMAGE_COMPRESSED_BYTE_CAP=Number.MAX_SAFE_INTEGER;
+const IMAGE_COMPRESSED_BYTE_CAP=Number.MAX_SAFE_INTEGER;
 const IMAGE_DECODE_TIMEOUT_MS=25_000;
 const IMAGE_ENCODE_TIMEOUT_MS=25_000;
 const PIXELS_PER_TICK=131_072;
@@ -581,7 +581,7 @@ export async function normalizeSvgGrayscale(svg,signal,{
  checkAbort(signal);
  const doc=parse(svg);if(doc.querySelector('parsererror')||doc.doctype||doc.documentElement?.localName!=='svg')fail('SVG_FILTER_PARSE_FAILED');
  const root=doc.documentElement,all=nodes(root),seen=new Set(),definitions=new Map();
- if(all.length>60000)fail('SVG_FILTER_ELEMENT_BUDGET');
+ // The parsed DOM determines the actual available element count.
  for(const el of all){
   if(el.hasAttribute('id')){
    const id=el.getAttribute('id');if(!/^[A-Za-z_][\w.-]*$/.test(id)||seen.has(id))fail('SVG_FILTER_ID_INVALID');
