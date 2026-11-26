@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {jpegSourceInfo,MAX_JPEG_HEADER_BYTES} from '../src/jpeg-header.mjs';
+import {jpegSourceInfo,readJpegSourceInfo} from '../src/jpeg-header.mjs';
 
 // Port of the existing R65 svg-safe-grayscale.mjs waitForImageOperation API;
 // the production import is not changed. Tests focus on actual image-pdf.js
@@ -15,7 +15,7 @@ async function waitForImageOperation(promise,signal,timeoutMs,code,onLate=()=>{}
  const guard=new Promise((_,reject)=>{
   abort=()=>reject(new DOMException('변환이 취소되었습니다.','AbortError'));
   signal?.addEventListener('abort',abort,{once:true});
-  timer=setTimeout(()=>reject(Error(code)),timeoutMs);
+  if(timeoutMs!==Infinity)timer=setTimeout(()=>reject(Error(code)),timeoutMs);
  });
  try{return await Promise.race([tracked,guard]);}
  finally{active=false;clearTimeout(timer);signal?.removeEventListener('abort',abort);}
@@ -42,13 +42,13 @@ function shim({decode,encode,save,bytes=jpeg}={}){
   save:save||(async()=>Uint8Array.from([37,80,68,70,45,49,46,55]))
  })};
  const make=new Function('PDFDocument','verifyOtherHeader','cancelled',
-  'readDocumentBuffer','jpegSourceInfo','MAX_JPEG_HEADER_BYTES',
+  'readDocumentBuffer','readJpegSourceInfo',
   'waitForImageOperation','createImageBitmap','document','Blob','assertCompletePdfBytes',body+'\nreturn {convertImage,imageDecodeTarget};');
  const api=make(pdf,()=>{},signal=>{if(signal?.aborted)throw new DOMException('취소','AbortError')},
   async file=>{fullReads++;return file.bytes.buffer.slice(file.bytes.byteOffset,file.bytes.byteOffset+file.bytes.byteLength)},
-  jpegSourceInfo,MAX_JPEG_HEADER_BYTES,waitForImageOperation,
+  readJpegSourceInfo,waitForImageOperation,
   (...args)=>{decodeArgs=args[1];return impl(...args)},doc,Blob,bytes=>bytes);
- const input={bytes,slice:(_from,end)=>({arrayBuffer:async()=>bytes.subarray(0,end).slice().buffer})};
+ const input={size:bytes.length,bytes,slice:(_from,end)=>({arrayBuffer:async()=>bytes.subarray(0,end).slice().buffer})};
  return {api,input,get closed(){return closed},get cleared(){return cleared},get fullReads(){return fullReads},
   get canvases(){return canvases},get decodeArgs(){return decodeArgs}};
 }
@@ -98,7 +98,7 @@ test('invalid timeout configuration is rejected before file loading',async()=>{
 });
 test('absurd PNG header dimensions cannot bypass target pixel budget',()=>{
  const x=shim();assert.throws(()=>x.api.imageDecodeTarget(2**32-1,2**32-1),/이미지의 실제/);
- assert.throws(()=>x.api.imageDecodeTarget(200001,1),/이미지의 실제/);
+ assert.equal(x.api.imageDecodeTarget(200001,1).width,200001);
 });
 test('timeout and cancellation errors preserve machine-readable codes',async()=>{
  const x=shim({decode:()=>new Promise(()=>{})});
@@ -119,12 +119,12 @@ function oversizedJpegHeader(){
  assert.equal(jpegSourceInfo(bytes).width,60000);
  return bytes;
 }
-test('browser ignoring downsizing is rejected before canvas creation',async()=>{
- const x=shim({bytes:oversizedJpegHeader(),decode:async()=>({width:60000,height:40000,close(){x._closedIgnored=true}})});
- await assert.rejects(x.api.convertImage(x.input,()=>{},undefined,'jpg'),/IMAGE_DECODE_RESIZE_UNVERIFIED/);
+test('browser silently returning smaller bitmap is rejected before canvas creation',async()=>{
+ const x=shim({bytes:oversizedJpegHeader(),decode:async()=>({width:6000,height:4000,close(){x._closedIgnored=true}})});
+ await assert.rejects(x.api.convertImage(x.input,()=>{},undefined,'jpg'),/IMAGE_DECODE_DIMENSIONS_UNVERIFIED/);
  assert.equal(x._closedIgnored,true);
  assert.equal(x.canvases,0);
- assert.ok(x.decodeArgs.resizeWidth<60000);
+ assert.equal(x.decodeArgs.resizeWidth,undefined);
 });
 test('malformed PNG dimension header is rejected before any decoder allocation',async()=>{
  const x=shim({bytes:Uint8Array.from([137,80,78,71,13,10,26,10])});
@@ -145,7 +145,7 @@ test('malformed PNG preflight fails without reading full source image bytes',asy
  assert.equal(x.fullReads,0);
 });
 test('JPEG/PNG header validation precedes native image decoding and full PNG read',()=>{
- assert.ok(src.indexOf('const jpegHeader=')<src.indexOf('const source=file;'));
+ assert.ok(src.indexOf('const jpegInfo=')<src.indexOf('const source=file;'));
  assert.ok(src.indexOf('const pngHeader=')<src.indexOf('const source=file;'));
  assert.ok(src.indexOf('const source=file;')<src.indexOf('await readDocumentBuffer('));
  assert.doesNotMatch(src,/IMAGE_INPUT_BYTES_LIMIT/);
