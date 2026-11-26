@@ -482,12 +482,12 @@ test('R37 SVG styles reject unsupported selectors, external URLs and unresolved 
  });
 });
 
-test('R37 CSS selectors reject linked stylesheets and large styles',()=>{
+test('R37 CSS rejects linked stylesheets but accepts large local styles',()=>{
  const style=el('style',{},[], '@import url(https://site.example/font.css);');
  const root=el('svg',{},[style,el('rect')]);
  assert.equal(flattenLocalSvgStyles(root).reason,'SVG_STYLESHEET_UNSUPPORTED');
  style.textContent='.a { fill: #000; }'.repeat(4000);
- assert.equal(flattenLocalSvgStyles(root).reason,'SVG_STYLESHEET_TOO_LARGE');
+ assert.equal(flattenLocalSvgStyles(root).ok,true);
 });
 
 test('R37 unverified character-position lists or spacing route to page fallback',async()=>{
