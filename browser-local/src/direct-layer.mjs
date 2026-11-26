@@ -30,7 +30,7 @@ export function directClip(node){
  // verified. One closed compound path can express either winding rule.
  if(!Array.isArray(node.paths)||node.paths.length!==1)fail('CLIP_PATH_COUNT');
  const p=node.paths[0];
- if(typeof p?.even_odd!=='boolean'||!Array.isArray(p.commands)||p.commands.length<3||p.commands.length>4096)fail('CLIP_PATH');
+ if(typeof p?.even_odd!=='boolean'||!Array.isArray(p.commands)||p.commands.length<3)fail('CLIP_PATH');
  let open=false,segments=0;const commands=[];
  for(const c of p.commands){
   if(c==='Close'){
