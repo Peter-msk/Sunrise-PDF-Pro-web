@@ -110,7 +110,7 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
  }
  candidates.sort((a,b)=>b.score-a.score||a.index-b.index);
  const faces=[],seen=new Set(),loadedSources=new Set(),loadedNames=new Set();
- const started=Date.now(),maxReadMs=22000;
+ const started=Date.now(),maxReadMs=Infinity;
  let unreadable=0,matched=0,timedOutFonts=0,skippedByBudget=0;
  for(const candidate of candidates){
   const {item,expanded,originalNames}=candidate;
@@ -129,13 +129,13 @@ export async function loadDocumentLocalFonts(doc,count,available,parser,signal,o
    if(cached)loaded={faces:[{...cached,aliases:[...cached.aliases]}]};
    else{
    const blob=await boundedFontStep(()=>item.blob(),{signal,
-    timeoutMs:Math.min(4000,remaining),code:'PC_FONT_BLOB_TIMEOUT'});
+    timeoutMs:remaining,code:'PC_FONT_BLOB_TIMEOUT'});
    // The blob is an SFNT container, not necessarily a .ttf outline. Fontkit
    // inspects the bytes, not the extension, and rejects unsupported formats.
    const file=new File([blob],'local-font.ttf',{type:'font/ttf'});
    loaded=await boundedFontStep(()=>loadPdfFonts([file],parser,signal,
     {postscriptName:item.postscriptName||null}),{signal,
-    timeoutMs:Math.min(4000,Math.max(1,maxReadMs-(Date.now()-started))),
+    timeoutMs:Math.max(1,maxReadMs-(Date.now()-started)),
     code:'PC_FONT_PARSE_TIMEOUT'});
    if(loaded?.faces?.[0])cache?.put(item,{...loaded.faces[0],aliases:[...loaded.faces[0].aliases]});
    }
