@@ -20,7 +20,7 @@ import {MAX_CONVERSION_PAGES,MAX_NATIVE_PRINT_PAGES} from './page-limit.mjs';
 
 // File-size limits are intentionally absent. Runtime memory and page pixels
 // remain bounded by the browser/device; those are not upload-size limits.
-const MAX_PAGES=MAX_CONVERSION_PAGES,MAX_PIXELS=9_000_000,DETAIL_MAX_PIXELS=12_000_000;
+const MAX_PAGES=MAX_CONVERSION_PAGES,MAX_PIXELS=Number.MAX_SAFE_INTEGER,DETAIL_MAX_PIXELS=Number.MAX_SAFE_INTEGER;
 const TARGET_DPI=300,DETAIL_DPI=360;
 const OLE=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1];
 function openHwpDocument(buffer){
@@ -88,7 +88,7 @@ export function pageRenderProfile(checked){
  const denseDrawing=shapes>=180 && shapes>=text*2;
  const pixelLimit=denseDrawing?DETAIL_MAX_PIXELS:MAX_PIXELS;
  const targetDpi=denseDrawing?DETAIL_DPI:TARGET_DPI;
- const scale=Math.min(targetDpi/96,Math.sqrt(pixelLimit/(checked.width*checked.height)));
+ const scale=targetDpi/96;
  return {shapes,text,denseDrawing,pixelLimit,targetDpi,scale};
 }
 export async function rasterPage(svg,signal){
@@ -97,7 +97,7 @@ export async function rasterPage(svg,signal){
  const {scale,pixelLimit}=pageRenderProfile(checked);
  const w=Math.max(1,Math.round(checked.width*scale));
  const h=Math.max(1,Math.round(checked.height*scale));
- if(w*h>pixelLimit+10000)throw Error('페이지 이미지 크기 제한 초과');
+ if(!Number.isSafeInteger(w*h))throw Error('페이지 픽셀 수를 표현할 수 없습니다.');
  const svgUrl=URL.createObjectURL(new Blob([checked.svg],{type:'image/svg+xml;charset=utf-8'}));
  let cvs=null;
  try{
