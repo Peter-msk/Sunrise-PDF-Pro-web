@@ -54,7 +54,7 @@ function gifEnv({imgs=[fakeImage()],decode,encode,stepMs=30,pageMs=95,signal}={}
   encodeGifPixels:encode??(async()=> 'data:image/png;base64,abc'),
   setTimeout,clearTimeout};
  const script=gifSource.replace(/^import .*?;\s*$/gm,'').replace('export async function normalizeGifSvg','async function normalizeGifSvg')
-  .replace('GIF_STEP_TIMEOUT_MS=25_000,GIF_PAGE_TIMEOUT_MS=90_000',`GIF_STEP_TIMEOUT_MS=${stepMs},GIF_PAGE_TIMEOUT_MS=${pageMs}`)+'\nglobalThis.normalize=normalizeGifSvg;';
+  .replace(/GIF_STEP_TIMEOUT_MS=(?:25_000|Infinity),GIF_PAGE_TIMEOUT_MS=(?:90_000|Infinity)/,`GIF_STEP_TIMEOUT_MS=${stepMs},GIF_PAGE_TIMEOUT_MS=${pageMs}`)+'\nglobalThis.normalize=normalizeGifSvg;';
  vm.runInNewContext(script,env);
  const run=(svg='<svg/>')=>env.normalize(svg,signal,{decode:decode??(async()=>bitmap),documentRef});
  return {run,bitmap,getClosed:()=>closed,getAttr:()=>imgs[0]?.attr.value,canvasCleared:()=>canvasCleared};
