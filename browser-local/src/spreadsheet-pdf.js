@@ -45,11 +45,10 @@ export function planSheet(sheet,name,XLSX,font){
   const value=sheet['!cols']?.[c]?.wch??10;
   if(typeof value!=='number'||!Number.isFinite(value)||value<0)
    throw Error(name+': 열 너비가 유효하지 않습니다.');
-  return Math.max(18,Math.min(360,value*5.5+8));
+  return Math.max(18,value*5.5+8);
  });
- const total=widths.reduce((a,b)=>a+b,0);const paper=total>531?[841.89,595.28]:[595.28,841.89];
- const scale=Math.min(1,(paper[0]-MARGIN*2)/total);
- if(scale<.65)throw Error(name+': 열이 너무 많아 글자를 읽기 어렵습니다. 필요한 열을 별도 시트로 나누어 주세요.');
+ const total=widths.reduce((a,b)=>a+b,0);const paper=total>531?[Math.max(841.89,total+MARGIN*2),595.28]:[595.28,841.89];
+ const scale=1;
  for(let c=0;c<widths.length;c++)widths[c]*=scale;
  const widthPrefix=[0];for(const w of widths)widthPrefix.push(widthPrefix.at(-1)+w);
  const rows=[];for(let r=range.s.r;r<=range.e.r;r++)if(!sheet['!rows']?.[r]?.hidden)rows.push(r);
@@ -74,7 +73,6 @@ export function planSheet(sheet,name,XLSX,font){
    throw Error(name+': 병합 셀의 시작 위치가 숨겨져 있습니다. 숨김을 해제해 주세요.');
   // An indivisible merged region taller than one paper cannot be output.
   // Reject before allocating every covered-cell key for a pathological merge.
-  let mergeHeight=0;for(let i=r0;i<=r1;i++){mergeHeight+=heights[i];if(mergeHeight>printableBody)throw Error(name+': 한 행 또는 병합 영역이 한 쪽보다 큽니다.');}
   const m={r:r0,c:c0,endR:r1,endC:c1};mergeEnds.set(m.r,Math.max(mergeEnds.get(m.r)??m.r,m.endR));
   for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){const key=r+':'+c;if(covered.has(key)||merges.has(key))throw Error(name+': 병합 셀이 겹칩니다.');if(r===m.r&&c===m.c)merges.set(key,m);else covered.add(key);}
  }
@@ -100,11 +98,14 @@ export function planSheet(sheet,name,XLSX,font){
  while(cursor<rows.length){
   let end=cursor;for(let i=cursor;i<=end;i++)end=Math.max(end,mergeEnds.get(i)??i);
   let groupHeight=0;for(let i=cursor;i<=end;i++)groupHeight+=heights[i];
-  if(groupHeight>body)throw Error(name+': 한 행 또는 병합 영역이 한 쪽보다 큽니다. 행 내용을 나누어 주세요.');
+  if(groupHeight>body){
+   if(cursor>start)pages.push({start,end:cursor-1});
+   pages.push({start:cursor,end});start=cursor=end+1;used=0;continue;
+  }
   if(used+groupHeight>body){pages.push({start,end:cursor-1});start=cursor;used=0;}
   used+=groupHeight;cursor=end+1;
  }
- pages.push({start,end:rows.length-1});
+ if(start<rows.length)pages.push({start,end:rows.length-1});
  const assigned=pages.map(()=>[]);
  // A cell belongs to exactly one page: distribute once instead of filtering
  // every cell for every page (quadratic for long worksheets).
@@ -116,7 +117,7 @@ export function planSheet(sheet,name,XLSX,font){
   // Transfer ownership, rather than allocating a duplicate object for every cell.
   cell.r-=start;cell.endR-=start;assigned[pageIndex].push(cell);
  }
- return pages.map((p,index)=>({name,paper,size,lineHeight,index:index+1,cols:widths,rows:heights.slice(p.start,p.end+1),cells:assigned[index]}));
+ return pages.map((p,index)=>{const rowHeights=heights.slice(p.start,p.end+1);const logicalPaper=[paper[0],Math.max(paper[1],rowHeights.reduce((n,h)=>n+h,0)+MARGIN*2+28)];return {name,paper:logicalPaper,size,lineHeight,index:index+1,cols:widths,rows:rowHeights,cells:assigned[index]};});
 }
 function geometry(cell,columnPrefix,rowPrefix){
  const x=MARGIN+columnPrefix[cell.c],top=MARGIN+28+rowPrefix[cell.r];
@@ -125,16 +126,16 @@ function geometry(cell,columnPrefix,rowPrefix){
 export async function drawSheetPages(pdf,plan,font,signal,onProgress=()=>{},family="NanumGothic",{makePreviewSvg=true}={}){
  let firstSvg,previousCols=null,columnPrefix=null;
   for(let i=0;i<plan.length;i++){
-   cancelled(signal);const p=plan[i],page=pdf.addPage(p.paper),title=p.name+' · '+p.index;
-   page.drawText(title,{x:MARGIN,y:p.paper[1]-MARGIN-12,size:11,font,color:rgb(.08,.2,.33)});
+   cancelled(signal);const p=plan[i],factor=Math.min(1,14400/Math.max(...p.paper)),page=pdf.addPage(p.paper.map(n=>n*factor)),title=p.name+' · '+p.index;
+   page.drawText(title,{x:MARGIN*factor,y:(p.paper[1]-MARGIN-12)*factor,size:11*factor,font,color:rgb(.08,.2,.33)});
    const shapes=makePreviewSvg&&i===0?[]:null;
    if(p.cols!==previousCols){columnPrefix=[0];for(const width of p.cols)columnPrefix.push(columnPrefix.at(-1)+width);previousCols=p.cols;}
    const rowPrefix=[0];for(const height of p.rows)rowPrefix.push(rowPrefix.at(-1)+height);
-   for(const cell of p.cells){const g=geometry(cell,columnPrefix,rowPrefix);page.drawRectangle({x:g.x,y:p.paper[1]-g.top-g.height,width:cell.width,height:g.height,borderColor:rgb(.72,.76,.8),borderWidth:.4});
+   for(const cell of p.cells){const g=geometry(cell,columnPrefix,rowPrefix);page.drawRectangle({x:g.x*factor,y:(p.paper[1]-g.top-g.height)*factor,width:cell.width*factor,height:g.height*factor,borderColor:rgb(.72,.76,.8),borderWidth:.4*factor});
     if(shapes)shapes.push(`<rect x="${g.x}" y="${g.top}" width="${cell.width}" height="${g.height}" fill="white" stroke="#b8c2cc" stroke-width=".4"/>`);
     for(let n=0;n<cell.lines.length;n++){
      const text=cell.lines[n],baseline=g.top+PAD*p.size/FONT+p.size+n*p.lineHeight;
-     if(text)page.drawText(text,{x:g.x+PAD*p.size/FONT,y:p.paper[1]-baseline,size:p.size,font});
+     if(text)page.drawText(text,{x:(g.x+PAD*p.size/FONT)*factor,y:(p.paper[1]-baseline)*factor,size:p.size*factor,font});
      if(shapes)shapes.push(`<text x="${g.x+PAD*p.size/FONT}" y="${baseline}" font-size="${p.size}">${escape(text)}</text>`);
     }
    }
