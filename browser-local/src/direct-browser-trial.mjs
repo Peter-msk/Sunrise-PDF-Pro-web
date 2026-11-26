@@ -5,7 +5,7 @@ import {directFamilyKey,validateDirectFace} from './direct-font.mjs';
 import {loadPdfFonts,installMeasureFonts} from './pdf-fonts.js';
 import {loadBundledFonts} from './bundled-fonts.js';
 import {boundedFontStep} from './font-timeout.mjs';
-const MAX_FACE=32*1024*1024,MAX_TOTAL=64*1024*1024;
+const MAX_FACE=Number.MAX_SAFE_INTEGER,MAX_TOTAL=Number.MAX_SAFE_INTEGER;
 const abort=signal=>{if(signal?.aborted)throw new DOMException('변환이 취소되었습니다.','AbortError');};
 const exact=(face,family,bold)=>directFamilyKey(face?.family)===directFamilyKey(family)&&face.bold===bold&&face.italic===false;
 export function selectExactDirectFace(faces,family,bold){
@@ -16,7 +16,7 @@ export function selectExactDirectFace(faces,family,bold){
 export async function convertDirectTrial({buffer,openDocument,readPageCount,fontFiles=[],localFonts=[],signal,onProgress=()=>{}}){
  abort(signal);
  const files=Array.from(fontFiles||[]);
- if(files.length>16||files.some(f=>!Number.isSafeInteger(f.size)||f.size>MAX_FACE)||files.reduce((a,f)=>a+f.size,0)>MAX_TOTAL)throw Error('DIRECT_PDF_TEXT_FONT_BUDGET');
+ if(files.some(f=>!Number.isSafeInteger(f.size)||f.size>MAX_FACE)||files.reduce((a,f)=>a+f.size,0)>MAX_TOTAL)throw Error('DIRECT_PDF_TEXT_FONT_BUDGET');
  onProgress({stage:'fonts',detail:'bundled',page:0,total:1});
  const selected=files.length?(await loadPdfFonts(files,fontkit,signal)).faces:[];
  const bundled=(await loadBundledFonts(fontkit,signal)).faces;
