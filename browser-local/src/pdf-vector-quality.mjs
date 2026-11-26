@@ -59,7 +59,7 @@ export function summarizeVectorPreservation(result){
  */
 export async function inspectPdfVectorQuality(pdfBlob,converted,{
  signal,maxBytes=96*1024*1024,loadPdfJs=()=>import('pdfjs-dist/legacy/build/pdf.mjs'),
- workerSrc=null,maxPageOperators=750_000
+ workerSrc=null,maxPageOperators=Number.MAX_SAFE_INTEGER
 }={}){
  if(signal?.aborted)throw abortError();
  const summary=summarizeVectorPreservation(converted);
