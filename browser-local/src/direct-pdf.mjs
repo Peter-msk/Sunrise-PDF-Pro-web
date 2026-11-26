@@ -14,7 +14,7 @@ import {cooperativeYield} from './cooperative-yield.mjs';
 import {assertCompletePdfBytes} from './pdf-output-integrity.mjs';
 const SCHEMA_MINOR=35,RESOURCE_MINOR=6;
 const YIELD_UNITS=256,IMAGE_CACHE_ENTRIES=128;
-const MAX_JSON=32*1024*1024,MAX_NODES=60000,MAX_OPS=100000,MAX_DEPTH=128;
+const MAX_JSON=Number.MAX_SAFE_INTEGER,MAX_NODES=Number.MAX_SAFE_INTEGER,MAX_OPS=Number.MAX_SAFE_INTEGER,MAX_DEPTH=Number.MAX_SAFE_INTEGER;
 const error=code=>{throw Error('DIRECT_PDF_'+code);};
 function bbox(b){
  if(!plain(b)||!['x','y','width','height'].every(k=>finite(b[k]))||b.width<0||b.height<0)error('BOUNDS');
@@ -61,32 +61,32 @@ export function inspectDirectPage(tree,{allowText=false,allowMedia=false,allowLa
     break;
    case 'clipRect':case 'clipPath':
     clips++;
-    if(allowLayers){const clip=directClip(node);clipCost+=clip.cost;if(clipCost>20000||chain.length>=16)error('CLIP_BUDGET');stack.push({node:node.child,depth:depth+1,layer:active,chain:[...chain,clip]});}
+    if(allowLayers){const clip=directClip(node);clipCost+=clip.cost;if(!Number.isSafeInteger(clipCost))error('CLIP_BUDGET');stack.push({node:node.child,depth:depth+1,layer:active,chain:[...chain,clip]});}
     else{blockers.add('clip');stack.push({node:node.child,depth:depth+1,layer:active,chain});}break;
    case 'leaf':
     if(!Array.isArray(node.ops)||node.ops.length>MAX_OPS-operations)error('OP_BUDGET');
     for(const op of node.ops){
      if(!plain(op)||typeof op.type!=='string'||op.type.length>64)error('OP');
      operations++;bbox(op.bbox);
-     const add=item=>{if(allowLayers){item.plane=directPlane(op,active);item.clips=chain;clipReplayCost+=chain.reduce((n,c)=>n+c.cost,0);if(clipReplayCost>100000)error('CLIP_REPLAY_BUDGET');}paint.push(item);};
+     const add=item=>{if(allowLayers){item.plane=directPlane(op,active);item.clips=chain;clipReplayCost+=chain.reduce((n,c)=>n+c.cost,0);if(!Number.isSafeInteger(clipReplayCost))error('CLIP_REPLAY_BUDGET');}paint.push(item);};
      types.set(op.type,(types.get(op.type)||0)+1);
      if(op.type==='rawSvg')svgReferences++;
      if(allowSpecial&&['equation','placeholder','footnoteMarker','textControlMark','controlLabel','textDecoration','tabLeader','charOverlap','formObject'].includes(op.type)){
       try{const items=planDirectSpecial(op);
-       if((specialItems+=items.length)>10000)error('SPECIAL_BUDGET');
+       if(!Number.isSafeInteger(specialItems+=items.length))error('SPECIAL_BUDGET');
        if(!allowText&&items.some(item=>item.kind==='text'))error('SPECIAL_TEXT_DISABLED');
-       for(const item of items){if(item.kind==='text'){if(++glyphCount>50000)error('TEXT_BUDGET');}
-        if(item.kind==='path'&&(pathCommands+=item.commands.length)>20000)error('PATH_PAGE_BUDGET');
+       for(const item of items){if(item.kind==='text'){if(!Number.isSafeInteger(++glyphCount))error('TEXT_BUDGET');}
+        if(item.kind==='path'&&!Number.isSafeInteger(pathCommands+=item.commands.length))error('PATH_PAGE_BUDGET');
         item.plane=1;add(item);}specialCount++;
       }catch(e){if(!String(e.message).startsWith('DIRECT_PDF_SPECIAL_'))throw e;blockers.add(e.message);}continue;
      }
      if(op.type==='textRun'){
       textRuns++;
       const family=op.style?.fontFamily;
-      if(typeof family==='string'&&family.length<=256&&fonts.size<1024)fonts.add(family);
+      if(typeof family==='string'&&family.length<=256)fonts.add(family);
       if(allowText){
        try{const plan=planDirectText(op);glyphCount+=plan.glyphs.length;
-        if(glyphCount>50000)error('TEXT_BUDGET');add(plan);
+        if(!Number.isSafeInteger(glyphCount))error('TEXT_BUDGET');add(plan);
        }catch(e){if(!String(e.message).startsWith('DIRECT_PDF_TEXT_'))throw e;blockers.add(e.message);}
        continue;
       }
@@ -94,12 +94,12 @@ export function inspectDirectPage(tree,{allowText=false,allowMedia=false,allowLa
      if(allowMedia&&['image','line','ellipse','path'].includes(op.type)){
       try{
        const item=op.type==='image'?planDirectImage(op,tree.resources,{allowLayers}):planDirectShape(op);
-       if(++mediaCount>2048)error('MEDIA_COUNT');
+       if(!Number.isSafeInteger(++mediaCount))error('MEDIA_COUNT');
        if(item.kind==='image'){
         mediaBytes+=item.bytes.length;mediaPixels+=item.info.width*item.info.height;
-        if(mediaBytes>32*1024*1024||mediaPixels>48_000_000)error('MEDIA_PAGE_BUDGET');
+        if(!Number.isSafeInteger(mediaBytes)||!Number.isSafeInteger(mediaPixels))error('MEDIA_PAGE_BUDGET');
        }
-       if(item.kind==='path'&&(pathCommands+=item.commands.length)>20000)error('PATH_PAGE_BUDGET');
+       if(item.kind==='path'&&!Number.isSafeInteger(pathCommands+=item.commands.length))error('PATH_PAGE_BUDGET');
        add(item);
       }catch(e){if(!String(e.message).startsWith('DIRECT_PDF_MEDIA_'))throw e;blockers.add(e.message);}
       continue;
