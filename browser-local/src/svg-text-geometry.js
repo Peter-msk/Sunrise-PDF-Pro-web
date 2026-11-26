@@ -7,13 +7,13 @@
 const NUMBER='[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?';
 const LENGTH=new RegExp(`^(${NUMBER})(px)?$`);
 const MAX_ABS=1_000_000;
-const MAX_LIST=8192;
+const MAX_LIST=Number.MAX_SAFE_INTEGER;
 
 export function parseSvgNumberList(value,{allowPx=false}={}){
   const source=String(value ?? '').trim();
   if(!source || source.length>MAX_LIST)return null;
   const chunks=source.split(/[\s,]+/);
-  if(chunks.some(x=>!x)||chunks.length>4096)return null;
+  if(chunks.some(x=>!x))return null;
   const numbers=[];
   for(const chunk of chunks){
     const match=LENGTH.exec(chunk);
@@ -30,7 +30,7 @@ export function parseSvgNumberList(value,{allowPx=false}={}){
 // is routed to the raster page fallback instead of being silently ignored.
 export function validateSvgTransform(value){
   const input=String(value??'').trim();
-  if(!input||input.length>1024)return false;
+  if(!input)return false;
   const grammar=/\s*(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^()]*)\)\s*,?\s*/gy;
   const arity={matrix:[6],translate:[1,2],scale:[1,2],rotate:[1,3],skewX:[1],skewY:[1]};
   let end=0,found=0;
@@ -81,7 +81,7 @@ export function validateTextGeometry(el){
     if(!['text','tspan','textPath'].includes(tag)||
        !['spacing','spacingAndGlyphs'].includes(adjustment)||
        !values||values.length!==1||values[0]<=0||values[0]>10000||
-       !chars.length||chars.length>4096||
+       !chars.length||
        /[\u0000-\u001f\u007f]/u.test(text)||
        el.hasAttribute('textlength')||el.hasAttribute('lengthadjust')||
        !safeChildren)
