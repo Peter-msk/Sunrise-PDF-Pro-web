@@ -21,7 +21,7 @@ function exifOrientation(bytes,start,end){
   const offset=u32(tiff+4);
   if(offset>65536||tiff+offset+2>end)throw Error('JPEG_EXIF_IFD_INVALID');
   const ifd=tiff+offset,count=u16(ifd);
-  if(count>512||ifd+2+count*12>end)throw Error('JPEG_EXIF_IFD_INVALID');
+  if(ifd+2+count*12>end)throw Error('JPEG_EXIF_IFD_INVALID');
   for(let i=0;i<count;i++){
     const entry=ifd+2+i*12;
     if(u16(entry)!==0x0112)continue;
@@ -37,11 +37,11 @@ function exifOrientation(bytes,start,end){
  * Accepts a leading slice of file bytes up to MAX_JPEG_HEADER_BYTES.
  * Fail closed if SOS or SOF is unavailable within the budget.
  */
-export function jpegSourceInfo(data){
+export function jpegSourceInfo(data,{maxHeaderBytes=Number.MAX_SAFE_INTEGER}={}){
   const bytes=data instanceof Uint8Array?data:new Uint8Array(data);
   if(bytes.length<4||bytes[0]!==0xff||bytes[1]!==0xd8)
     throw Error('JPEG_SIGNATURE_INVALID');
-  const limit=Math.min(bytes.length,MAX_JPEG_HEADER_BYTES);
+  const limit=Math.min(bytes.length,maxHeaderBytes);
   let at=2,width=0,height=0,orientation=1,foundSOF=false;
   while(at<limit){
     if(bytes[at++]!==0xff)throw Error('JPEG_MARKER_INVALID');
@@ -75,5 +75,19 @@ export function jpegSourceInfo(data){
     }
     at=end;
   }
-  throw Error(limit===MAX_JPEG_HEADER_BYTES?'JPEG_HEADER_SCAN_LIMIT':'JPEG_HEADER_INCOMPLETE');
+  throw Error(limit===maxHeaderBytes?'JPEG_HEADER_SCAN_LIMIT':'JPEG_HEADER_INCOMPLETE');
+}
+
+/** Read metadata in progressively larger slices; no fixed header-size rejection. */
+export async function readJpegSourceInfo(file,signal){
+ let length=Math.min(file.size,MAX_JPEG_HEADER_BYTES);
+ for(;;){
+  if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
+  const data=await file.slice(0,length).arrayBuffer();
+  if(signal?.aborted)throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');
+  try{return jpegSourceInfo(data);}catch(error){
+   if(error?.message!=='JPEG_HEADER_INCOMPLETE'||length>=file.size)throw error;
+   length=Math.min(file.size,length*2);
+  }
+ }
 }
