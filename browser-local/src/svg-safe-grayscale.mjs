@@ -16,8 +16,8 @@ const PIXEL_CAP=Number.MAX_SAFE_INTEGER,IMAGE_LIMIT=Number.MAX_SAFE_INTEGER;
 const PAGE_IMAGE_PIXEL_CAP=Number.MAX_SAFE_INTEGER;
 const PAGE_IMAGE_COMPRESSED_BYTE_CAP=Number.MAX_SAFE_INTEGER;
 const IMAGE_COMPRESSED_BYTE_CAP=Number.MAX_SAFE_INTEGER;
-const IMAGE_DECODE_TIMEOUT_MS=25_000;
-const IMAGE_ENCODE_TIMEOUT_MS=25_000;
+const IMAGE_DECODE_TIMEOUT_MS=Infinity;
+const IMAGE_ENCODE_TIMEOUT_MS=Infinity;
 const PIXELS_PER_TICK=131_072;
 
 const LOCAL_FILTER=/^url\(\s*['"]?#([A-Za-z_][\w.-]*)['"]?\s*\)$/;
@@ -486,7 +486,7 @@ export async function waitForImageOperation(promise,signal,timeoutMs,code,onLate
  const guard=new Promise((_,reject)=>{
   abort=()=>reject(new DOMException('변환이 취소되었습니다.','AbortError'));
   signal?.addEventListener('abort',abort,{once:true});
-  timer=setTimeout(()=>reject(Error(code)),timeoutMs);
+  if(timeoutMs!==Infinity)timer=setTimeout(()=>reject(Error(code)),timeoutMs);
  });
  try{return await Promise.race([tracked,guard]);}
  finally{active=false;clearTimeout(timer);signal?.removeEventListener('abort',abort);}
