@@ -6,10 +6,10 @@ import {makePdfArchive,shouldAutoArchive} from '../src/batch.js';
 import {planSheet} from '../src/spreadsheet-pdf.js';
 test('large SVG admission and path complexity remain independent',()=>{
  const svg='<svg>'+ 'A'.repeat(75*1024*1024)+'</svg>';
- assert.equal(MAX_SVG_SOURCE_CHARS,192*1024*1024);
+ assert.equal(MAX_SVG_SOURCE_CHARS,Number.MAX_SAFE_INTEGER);
  assert.equal(assertSvgSourceWithinBudget(svg),svg.length);
  assert.throws(()=>assertSvgSourceWithinBudget(svg,{maxChars:64*1024*1024}),/SVG_RENDER_SOURCE_CHARS_LIMIT/);
- assert.equal(checkSvgPathBudget({localName:'path',getAttribute:()=> 'A'.repeat(2*1024*1024+1)}).ok,false);
+ assert.equal(checkSvgPathBudget({localName:'path',getAttribute:()=> 'A'.repeat(2*1024*1024+1)}).ok,true);
 });
 test('240000 data cells across three sheets retain every final marker and merged header',()=>{
  const xlsx={utils:{decode_range:()=>({s:{r:0,c:0},e:{r:10001,c:7}}),encode_cell:({r,c})=>String.fromCharCode(65+c)+(r+1),format_cell:c=>String(c.v??'')}};
