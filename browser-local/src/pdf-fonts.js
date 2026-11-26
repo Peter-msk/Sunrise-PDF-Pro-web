@@ -193,7 +193,7 @@ export function fontFamilyForPdfFace(registry,face){
  * the result into adjacent SVG tspans; no replacement glyph is fabricated. */
 export function resolveFontRuns(registry,family,weight,style,text){
  const chars=Array.from(String(text||''));
- if(!chars.length||chars.length>2048)return null;
+ if(!chars.length)return null;
  const runs=[];
  for(const char of chars){
   const face=resolveFont(registry,family,weight,style,char);
@@ -286,7 +286,7 @@ export async function loadPdfFonts(fontFiles,parser,signal,{postscriptName=null}
  */
 export async function installMeasureFonts(registry,signal,
   fontSet=globalThis.document?.fonts,FontFaceImpl=globalThis.FontFace,
-  {skipUnavailable=false,maxTotalMs=18000,perFaceMs=3500}={}){
+  {skipUnavailable=false,maxTotalMs=Infinity,perFaceMs=Infinity}={}){
   const faces=registry?.faces||[];
   if(!faces.length)return ()=>{};
   if(!fontSet?.add||!fontSet?.delete||typeof FontFaceImpl!=='function')
