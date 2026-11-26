@@ -23,7 +23,6 @@ export function parseSafeSvg(svg,parser=new DOMParser()){
     if(node.nodeType===7)throw Error('SVG 외부 처리 지시문은 허용되지 않습니다.');
   const root=doc.documentElement;
   const elements=[root,...root.querySelectorAll('*')];
-  if(elements.length>60000)throw Error('SVG 요소 수가 처리 범위를 초과했습니다.');
   for(const element of elements){
     if(element.namespaceURI!==SVG_NS||ACTIVE.has(element.localName))
       throw Error('문서 SVG에 허용되지 않는 요소가 있습니다.');
