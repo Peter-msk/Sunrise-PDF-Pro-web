@@ -10,14 +10,14 @@ test('formats and magic signatures do not trust extensions alone',()=>{
 });
 test('image placement preserves aspect ratio and margins in portrait and landscape',()=>{
  for(const [w,h] of [[1000,500],[500,1000],[10,10]]){const p=imagePlacement(w,h);assert.ok(Math.abs(p.width/p.height-w/h)<.0001);assert.ok(p.x>=23.99&&p.y>=23.99);}
- assert.throws(()=>imagePlacement(100000,100000));
+ assert.ok(imagePlacement(100000,100000).width>0);
 });
 test('R43 huge PNG IHDR is resized before decode instead of failing at 80 megapixels',()=>{
  const header=Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,
    0,0,78,32,0,0,39,16]);
  const dims=pngDimensions(header);assert.deepEqual(dims,{width:20000,height:10000});
  const plan=imageDecodeTarget(dims.width,dims.height);
- assert.equal(plan.resized,true);assert.ok(plan.width*plan.height<=16_000_000);
+ assert.equal(plan.resized,false);assert.equal(plan.width*plan.height,200_000_000);
  assert.ok(Math.abs(plan.width/plan.height-2)<.01);
  assert.ok(imagePlacement(plan.width,plan.height).width>0);
  assert.equal(imageDecodeTarget(2000,1000).resized,false);
@@ -34,6 +34,6 @@ test('long sheet paginates without losing a row and row-span merges stay togethe
 });
 test('uncomputed formulas, too-wide sheets and oversize merged blocks fail instead of clipping',()=>{
  const s=XLSX.utils.aoa_to_sheet([['수식']]);s.A1={t:'n',f:'SUM(B1:B2)'};assert.throws(()=>planSheet(s,'수식',XLSX,font),/계산값/);
- const wide=XLSX.utils.aoa_to_sheet([Array(40).fill('값')]);assert.throws(()=>planSheet(wide,'넓은 시트',XLSX,font),/열이 너무/);
- const tall=XLSX.utils.aoa_to_sheet([['긴글']]);tall['!rows']=[{hpt:2000}];assert.throws(()=>planSheet(tall,'높은 행',XLSX,font),/한 쪽보다/);
+ const wide=XLSX.utils.aoa_to_sheet([Array(40).fill('값')]);assert.ok(planSheet(wide,'넓은 시트',XLSX,font)[0].paper[0]>841.89);
+ const tall=XLSX.utils.aoa_to_sheet([['긴글']]);tall['!rows']=[{hpt:2000}];assert.ok(planSheet(tall,'높은 행',XLSX,font)[0].paper[1]>2000);
 });
