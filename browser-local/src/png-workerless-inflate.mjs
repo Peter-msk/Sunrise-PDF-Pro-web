@@ -4,7 +4,7 @@
 import {Unzlib} from 'fflate';
 export function pngScanlineBytes({width,height,pixelBitlength,interlaceMethod}){
  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1||
- width>8192||height>8192||width*height>9_000_000||
+ width>0x7fffffff||height>0x7fffffff||!Number.isSafeInteger(width*height*4)||
  ![1,2,4,8,16,24,32,48,64].includes(pixelBitlength)||
  ![0,1].includes(interlaceMethod))throw Error('PNG_PDF_DECODE_BUDGET');
  const passes=interlaceMethod===1?[[0,0,8,8],[4,0,8,8],[0,4,4,8],[2,0,4,4],[0,2,2,4],[1,0,2,2],[0,1,1,2]]:[[0,0,1,1]];
