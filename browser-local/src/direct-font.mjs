@@ -4,7 +4,7 @@
  */
 const fail=code=>{throw Error('DIRECT_PDF_TEXT_'+code);};
 export const directFamilyKey=s=>typeof s==='string'?s.trim().normalize('NFC').toLowerCase():'';
-const MAX_FONT=32*1024*1024,MAX_TABLES=256,MAX_FACES=32;
+const MAX_FONT=Number.MAX_SAFE_INTEGER,MAX_TABLES=65535,MAX_FACES=0xffffffff;
 const TTF=0x00010000,TTC=0x74746366,OTTO=0x4f54544f,OS2=0x4f532f32,HEAD=0x68656164,NAME=0x6e616d65;
 const view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 const aligned=n=>Math.ceil(n/4)*4;
@@ -30,7 +30,7 @@ function directory(v,base){
 function postscriptNames(v,map){
  const t=map.get(NAME);if(!t||t.length<6)fail('FONT_NAME');
  const start=t.offset,count=v.getUint16(start+2),storage=v.getUint16(start+4);
- if(count>4096||6+12*count>t.length||storage<6+12*count||storage>t.length)fail('FONT_NAME');
+ if(6+12*count>t.length||storage<6+12*count||storage>t.length)fail('FONT_NAME');
  const names=new Set();
  for(let i=0;i<count;i++){
   const p=start+6+12*i;
@@ -150,7 +150,7 @@ export function validateDirectFace(fontkit,face,family,bold=false){
 // OS permission, CSS aliases or a bundled fallback. No queryLocalFonts call.
 // Duplicate references are deduped; conflicting candidates are not guessed.
 export function createDirectFontResolver(faces,{selections={}}={}){
- if(!Array.isArray(faces)||faces.length>128)fail('FONT_REGISTRY');
+ if(!Array.isArray(faces))fail('FONT_REGISTRY');
  const entries=[...new Set(faces)].filter(f=>f?.embeddingAllowed===true&&!f.isFallback);
  const selected=new Map(Object.entries(selections));
  return async({family,bold,italic})=>{
