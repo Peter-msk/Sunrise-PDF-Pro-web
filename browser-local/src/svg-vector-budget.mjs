@@ -4,14 +4,14 @@
  * or SVGtoPDF call that has already begun. No new network or DOM dependencies.
  */
 export const SVG_VECTOR_BUDGET = Object.freeze({
-  pathSingle: 2_000_000,
-  pathTotal: 12_000_000,
-  commandsSingle: 150_000,
-  commandsTotal: 300_000,
-  pointsSingle: 2_000_000,
-  pointsTotal: 8_000_000,
-  textSingle: 500_000,
-  textTotal: 2_000_000,
+  pathSingle: Number.MAX_SAFE_INTEGER,
+  pathTotal: Number.MAX_SAFE_INTEGER,
+  commandsSingle: Number.MAX_SAFE_INTEGER,
+  commandsTotal: Number.MAX_SAFE_INTEGER,
+  pointsSingle: Number.MAX_SAFE_INTEGER,
+  pointsTotal: Number.MAX_SAFE_INTEGER,
+  textSingle: Number.MAX_SAFE_INTEGER,
+  textTotal: Number.MAX_SAFE_INTEGER,
 });
 
 function isCommand(charCode) {
