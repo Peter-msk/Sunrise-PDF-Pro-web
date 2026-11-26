@@ -69,5 +69,5 @@ test('already-aborted PNG does not call canvas.toBlob',async()=>{
 });
 test('reject invalid timeout budget (load/encode)',async()=>{
  assert.throws(()=>loadSvgRasterImage(new ImageStub(),'blob:bad',null,0),/SVG_RASTER_TIMEOUT_INVALID/);
- assert.throws(()=>encodeSvgRasterPng({toBlob(){}},null,Infinity),/SVG_RASTER_TIMEOUT_INVALID/);
+ assert.throws(()=>encodeSvgRasterPng({toBlob(){}},null,NaN),/SVG_RASTER_TIMEOUT_INVALID/);
 });
