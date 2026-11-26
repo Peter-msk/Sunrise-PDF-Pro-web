@@ -39,7 +39,7 @@ test('no hard size limit at file input or HWP decoder entry',()=>{
  assert.match(source,/file\.slice\(0,8\)\.arrayBuffer\(\)/);
  assert.match(source,/const MAX_PAGES=MAX_CONVERSION_PAGES/);
  assert.match(source,/MAX_NATIVE_PRINT_PAGES/);
- assert.match(source,/DETAIL_MAX_PIXELS=12_000_000/);
+ assert.match(source,/DETAIL_MAX_PIXELS=Number\.MAX_SAFE_INTEGER/);
  assert.match(main,/fontFiles,engine/);
  assert.match(html,/<input id="pdf-font"[^>]*multiple/);
 });
