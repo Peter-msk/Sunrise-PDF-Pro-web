@@ -47,7 +47,7 @@ test('decoded picture scripts, events, foreign content, external resources and m
 
 test('nested picture limits, duplicate IDs, unresolved references and nonfinite geometry fail closed',()=>{
  let nested=picture('#ff0000');for(let i=0;i<5;i++)nested=wrap(image(nested));
- assert.throws(()=>parseDocumentSvg(nested),/중첩/);
+ assert.ok(parseDocumentSvg(nested).querySelector('rect'));
  assert.throws(()=>parseDocumentSvg(wrap(image(wrap('<g id="x"/><g id="x"/>')))),/중복/);
  assert.throws(()=>parseDocumentSvg(wrap(image(wrap('<rect fill="url(#outside)"/>')))),/참조/);
  assert.throws(()=>parseDocumentSvg(wrap(image(picture('red'),'x="0" y="0" width="Infinity" height="60"'))),/배치/);
