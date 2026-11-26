@@ -69,7 +69,7 @@ function parseCss(text){
     if(!result || result.index!==cursor)return null;
     const selectors=result[1].split(',');
     const declarations=readDeclarations(result[2]);
-    if(!declarations||selectors.length>16)return null;
+    if(!declarations)return null;
     for(const selector of selectors){
       const parsed=parseSelector(selector);
       if(!parsed || ++order>MAX_RULES)return null;
