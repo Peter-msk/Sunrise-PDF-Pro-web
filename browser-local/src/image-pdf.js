@@ -86,6 +86,7 @@ export async function convertImage(file,onProgress,signal,kind,{
     if(Math.abs(bitmap.width/bitmap.height/expected-1)>0.012)
       throw Error('JPEG_EXIF_ORIENTATION_UNVERIFIED');
   }
+  if(bitmap.width!==decode.width||bitmap.height!==decode.height)throw Error('IMAGE_DECODE_DIMENSIONS_UNVERIFIED');
   const target=imageDecodeTarget(bitmap.width,bitmap.height);
   const resized=Boolean(decode?.resized||target.resized);
   let normalized=null,width=bitmap.width,height=bitmap.height;
