@@ -6,8 +6,8 @@ import {jpegSourceInfo,MAX_JPEG_HEADER_BYTES} from './jpeg-header.mjs';
 import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 
 const MAX_DECODE_PIXELS=Number.MAX_SAFE_INTEGER,MAX_CANVAS_SIDE=0x7fffffff;
-const IMAGE_DECODE_TIMEOUT_MS=35_000,IMAGE_ENCODE_TIMEOUT_MS=35_000;
-const IMAGE_PDF_SAVE_TIMEOUT_MS=120_000;
+const IMAGE_DECODE_TIMEOUT_MS=Infinity,IMAGE_ENCODE_TIMEOUT_MS=Infinity;
+const IMAGE_PDF_SAVE_TIMEOUT_MS=Infinity;
 
 /** Read PNG IHDR without decoding a potentially hundred-megapixel bitmap. */
 export function pngDimensions(data){
@@ -45,7 +45,7 @@ export async function convertImage(file,onProgress,signal,kind,{
   saveTimeoutMs=IMAGE_PDF_SAVE_TIMEOUT_MS
 }={}){
  if(![decodeTimeoutMs,encodeTimeoutMs,saveTimeoutMs].every(ms=>
-   Number.isFinite(ms)&&ms>0))throw Error('IMAGE_TIMEOUT_CONFIG_INVALID');
+   ms>0&&(Number.isFinite(ms)||ms===Infinity)))throw Error('IMAGE_TIMEOUT_CONFIG_INVALID');
  cancelled(signal);
  verifyOtherHeader(kind,await file.slice(0,8).arrayBuffer());cancelled(signal);
  // Parse only a small image header *before* allocating a full file ArrayBuffer.
