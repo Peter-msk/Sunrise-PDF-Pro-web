@@ -45,17 +45,17 @@ test('R64 FontFace.load watchdog skips an unavailable face and releases installe
  assert.equal(registered.size,0);
  cleanup();
 });
-test('R64 on-device font discovery is bounded and bundled aliases scoped to SVG names',()=>{
+test('R64 on-device font discovery is unrestricted by default and bundled aliases scoped to SVG names',()=>{
  const root=new URL('../src/',import.meta.url);
  const scan=readFileSync(new URL('local-fonts.js',root),'utf8');
  const converter=readFileSync(new URL('converter.js',root),'utf8');
  const main=readFileSync(new URL('main.js',root),'utf8');
  const telemetry=readFileSync(new URL('pro-telemetry.js',root),'utf8');
  const server=readFileSync(new URL('../../src/admin/handler.js',import.meta.url),'utf8');
- assert.match(scan,/maxReadMs=22000/);
+ assert.match(scan,/maxReadMs=Infinity/);
  assert.match(scan,/boundedFontStep\(\(\)=>item\.blob\(\)/);
  assert.match(converter,/const tailoredBundled=options\.localFonts/);
- assert.match(converter,/maxTotalMs:18000,perFaceMs:3500/);
+ assert.match(converter,/maxTotalMs:Infinity,perFaceMs:Infinity/);
  assert.match(main,/info\.detail==='read'/);
  for(const stage of ['font_scan','font_read','font_bundle','font_measure']){
   assert.ok(telemetry.includes("'"+stage+"'"));
