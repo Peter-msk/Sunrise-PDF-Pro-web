@@ -6,7 +6,7 @@
  */
 import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 const PNG_DATA = /^data:image\/png;base64,([a-z0-9+/]+={0,2})$/i;
-const IMAGE_OPERATION_TIMEOUT_MS = 20_000;
+const IMAGE_OPERATION_TIMEOUT_MS = Infinity;
 const PNG_SIGNATURE = [137,80,78,71,13,10,26,10];
 const MAX_RASTER_PIXELS = Number.MAX_SAFE_INTEGER;
 const MAX_CANVAS_SIDE = 0x7fffffff;
@@ -92,11 +92,11 @@ export async function normalizeEmbeddedPngSvg(svg,signal,{
   now=Date.now,
   // Per-image watchdogs alone may accumulate into minutes for one page.
   // Bound the whole PNG-normalization phase, not PDF/SVG/WASM rendering.
-  pageTimeoutMs=180_000
+  pageTimeoutMs=Infinity
 }={}){
   cancelled(signal);
-  if(!Number.isFinite(imageTimeoutMs)||imageTimeoutMs<=0||
-     !Number.isFinite(pageTimeoutMs)||pageTimeoutMs<=0)
+  if(!(imageTimeoutMs>0)||(!Number.isFinite(imageTimeoutMs)&&imageTimeoutMs!==Infinity)||
+     !(pageTimeoutMs>0)||(!Number.isFinite(pageTimeoutMs)&&pageTimeoutMs!==Infinity))
     throw Error('PNG_IMAGE_TIMEOUT_INVALID');
   const pageDeadline=now()+pageTimeoutMs;
   const pageImageStep=(start,code,onLate)=>{
