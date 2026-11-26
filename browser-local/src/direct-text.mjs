@@ -8,7 +8,7 @@ import {isCoordinate as finite,isRecord as plain,isRgbHex} from './direct-contra
 const near=(a,b)=>finite(a)&&finite(b)&&Math.abs(a-b)<=.002;
 const range=(r,start,end)=>r?.start===start&&r?.end===end;
 const unsafe=/[^\uAC00-\uD7A3A-Za-z0-9 .,!?():;+\-\/]/u;
-const MAX_RUN=4096;
+const MAX_RUN=Number.MAX_SAFE_INTEGER;
 export function planDirectText(op){
  const t=op.text,s=op.style,p=op.placement,m=p?.runToPage;
  if(typeof t!=='string'||!t.length||t.length>MAX_RUN||unsafe.test(t))fail('UNICODE_SCOPE');
