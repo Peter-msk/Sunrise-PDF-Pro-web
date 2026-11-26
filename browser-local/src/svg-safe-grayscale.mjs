@@ -299,7 +299,7 @@ function planRhwpImage(target,definitions,onReject=()=>{}){
  }
  const descriptors=[],operations=[];
  let node=target;
- for(let depth=0;depth<12;depth++){
+ while(node){
   const descriptor=getFilter(node);
   if(descriptor.value){
    const ref=LOCAL_FILTER.exec(descriptor.value),spec=ref&&identifyRhwpImageEffect(definitions.get(ref[1]));
@@ -321,14 +321,14 @@ function planRhwpImage(target,definitions,onReject=()=>{}){
      (node.localName!=='g'||node.children.length!==1||!onlyAttrs(node,['filter','opacity'])))return reject('wrapper-shape');
   node=node.children[0];
  }
- return reject('nesting-limit');
+ return reject('wrapper-shape');
 }
 export async function applyRhwpImageEffectsRGBA(pixels,width,height,operations,signal,{
  yieldControl=defaultYield,chunkPixels=PIXELS_PER_TICK
 }={}){
  if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||width*height>PIXEL_CAP||
   pixels?.length!==width*height*4||!Number.isSafeInteger(chunkPixels)||chunkPixels<1||
-  !Array.isArray(operations)||!operations.length||operations.length>24||
+  !Array.isArray(operations)||!operations.length||
   operations.some(o=>!['gray','threshold','linear'].includes(o?.kind)||(o.kind==='linear'&&
    (!(o.slope>=0&&o.slope<=2)||!(o.intercept>=-1.5&&o.intercept<=1.5)))))fail('SVG_FILTER_IMAGE_DATA_INVALID');
  const clamp=v=>Math.max(0,Math.min(1,v));
