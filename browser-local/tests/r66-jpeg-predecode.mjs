@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {jpegSourceInfo,MAX_JPEG_HEADER_BYTES} from '../src/jpeg-header.mjs';
+import {jpegSourceInfo,MAX_JPEG_HEADER_BYTES,readJpegSourceInfo} from '../src/jpeg-header.mjs';
 
 const utf8=new TextEncoder();
 const segment=(marker,body)=>Uint8Array.from([255,marker, (body.length+2)>>8, (body.length+2)&255,...body]);
@@ -60,7 +60,7 @@ test('bounded header parser rejects oversized metadata before browser decode',()
 });
 test('R65 image predecode uses parsed display dimensions before createImageBitmap',()=>{
  const source=readFileSync(new URL('../src/image-pdf.js',import.meta.url),'utf8');
- assert.match(source,/jpegSourceInfo\(new Uint8Array\(jpegHeader\)\)/);
+ assert.match(source,/readJpegSourceInfo\(file,signal\)/);
  assert.match(source,/imageDecodeTarget\(rawSize\.width,rawSize\.height\)/);
  assert.match(source,/imageOrientation:'from-image'/);
  assert.match(source,/JPEG_EXIF_ORIENTATION_UNVERIFIED/);
@@ -71,26 +71,27 @@ test('R65 image predecode uses parsed display dimensions before createImageBitma
 function conversionShim({decodeIgnoresExif=false}={}){
  const moduleText=readFileSync(new URL('../src/image-pdf.js',import.meta.url),'utf8')
   .replace(/^import .+;$/gm,'').replace(/^export /gm,'');
- let requested=null,closed=0,dimensions=null;
+ let requested=null,closed=0,dimensions=null,sourceInfo=null;
  const fakePdf={create:async()=>({
   embedPng:async()=>({width:dimensions.width,height:dimensions.height}),
   addPage:()=>({drawImage:()=>{}}),save:async()=>Uint8Array.from([37,80,68,70,45,49])
  })};
  const fakeImage=async(_blob,options={})=>{
   requested=options;
-  const w=options.resizeWidth||800,h=options.resizeHeight||400;
+  const w=options.resizeWidth||sourceInfo.displayWidth,h=options.resizeHeight||sourceInfo.displayHeight;
   return {width:decodeIgnoresExif?800:w,height:decodeIgnoresExif?400:h,
     close(){closed++}};
  };
  const dom={createElement:()=>({width:0,height:0,getContext:()=>({drawImage:()=>{}}),
   toBlob(cb){cb(new Blob(['fake-png'],{type:'image/png'}))}})};
  const factory=new Function('PDFDocument','verifyOtherHeader','cancelled',
-  'readDocumentBuffer','jpegSourceInfo','MAX_JPEG_HEADER_BYTES',
+  'readDocumentBuffer','readJpegSourceInfo',
   'createImageBitmap','document','Blob','waitForImageOperation','assertCompletePdfBytes',moduleText+'\nreturn {convertImage};');
  const api=factory(fakePdf,()=>{},()=>{},async(file)=>file.bytes.buffer,
-  jpegSourceInfo,MAX_JPEG_HEADER_BYTES,fakeImage,dom,Blob,async(p)=>p,bytes=>bytes);
+  readJpegSourceInfo,fakeImage,dom,Blob,async(p)=>p,bytes=>bytes);
  async function convert(bytes){
-  const file={bytes,slice:(_start,end)=>({arrayBuffer:async()=>bytes.slice(0,end).buffer})};
+  sourceInfo=jpegSourceInfo(bytes);
+  const file={size:bytes.length,bytes,slice:(_start,end)=>({arrayBuffer:async()=>bytes.slice(0,end).buffer})};
   dimensions={width:0,height:0};
   // PDF embedding returns dimensions supplied by the drawn bitmap.
   const old=fakePdf.create;
@@ -110,8 +111,7 @@ test('actual convertImage path bounds a large JPEG BEFORE calling createImageBit
  const shim=conversionShim();
  const result=await shim.convert(sample({width:60000,height:40000}));
  assert.equal(result.pages,1);
- assert.ok(shim.requested.resizeWidth*shim.requested.resizeHeight<=16_000_000);
- assert.ok(shim.requested.resizeWidth<60000&&shim.requested.resizeHeight<40000);
+ assert.equal(shim.requested.resizeWidth,undefined);assert.equal(shim.requested.resizeHeight,undefined);
  assert.equal(shim.requested.imageOrientation,'from-image');
  assert.equal(shim.closed,1);
 });
