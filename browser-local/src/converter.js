@@ -202,7 +202,7 @@ export async function convertToPdf(file,onProgress=()=>{},signal,options={}){
    fontRegistry={faces:[...selected.faces,...localOnly,...tailoredBundled],allowCoverageFallback:true};
    onProgress({stage:'fonts',page:1,total:1,detail:'measure'});
    releaseMeasureFonts=await installMeasureFonts(fontRegistry,signal,
-    undefined,undefined,{skipUnavailable:true,maxTotalMs:18000,perFaceMs:3500});
+    undefined,undefined,{skipUnavailable:true,maxTotalMs:Infinity,perFaceMs:Infinity});
    onProgress({stage:'fonts',page:1,total:1,detail:'complete'});
   }
   if(!doc){
