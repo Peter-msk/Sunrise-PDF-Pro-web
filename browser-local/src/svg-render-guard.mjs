@@ -2,11 +2,11 @@
  * No SVG parsing or rewriting here. The existing sanitizer remains authoritative.
  * These checks fail closed before especially expensive synchronous PDFKit work.
  */
-// Align raw SVG with the 128 MiB per-page embedded PNG source budget plus base64 overhead.
+// No artificial source or path size cap in production; explicit test budgets remain supported.
 // This is a per-page safety budget, NOT a document input-size or page-count cap.
-export const MAX_SVG_SOURCE_CHARS = 192 * 1024 * 1024;
-export const MAX_SINGLE_PATH_CHARS = 2 * 1024 * 1024;
-export const MAX_PAGE_PATH_CHARS = 8 * 1024 * 1024;
+export const MAX_SVG_SOURCE_CHARS = Number.MAX_SAFE_INTEGER;
+export const MAX_SINGLE_PATH_CHARS = Number.MAX_SAFE_INTEGER;
+export const MAX_PAGE_PATH_CHARS = Number.MAX_SAFE_INTEGER;
 
 export function assertSvgSourceWithinBudget(source,{maxChars=MAX_SVG_SOURCE_CHARS}={}){
   if(typeof source!=='string')throw Error('SVG_RENDER_INPUT_INVALID');
