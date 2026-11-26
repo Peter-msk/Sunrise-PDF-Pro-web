@@ -24,8 +24,8 @@ test('DEV36 anonymous progress collector accepts bounded boot stages',()=>{
 });
 test('DEV36 oversized SVG explanation does not claim unsafe auto-recovery',()=>{
  const message=localFailureAdvice('SVG_RENDER_SOURCE_CHARS_LIMIT');
- assert.match(message,/페이지가 너무 복잡/);
- assert.match(message,/다른 문서를 먼저 완료/);
+ assert.match(message,/브라우저 렌더링 안전 범위/);
+ assert.match(message,/문서 전체 용량 제한은 아닙니다/);
  assert.ok(!message.includes('자동'));
  assert.match(localFailureAdvice('WASM_INIT_FAILED'),/변환 기능을 시작하지 못/);
 });
