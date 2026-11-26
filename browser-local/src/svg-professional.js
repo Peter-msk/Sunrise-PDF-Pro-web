@@ -367,7 +367,7 @@ export function classifySvgWriterReason(error){
 export async function tryProfessionalDocument(hwpDoc,count,{
   checkedSvg,rasterPage,signal,fontRegistry={faces:[]},
   onProgress=()=>{},loadLibraries,imageBytes=localPngBytes,allowRasterFallback=false,
-  finalizeTimeoutMs=120_000,filterOnlyRasterFallback=false
+  finalizeTimeoutMs=Infinity,filterOnlyRasterFallback=false
 }={}){
   const cancel=()=>{if(signal?.aborted)
     throw new DOMException('PDF 변환이 취소되었습니다.','AbortError');};
