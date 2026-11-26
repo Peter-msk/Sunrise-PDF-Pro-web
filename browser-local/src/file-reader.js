@@ -9,8 +9,8 @@
  * @param {AbortSignal} [signal] cancellation
  * @param {(progress:{loaded:number,total:number})=>void} [onProgress]
  */
-export function readDocumentBuffer(file, signal, onProgress=()=>{}, {idleTimeoutMs=90_000}={}) {
-  if(!Number.isSafeInteger(idleTimeoutMs)||idleTimeoutMs<1)
+export function readDocumentBuffer(file, signal, onProgress=()=>{}, {idleTimeoutMs=Infinity}={}) {
+  if(idleTimeoutMs!==Infinity&&(!Number.isSafeInteger(idleTimeoutMs)||idleTimeoutMs<1))
     return Promise.reject(Error('FILE_READ_IDLE_TIMEOUT_INVALID'));
   if(signal?.aborted) return Promise.reject(new DOMException('PDF 변환이 취소되었습니다.','AbortError'));
   if(!file || typeof file.size!=='number' || file.size<8)
@@ -23,6 +23,7 @@ export function readDocumentBuffer(file, signal, onProgress=()=>{}, {idleTimeout
     // Stop the native reader instead of only timing out a Promise wrapper.
     const resetIdleWatch=()=>{
       clearTimeout(idleTimer);
+      if(idleTimeoutMs===Infinity)return;
       idleTimer=setTimeout(()=>{
         if(settled)return;
         finish(Error('FILE_READ_IDLE_TIMEOUT'));
