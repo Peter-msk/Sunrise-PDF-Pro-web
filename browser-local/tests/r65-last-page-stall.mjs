@@ -23,7 +23,7 @@ function oversizedPng(){
 }
 function opts(overrides={}){
  const {doc}=oversizedPng();
- return {parse:()=>doc,serialize:()=>'<svg/>',imageTimeoutMs:18,...overrides};
+ return {parse:()=>doc,serialize:()=>'<svg/>',maxPixels:9_000_000,imageTimeoutMs:18,...overrides};
 }
 function goodBitmap(){
  return {width:3000,height:3000,close(){}};
