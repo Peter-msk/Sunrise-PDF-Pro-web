@@ -42,9 +42,9 @@ export async function convertDirectTrial({buffer,openDocument,readPageCount,font
     for(const entry of candidates){
      abort(signal);if(++localReads>32)throw Error('DIRECT_PDF_TEXT_FONT_BUDGET');
      try{
-      const blob=await boundedFontStep(()=>entry.blob(),{signal,timeoutMs:4000,code:'DIRECT_PDF_TEXT_FONT_TIMEOUT'});
+      const blob=await boundedFontStep(()=>entry.blob(),{signal,timeoutMs:Infinity,code:'DIRECT_PDF_TEXT_FONT_TIMEOUT'});
       if(blob.size>MAX_FACE||retained+candidateBytes+blob.size>MAX_TOTAL)throw Error('DIRECT_PDF_TEXT_FONT_BUDGET');
-      const arr=await boundedFontStep(()=>loadPdfFonts([new File([blob],'local-font.ttf')],fontkit,signal,{postscriptName:entry.postscriptName||null}),{signal,timeoutMs:4000,code:'DIRECT_PDF_TEXT_FONT_TIMEOUT'});
+      const arr=await boundedFontStep(()=>loadPdfFonts([new File([blob],'local-font.ttf')],fontkit,signal,{postscriptName:entry.postscriptName||null}),{signal,timeoutMs:Infinity,code:'DIRECT_PDF_TEXT_FONT_TIMEOUT'});
       const f=arr.faces[0];if(exact(f,family,bold)){matches.push(f);candidateBytes+=f.bytes.length;if(matches.length>1)throw Error('DIRECT_PDF_TEXT_FONT_AMBIGUOUS');}
      }catch(e){if(signal?.aborted||e?.name==='AbortError'||/FONT_(?:BUDGET|AMBIGUOUS)/.test(String(e?.message)))throw e;}
     }
