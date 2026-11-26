@@ -3,7 +3,7 @@ import {cooperativeYield} from './cooperative-yield.mjs';
 // PNG/JPEG. Convert only a validated single-frame GIF; never fetch URLs.
 import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 const MAX_BYTES=Number.MAX_SAFE_INTEGER,MAX_PIXELS=Number.MAX_SAFE_INTEGER,MAX_IMAGES=Number.MAX_SAFE_INTEGER;
-const GIF_STEP_TIMEOUT_MS=25_000,GIF_PAGE_TIMEOUT_MS=90_000;
+const GIF_STEP_TIMEOUT_MS=Infinity,GIF_PAGE_TIMEOUT_MS=Infinity;
 const GIF=/^data:image\/gif;base64,([a-z0-9+/\s]+={0,2})$/i;
 export function validateStaticGif(bytes){
  const fail=()=>{throw Error('GIF 그림이 손상되었거나 지원하지 않는 형식입니다.');};
