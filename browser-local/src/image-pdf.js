@@ -5,7 +5,7 @@ import {assertCompletePdfBytes} from './pdf-output-integrity.mjs';
 import {jpegSourceInfo,MAX_JPEG_HEADER_BYTES} from './jpeg-header.mjs';
 import {waitForImageOperation} from './svg-safe-grayscale.mjs';
 
-const MAX_DECODE_PIXELS=16_000_000,MAX_CANVAS_SIDE=16_384;
+const MAX_DECODE_PIXELS=Number.MAX_SAFE_INTEGER,MAX_CANVAS_SIDE=0x7fffffff;
 const IMAGE_DECODE_TIMEOUT_MS=35_000,IMAGE_ENCODE_TIMEOUT_MS=35_000;
 const IMAGE_PDF_SAVE_TIMEOUT_MS=120_000;
 
@@ -24,7 +24,7 @@ export function pngDimensions(data){
  * decode target prevents the browser from allocating hundreds of MB. */
 export function imageDecodeTarget(width,height){
  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<=0||height<=0||
-    width>200_000||height>200_000||!Number.isSafeInteger(width*height))
+    width>0x7fffffff||height>0x7fffffff||!Number.isSafeInteger(width*height))
   throw Error('이미지의 실제 가로·세로 크기를 확인할 수 없습니다.');
  const scale=Math.min(1,Math.sqrt(MAX_DECODE_PIXELS/(width*height)),
    MAX_CANVAS_SIDE/width,MAX_CANVAS_SIDE/height);
@@ -35,7 +35,7 @@ export function imageDecodeTarget(width,height){
 }
 
 export function imagePlacement(width,height){
- if(!(width>0&&height>0)||width*height>80_000_000)throw Error('이미지 크기가 유효하지 않거나 8천만 픽셀을 초과합니다.');
+ if(!Number.isFinite(width)||!Number.isFinite(height)||!(width>0&&height>0))throw Error('이미지 크기가 유효하지 않습니다.');
  const paper=width>height?[841.89,595.28]:[595.28,841.89];
  const scale=Math.min((paper[0]-48)/width,(paper[1]-48)/height);
  return {paper,width:width*scale,height:height*scale,x:(paper[0]-width*scale)/2,y:(paper[1]-height*scale)/2};
