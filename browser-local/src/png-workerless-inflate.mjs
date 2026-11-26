@@ -13,11 +13,12 @@ export function pngScanlineBytes({width,height,pixelBitlength,interlaceMethod}){
   const w=Math.max(0,Math.ceil((width-x)/dx)),h=Math.max(0,Math.ceil((height-y)/dy));
   if(w&&h)total+=h*(1+Math.ceil(w*pixelBitlength/8));
  }
+ if(!Number.isSafeInteger(total))throw Error('PNG_PDF_DECODE_BUDGET');
  return total;
 }
 export function inflatePngWithoutWorker(input,callback){
  const expected=pngScanlineBytes(this);
- if(!(input instanceof Uint8Array)||input.length<6||input.length>48*1024*1024)throw Error('PNG_PDF_IDAT_INVALID');
+ if(!(input instanceof Uint8Array)||input.length<6)throw Error('PNG_PDF_IDAT_INVALID');
  const output=new Uint8Array(expected);let written=0,finished=false;
  const decoder=new Unzlib((chunk,final)=>{
   if(chunk.length>expected-written)throw Error('PNG_PDF_IDAT_LENGTH_MISMATCH');
