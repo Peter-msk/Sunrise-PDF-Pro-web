@@ -144,7 +144,7 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
   const stack=[{el:root,family:'',weight:'normal',style:'normal',computedWeight:400,computedStyle:'normal'}];
   while(stack.length){
     const {el,family,weight,style,computedWeight=400,computedStyle='normal'}=stack.pop();
-    if(++nodes>60000)return {ok:false,reason:'SVG_COMPLEXITY'};
+    if(!Number.isSafeInteger(++nodes))return {ok:false,reason:'SVG_COMPLEXITY'};
     const vectorIssue=vectorBudget.element(el);
     if(vectorIssue)return {ok:false,reason:vectorIssue};
     const pathCheck=checkSvgPathBudget(el,pathChars);
@@ -232,7 +232,7 @@ export function preflightProfessionalSvg(checked,{fontRegistry={faces:[]}}={}){
           ? resolveFontRuns(fontRegistry,currentFamily,currentWeight,currentStyle,value) : null;
         const mixedOriginal=!!namedOriginal && runs?.some(run=>
           run.face.name===namedOriginal.name);
-        const canSplit=(!face||mixedOriginal) && runs?.length>1 && runs.length<=128 &&
+        const canSplit=(!face||mixedOriginal) && runs?.length>1 &&
           (el.localName==='text'||el.localName==='tspan') &&
           !el.children?.length && !el.hasAttribute('textLength') &&
           // Never detach combining marks from their base characters.
