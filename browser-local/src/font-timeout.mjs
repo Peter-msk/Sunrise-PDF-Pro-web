@@ -5,9 +5,9 @@
  *
  * This does not interrupt synchronous fontkit or rhwp/WASM CPU work.
  */
-export function boundedFontStep(task,{signal,timeoutMs=4000,code='LOCAL_FONT_STEP_TIMEOUT'}={}){
+export function boundedFontStep(task,{signal,timeoutMs=Infinity,code='LOCAL_FONT_STEP_TIMEOUT'}={}){
  if(signal?.aborted)return Promise.reject(new DOMException('PDF 변환이 취소되었습니다.','AbortError'));
- if(!Number.isFinite(timeoutMs)||timeoutMs<=0)
+ if(timeoutMs!==Infinity&&(!Number.isFinite(timeoutMs)||timeoutMs<=0))
    return Promise.reject(Object.assign(new Error(code),{name:'TimeoutError',code}));
  return new Promise((resolve,reject)=>{
   let finished=false,timer;
@@ -19,7 +19,7 @@ export function boundedFontStep(task,{signal,timeoutMs=4000,code='LOCAL_FONT_STE
   };
   const abort=()=>finish(reject,new DOMException('PDF 변환이 취소되었습니다.','AbortError'));
   signal?.addEventListener('abort',abort,{once:true});
-  timer=setTimeout(()=>finish(reject,Object.assign(new Error(code),{name:'TimeoutError',code})),timeoutMs);
+  if(timeoutMs!==Infinity)timer=setTimeout(()=>finish(reject,Object.assign(new Error(code),{name:'TimeoutError',code})),timeoutMs);
   Promise.resolve().then(()=>typeof task==='function'?task():task).then(
    value=>finish(resolve,value),error=>finish(reject,error)
   );
